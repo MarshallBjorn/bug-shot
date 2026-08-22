@@ -1,0 +1,43 @@
+# .NET build output
+bin/
+obj/
+artifacts/
+publish/
+TestResults/
+
+# IDE and editor files
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userprefs
+*.rsuser
+
+# Logs and diagnostics
+*.log
+*.binlog
+coverage/
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pfx
+*.snk
+*.key
+*.pem
+*.crt
+*.p12
+*.publishsettings
+appsettings.Local.json
+appsettings.*.local.json
+
+# Source control and OS files
+.git/
+.gitignore
+.DS_Store
+Thumbs.db
