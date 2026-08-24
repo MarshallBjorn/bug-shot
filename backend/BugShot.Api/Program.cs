@@ -17,11 +17,13 @@ builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services.AddOpenApi();
-builder.Services.AddDbContext<BugShotDbContext>(options => options.UseNpgsql(connectionString, npgsql =>
-{
-    npgsql.MapEnum<TicketStatus>("ticket_status");
-    npgsql.MapEnum<AttachmentKind>("attachment_kind");
-}));
+builder.Services.AddDbContext<BugShotDbContext>(options => options
+    .UseNpgsql(connectionString, npgsql =>
+    {
+        npgsql.MapEnum<TicketStatus>("ticket_status");
+        npgsql.MapEnum<AttachmentKind>("attachment_kind");
+    })
+    .UseSnakeCaseNamingConvention());
 
 builder.Services.AddCors(options =>
 {

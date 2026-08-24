@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BugShot.Api.Migrations
 {
     [DbContext(typeof(BugShotDbContext))]
-    [Migration("20260824152141_InitialCreate")]
+    [Migration("20260824160414_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -32,27 +32,33 @@ namespace BugShot.Api.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<string>("Key")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("key");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("name");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_projects");
 
                     b.HasIndex("Key")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("ix_projects_key");
 
-                    b.ToTable("Projects");
+                    b.ToTable("projects", (string)null);
 
                     b.HasData(
                         new
@@ -68,22 +74,27 @@ namespace BugShot.Api.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<string>("Origin")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("origin");
 
                     b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_project_origins");
 
                     b.HasIndex("ProjectId", "Origin")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("ix_project_origins_project_id_origin");
 
-                    b.ToTable("ProjectOrigins");
+                    b.ToTable("project_origins", (string)null);
 
                     b.HasData(
                         new
@@ -98,225 +109,283 @@ namespace BugShot.Api.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<string>("FieldName")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("field_name");
 
                     b.Property<int>("MatchCount")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("match_count");
 
                     b.Property<Guid>("RuleId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("rule_id");
 
                     b.Property<Guid>("TicketId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_sanitization_logs");
 
-                    b.HasIndex("RuleId");
+                    b.HasIndex("RuleId")
+                        .HasDatabaseName("ix_sanitization_logs_rule_id");
 
-                    b.HasIndex("TicketId");
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_sanitization_logs_ticket_id");
 
-                    b.ToTable("SanitizationLogs");
+                    b.ToTable("sanitization_logs", (string)null);
                 });
 
             modelBuilder.Entity("BugShot.Api.Models.SanitizationRule", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_enabled");
 
                     b.Property<string>("Pattern")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("pattern");
 
                     b.Property<Guid?>("ProjectId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
 
                     b.Property<string>("Replacement")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("replacement");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_sanitization_rules");
 
-                    b.HasIndex("ProjectId");
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_sanitization_rules_project_id");
 
-                    b.ToTable("SanitizationRules");
+                    b.ToTable("sanitization_rules", (string)null);
                 });
 
             modelBuilder.Entity("BugShot.Api.Models.Ticket", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
 
                     b.Property<string>("DeletedBy")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("deleted_by");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("character varying(1200)");
+                        .HasColumnType("character varying(1200)")
+                        .HasColumnName("description");
 
                     b.Property<string>("PageUrl")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("page_url");
 
                     b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
 
                     b.Property<DateTimeOffset>("ReceivedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
 
                     b.Property<DateTimeOffset?>("ReportedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reported_at");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
-                        .HasColumnType("bytea");
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
 
                     b.Property<TicketStatus>("Status")
-                        .HasColumnType("ticket_status");
+                        .HasColumnType("ticket_status")
+                        .HasColumnName("status");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
 
                     b.Property<string>("UserAgent")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("user_agent");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_tickets");
 
                     b.HasIndex("ProjectId", "ReceivedAt")
-                        .IsDescending(false, true);
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_tickets_project_id_received_at");
 
                     b.HasIndex("ProjectId", "Status", "ReportedAt")
-                        .IsDescending(false, false, true);
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("ix_tickets_project_id_status_reported_at");
 
-                    b.ToTable("Tickets");
+                    b.ToTable("tickets", (string)null);
                 });
 
             modelBuilder.Entity("BugShot.Api.Models.TicketAttachment", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("content_type");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasMaxLength(260)
-                        .HasColumnType("character varying(260)");
+                        .HasColumnType("character varying(260)")
+                        .HasColumnName("file_name");
 
                     b.Property<AttachmentKind>("Kind")
-                        .HasColumnType("attachment_kind");
+                        .HasColumnType("attachment_kind")
+                        .HasColumnName("kind");
 
                     b.Property<long>("SizeBytes")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
 
                     b.Property<Guid>("TicketId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
 
                     b.Property<string>("Uri")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("uri");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_attachments");
 
-                    b.HasIndex("TicketId");
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_ticket_attachments_ticket_id");
 
-                    b.ToTable("TicketAttachments");
+                    b.ToTable("ticket_attachments", (string)null);
                 });
 
             modelBuilder.Entity("BugShot.Api.Models.TicketComment", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<string>("Author")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("author");
 
                     b.Property<string>("Body")
                         .IsRequired()
                         .HasMaxLength(5000)
-                        .HasColumnType("character varying(5000)");
+                        .HasColumnType("character varying(5000)")
+                        .HasColumnName("body");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<Guid>("TicketId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_comments");
 
-                    b.HasIndex("TicketId", "CreatedAt");
+                    b.HasIndex("TicketId", "CreatedAt")
+                        .HasDatabaseName("ix_ticket_comments_ticket_id_created_at");
 
-                    b.ToTable("TicketComments");
+                    b.ToTable("ticket_comments", (string)null);
                 });
 
             modelBuilder.Entity("BugShot.Api.Models.TicketStatusChange", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<DateTimeOffset>("ChangedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
 
                     b.Property<string>("ChangedBy")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("changed_by");
 
                     b.Property<TicketStatus>("FromStatus")
-                        .HasColumnType("ticket_status");
+                        .HasColumnType("ticket_status")
+                        .HasColumnName("from_status");
 
                     b.Property<Guid>("TicketId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
 
                     b.Property<TicketStatus>("ToStatus")
-                        .HasColumnType("ticket_status");
+                        .HasColumnType("ticket_status")
+                        .HasColumnName("to_status");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_status_changes");
 
-                    b.HasIndex("TicketId", "ChangedAt");
+                    b.HasIndex("TicketId", "ChangedAt")
+                        .HasDatabaseName("ix_ticket_status_changes_ticket_id_changed_at");
 
-                    b.ToTable("TicketStatusChanges");
+                    b.ToTable("ticket_status_changes", (string)null);
                 });
 
             modelBuilder.Entity("BugShot.Api.Models.ProjectOrigin", b =>
@@ -325,7 +394,8 @@ namespace BugShot.Api.Migrations
                         .WithMany("Origins")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_project_origins_projects_project_id");
 
                     b.Navigation("Project");
                 });
@@ -336,13 +406,15 @@ namespace BugShot.Api.Migrations
                         .WithMany()
                         .HasForeignKey("RuleId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_sanitization_logs_sanitization_rules_rule_id");
 
                     b.HasOne("BugShot.Api.Models.Ticket", "Ticket")
                         .WithMany("SanitizationLogs")
                         .HasForeignKey("TicketId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_sanitization_logs_tickets_ticket_id");
 
                     b.Navigation("Rule");
 
@@ -354,7 +426,8 @@ namespace BugShot.Api.Migrations
                     b.HasOne("BugShot.Api.Models.Project", "Project")
                         .WithMany("SanitizationRules")
                         .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_sanitization_rules_projects_project_id");
 
                     b.Navigation("Project");
                 });
@@ -365,7 +438,8 @@ namespace BugShot.Api.Migrations
                         .WithMany("Tickets")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_tickets_projects_project_id");
 
                     b.Navigation("Project");
                 });
@@ -376,7 +450,8 @@ namespace BugShot.Api.Migrations
                         .WithMany("Attachments")
                         .HasForeignKey("TicketId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_attachments_tickets_ticket_id");
 
                     b.Navigation("Ticket");
                 });
@@ -387,7 +462,8 @@ namespace BugShot.Api.Migrations
                         .WithMany("Comments")
                         .HasForeignKey("TicketId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_comments_tickets_ticket_id");
 
                     b.Navigation("Ticket");
                 });
@@ -398,7 +474,8 @@ namespace BugShot.Api.Migrations
                         .WithMany("StatusHistory")
                         .HasForeignKey("TicketId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_status_changes_tickets_ticket_id");
 
                     b.Navigation("Ticket");
                 });
