@@ -7,6 +7,8 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
 {
     public DbSet<Project> Projects => Set<Project>();
 
+    public DbSet<ProjectOrigin> ProjectOrigins => Set<ProjectOrigin>();
+
     public DbSet<Ticket> Tickets => Set<Ticket>();
 
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
@@ -15,19 +17,23 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
 
     public DbSet<TicketStatusChange> TicketStatusChanges => Set<TicketStatusChange>();
 
+    public DbSet<SanitizationRule> SanitizationRules => Set<SanitizationRule>();
+
+    public DbSet<SanitizationLog> SanitizationLogs => Set<SanitizationLog>();
+
     public override int SaveChanges()
     {
-        ApplyTimestamps();
+        ApplyAuditFields();
         return base.SaveChanges();
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        ApplyTimestamps();
+        ApplyAuditFields();
         return base.SaveChangesAsync(cancellationToken);
     }
 
-    private void ApplyTimestamps()
+    private void ApplyAuditFields()
     {
         var now = DateTimeOffset.UtcNow;
 
@@ -41,22 +47,62 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
 
         foreach (var entry in ChangeTracker.Entries<Ticket>())
         {
-            if (entry.State is EntityState.Added or EntityState.Modified)
+            if (entry.State is not (EntityState.Added or EntityState.Modified))
             {
-                entry.Entity.UpdatedAt = now;
+                continue;
+            }
+
+            entry.Entity.UpdatedAt = now;
+
+            // Postgres nie ma odpowiednika rowversion wiec pilnujemy tego sami
+            entry.Entity.RowVersion = Guid.NewGuid().ToByteArray();
+
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.ReceivedAt = now;
             }
         }
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasPostgresEnum<TicketStatus>();
+        modelBuilder.HasPostgresEnum<AttachmentKind>();
+
         modelBuilder.Entity<Project>(entity =>
         {
             entity.Property(p => p.Name).HasMaxLength(128);
             entity.Property(p => p.Key).HasMaxLength(64);
-            entity.Property(p => p.AllowedOrigin).HasMaxLength(2048);
 
             entity.HasIndex(p => p.Key).IsUnique();
+
+            // projekt startowy zeby widget i dashboard mialy w co celowac na dev
+            entity.HasData(new Project
+            {
+                Id = new Guid("11111111-1111-1111-1111-111111111111"),
+                Name = "Projekt demo",
+                Key = "demo",
+                CreatedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)
+            });
+        });
+
+        modelBuilder.Entity<ProjectOrigin>(entity =>
+        {
+            entity.Property(o => o.Origin).HasMaxLength(2048);
+
+            entity.HasIndex(o => new { o.ProjectId, o.Origin }).IsUnique();
+
+            entity.HasOne(o => o.Project)
+                .WithMany(p => p.Origins)
+                .HasForeignKey(o => o.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasData(new ProjectOrigin
+            {
+                Id = new Guid("22222222-2222-2222-2222-222222222222"),
+                ProjectId = new Guid("11111111-1111-1111-1111-111111111111"),
+                Origin = "http://127.0.0.1:5500"
+            });
         });
 
         modelBuilder.Entity<Ticket>(entity =>
@@ -64,16 +110,16 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             entity.Property(t => t.Description).HasMaxLength(1200);
             entity.Property(t => t.PageUrl).HasMaxLength(2048);
             entity.Property(t => t.UserAgent).HasMaxLength(512);
-            entity.Property(t => t.Status).HasConversion<string>().HasMaxLength(32);
+            entity.Property(t => t.DeletedBy).HasMaxLength(128);
+            entity.Property(t => t.RowVersion).IsConcurrencyToken();
 
-            // dashboard zawsze patrzy w obrebie projektu
-            entity.HasIndex(t => new { t.ProjectId, t.Status, t.CreatedAt });
+            // listing dashboardu
+            entity.HasIndex(t => new { t.ProjectId, t.Status, t.ReportedAt })
+                .IsDescending(false, false, true);
 
-            // dwoch deweloperow nie moze po cichu nadpisac sobie statusu
-            entity.Property<uint>("xmin")
-                .HasColumnType("xid")
-                .ValueGeneratedOnAddOrUpdate()
-                .IsConcurrencyToken();
+            // sortowanie domyslne
+            entity.HasIndex(t => new { t.ProjectId, t.ReceivedAt })
+                .IsDescending(false, true);
 
             // kasowanie projektu nie moze po cichu zabrac wszystkich zgloszen
             entity.HasOne(t => t.Project)
@@ -87,7 +133,8 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             entity.Property(a => a.Uri).HasMaxLength(2048);
             entity.Property(a => a.FileName).HasMaxLength(260);
             entity.Property(a => a.ContentType).HasMaxLength(128);
-            entity.Property(a => a.Kind).HasConversion<string>().HasMaxLength(32);
+
+            entity.HasIndex(a => a.TicketId);
 
             entity.HasOne(a => a.Ticket)
                 .WithMany(t => t.Attachments)
@@ -100,6 +147,8 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             entity.Property(c => c.Author).HasMaxLength(128);
             entity.Property(c => c.Body).HasMaxLength(5000);
 
+            entity.HasIndex(c => new { c.TicketId, c.CreatedAt });
+
             entity.HasOne(c => c.Ticket)
                 .WithMany(t => t.Comments)
                 .HasForeignKey(c => c.TicketId)
@@ -109,13 +158,39 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
         modelBuilder.Entity<TicketStatusChange>(entity =>
         {
             entity.Property(s => s.ChangedBy).HasMaxLength(128);
-            entity.Property(s => s.FromStatus).HasConversion<string>().HasMaxLength(32);
-            entity.Property(s => s.ToStatus).HasConversion<string>().HasMaxLength(32);
+
+            entity.HasIndex(s => new { s.TicketId, s.ChangedAt });
 
             entity.HasOne(s => s.Ticket)
                 .WithMany(t => t.StatusHistory)
                 .HasForeignKey(s => s.TicketId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SanitizationRule>(entity =>
+        {
+            entity.Property(r => r.Pattern).HasMaxLength(512);
+            entity.Property(r => r.Replacement).HasMaxLength(128);
+
+            entity.HasOne(r => r.Project)
+                .WithMany(p => p.SanitizationRules)
+                .HasForeignKey(r => r.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SanitizationLog>(entity =>
+        {
+            entity.Property(l => l.FieldName).HasMaxLength(64);
+
+            entity.HasOne(l => l.Ticket)
+                .WithMany(t => t.SanitizationLogs)
+                .HasForeignKey(l => l.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(l => l.Rule)
+                .WithMany()
+                .HasForeignKey(l => l.RuleId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

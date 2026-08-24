@@ -9,10 +9,11 @@ public class Project : ICreatedAt
     // publiczny identyfikator wpinany w widget
     public string Key { get; set; } = string.Empty;
 
-    // origin dopuszczany w CORS dla widgetu tego projektu
-    public string AllowedOrigin { get; set; } = string.Empty;
-
     public DateTimeOffset CreatedAt { get; set; }
 
+    public ICollection<ProjectOrigin> Origins { get; set; } = [];
+
     public ICollection<Ticket> Tickets { get; set; } = [];
+
+    public ICollection<SanitizationRule> SanitizationRules { get; set; } = [];
 }
