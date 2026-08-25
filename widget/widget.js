@@ -1,6 +1,8 @@
 (function () {
   "use strict";
 
+  const API_BASE_URL = window.BUGSHOT_CONFIG.apiBaseUrl;
+
   const widget = document.querySelector(".bugshot-widget");
   if (!widget) return;
 
@@ -372,7 +374,7 @@
       reportedAt: new Date().toISOString(),
     };
 
-    return fetch("http://localhost:5110/api/v1/tickets", {
+    return fetch(`${API_BASE_URL}/api/v1/tickets`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
