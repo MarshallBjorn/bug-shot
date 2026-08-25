@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="BugShot.Api.Tests/BugShot.Api.Tests.csproj" />
+  <Project Path="BugShot.Api/BugShot.Api.csproj" />
+</Solution>

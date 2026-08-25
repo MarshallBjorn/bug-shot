@@ -1,6 +1,8 @@
-# Bug-shot — wstępna specyfikacja API
+# Bug-shot: specyfikacja API
 
-Dokument opisuje uzgodniony na tym etapie kształt API, modelu danych, zabezpieczeń i obsługi plików. Wszystko wersja MVP — rzeczy odłożone świadomie zebrane w sekcji „TODO / poza zakresem MVP".
+Dokument opisuje model danych, konwencje i decyzje projektowe. Powstał na bazie wstępnej specyfikacji uzgodnionej w zespole, uzupełnionej o to, co wyszło przy implementacji szkieletu backendu.
+
+Dokładne kształty żądań i odpowiedzi generują się z kontrolerów i są dostępne pod `/openapi/v1.json`. Dokument produkuje wbudowane OpenAPI z .NET 10. Interfejsu do klikania na razie nie ma, jest sam dokument.
 
 ## Model danych
 
@@ -15,128 +17,149 @@ erDiagram
     TICKET ||--o{ SANITIZATION_LOG : "ma"
 
     PROJECT {
-        uuid Id PK
-        varchar Name
-        varchar Key UK
-        timestamptz CreatedAt
+        uuid id PK
+        varchar name
+        varchar key UK
+        timestamptz created_at
     }
 
     PROJECT_ORIGIN {
-        uuid Id PK
-        uuid ProjectId FK
-        varchar Origin
+        uuid id PK
+        uuid project_id FK
+        varchar origin
     }
 
     SANITIZATION_RULE {
-        uuid Id PK
-        uuid ProjectId FK "nullable = reguła globalna"
-        varchar Pattern
-        varchar Replacement
-        boolean IsEnabled
-        timestamptz CreatedAt
+        uuid id PK
+        uuid project_id FK "null oznacza regule globalna"
+        varchar pattern
+        varchar replacement
+        boolean is_enabled
+        timestamptz created_at
     }
 
     SANITIZATION_LOG {
-        uuid Id PK
-        uuid TicketId FK
-        uuid RuleId FK
-        varchar FieldName
-        int MatchCount
-        timestamptz CreatedAt
+        uuid id PK
+        uuid ticket_id FK
+        uuid rule_id FK
+        varchar field_name
+        int match_count
+        timestamptz created_at
     }
 
     TICKET {
-        uuid Id PK
-        uuid ProjectId FK
-        varchar Description
-        varchar PageUrl
-        varchar UserAgent
-        ticket_status Status "enum"
-        timestamptz ReportedAt
-        timestamptz ReceivedAt
-        timestamptz CreatedAt
-        timestamptz UpdatedAt
-        timestamptz DeletedAt "nullable = tombstone"
-        varchar DeletedBy
-        bytea RowVersion "optimistic concurrency"
+        uuid id PK
+        uuid project_id FK
+        varchar description
+        varchar page_url
+        varchar user_agent
+        ticket_status status
+        timestamptz reported_at
+        timestamptz received_at
+        timestamptz created_at
+        timestamptz updated_at
+        timestamptz deleted_at "null dopoki nie skasowany"
+        varchar deleted_by
+        bytea row_version
     }
 
     TICKET_ATTACHMENT {
-        uuid Id PK
-        uuid TicketId FK
-        attachment_kind Kind "enum: Screenshot, UserUpload, ConsoleLog"
-        varchar Uri
-        varchar FileName
-        varchar ContentType
-        bigint SizeBytes
-        timestamptz CreatedAt
+        uuid id PK
+        uuid ticket_id FK
+        attachment_kind kind
+        varchar uri
+        varchar file_name
+        varchar content_type
+        bigint size_bytes
+        timestamptz created_at
     }
 
     TICKET_COMMENT {
-        uuid Id PK
-        uuid TicketId FK
-        varchar Author
-        varchar Body
-        timestamptz CreatedAt
+        uuid id PK
+        uuid ticket_id FK
+        varchar author
+        varchar body
+        timestamptz created_at
     }
 
     TICKET_STATUS_CHANGE {
-        uuid Id PK
-        uuid TicketId FK
-        ticket_status FromStatus
-        ticket_status ToStatus
-        varchar ChangedBy
-        timestamptz ChangedAt
+        uuid id PK
+        uuid ticket_id FK
+        ticket_status from_status
+        ticket_status to_status
+        varchar changed_by
+        timestamptz changed_at
     }
 ```
 
-### Decyzje
+### Konwencje nazewnicze
 
-Statusy i rodzaje załącznika trzymamy jako Postgresowe enumy: `ticket_status` (`New`, `InProgress`, `Resolved`, `Rejected`, `Deleted`) i `attachment_kind` (`Screenshot`, `UserUpload`, `ConsoleLog`). Dodawanie nowych wartości: `ALTER TYPE ... ADD VALUE`. Zmiany/rename planujemy migracją.
+Baza używa `snake_case` dla tabel, kolumn, kluczy i indeksów. Zapytania pisane ręcznie nie wymagają wtedy cudzysłowów, bo Postgres składa niecytowane identyfikatory do małych liter.
 
-`AllowedOrigin` z pierwotnej propozycji rozbity na osobną tabelę `PROJECT_ORIGIN` — projekt bywa hostowany na wielu domenach (prod, staging, preview).
+JSON w API używa `camelCase`. Warstwy są niezależne, więc kolumna `page_url` wychodzi na zewnątrz jako `pageUrl`.
 
-`ConsoleLog` nie leci do bazy. Traktujemy go jak każdy inny załącznik — plik na volume, wpis w `TICKET_ATTACHMENT` z `Kind = 'ConsoleLog'`. Konsekwencja: search po ticketach idzie tylko po `Description` i `PageUrl`, nie po treści logów. Twardy limit `ConsoleLog` = 256 KiB po stronie API, przed zapisem na dysk.
+### Enumy
 
-`UpdatedAt` aktualizowany na każdym `SaveChanges`. `RowVersion` do optimistic concurrency przy `PATCH status` — konflikt zwraca `409`.
+`ticket_status` i `attachment_kind` to natywne typy wyliczeniowe Postgresa, nie tekst.
 
-Kasowanie ticketu = soft-delete-lite (tombstone). Zostają: `Id`, `ProjectId`, `Status = 'Deleted'`, `DeletedAt`, `DeletedBy` + wpis w `TICKET_STATUS_CHANGE`. Znika: `Description`, `PageUrl`, `UserAgent`, komentarze, załączniki (w tym `ConsoleLog`) fizycznie z volume. Kasowanie projektu z aktywnymi ticketami dalej zablokowane.
+| Typ | W bazie | W JSON |
+|---|---|---|
+| `ticket_status` | `new`, `in_progress`, `resolved`, `rejected`, `deleted` | `New`, `InProgress`, `Resolved`, `Rejected`, `Deleted` |
+| `attachment_kind` | `screenshot`, `user_upload`, `console_log` | `Screenshot`, `UserUpload`, `ConsoleLog` |
 
-### Sanityzacja
-
-Reguły sanityzacji w osobnej tabeli `SANITIZATION_RULE` — nie `jsonb`, chcemy indeksować i audytować per reguła. `ProjectId` nullable = reguła globalna (email, karta, JWT, Bearer). Reguły projektowe nadpisują/rozszerzają globalne.
-
-Sanityzacja odpala się po stronie backendu **przed** zapisem — dla `Description`, `PageUrl`, `UserAgent` w bazie oraz dla `ConsoleLog` na volume. Trafienia loguje się do `SANITIZATION_LOG` (`FieldName`, `MatchCount`, `RuleId`) — bez zapisu oryginału. Ticket wraca do klienta zawsze w wersji zamaskowanej.
+Dodanie nowej wartości wymaga migracji z `ALTER TYPE ... ADD VALUE`. Zmiana nazwy istniejącej jest kosztowniejsza i wymaga osobnej migracji.
 
 ### Indeksy
 
-- `TICKET(ProjectId, Status, ReportedAt DESC)` — listing dashboardu
-- `TICKET(ProjectId, ReceivedAt DESC)` — sortowanie domyślne
-- `TICKET_COMMENT(TicketId, CreatedAt)`
-- `TICKET_STATUS_CHANGE(TicketId, ChangedAt)`
-- `TICKET_ATTACHMENT(TicketId)`
-- unikalny `PROJECT(Key)`
-- unikalny `PROJECT_ORIGIN(ProjectId, Origin)`
+- `tickets(project_id, status, reported_at DESC)` dla listingu z filtrem
+- `tickets(project_id, received_at DESC)` dla sortowania domyślnego
+- `ticket_comments(ticket_id, created_at)`
+- `ticket_status_changes(ticket_id, changed_at)`
+- `ticket_attachments(ticket_id)`
+- unikalny `projects(key)`
+- unikalny `project_origins(project_id, origin)`
 
-## Pliki
+### Czas
 
-Pliki nie trafiają do bazy. Baza trzyma `Uri`, plik leży w volume i serwuje go nginx z nagłówkami `Content-Disposition: attachment` i `X-Content-Type-Options: nosniff`.
+Wszystkie znaczniki czasu są przechowywane jako `timestamptz`, czyli w UTC. Postgres nie przyjmuje przesunięcia innego niż zero, więc `reportedAt` przysłany przez klienta jest przeliczany na UTC przed zapisem. Oryginalne przesunięcie nie jest zachowywane: `2026-08-24T09:12:33+02:00` wraca jako `2026-08-24T07:12:33+00:00`.
 
-Nazwa pliku na dysku: `{uuid}.{ext}`. `FileName` klienta trzymany tylko jako metadana w bazie, nigdy nie używany w ścieżce.
+Rozdzielenie pól jest celowe. `reported_at` pochodzi od klienta, którego zegar może być przestawiony. `received_at` stempluje serwer przy przyjęciu zgłoszenia i tylko na nim można polegać.
+
+### Współbieżność
+
+`created_at` jest nadawane przy dodaniu rekordu, a `updated_at` i `row_version` przy każdym zapisie ticketu. Robi to kontekst bazy, nie kod wołający, więc nie da się o tym zapomnieć w kontrolerze.
+
+`row_version` chroni przed sytuacją, w której dwóch deweloperów zmienia ten sam ticket i jeden nadpisuje drugiego bez śladu. Postgres nie ma odpowiednika `rowversion` z SQL Servera, więc pole nadaje backend przy każdym zapisie. Na zewnątrz wychodzi jako nieprzezroczysty string base64. Klient ma go nie parsować, tylko odesłać w niezmienionej postaci przy aktualizacji statusu.
+
+### Kasowanie
+
+Kasowanie ticketu to tombstone. Zostają `id`, `project_id`, `status` ustawiony na `Deleted`, `deleted_at`, `deleted_by` oraz wpis w historii statusów. Znikają opis, adres strony, user agent, komentarze i załączniki, te ostatnie fizycznie z wolumenu.
+
+Kasowanie projektu, który ma zgłoszenia, jest zablokowane na poziomie klucza obcego.
 
 ## Endpointy
 
-Prefix wersji: `/api/v1/...`, ustawiony globalnie w routingu. OpenAPI/Swashbuckle wpięty od dnia zero.
+Prefiks wersji `/api/v1`. Kolumna stanu mówi, czy endpoint istnieje w kodzie. Zaplanowane zwracają dziś 404.
 
-### Publiczny, dla widgetu
+| Endpoint | Stan | Opis |
+|---|---|---|
+| `POST /tickets` | działa | zgłoszenie z widgetu, patrz niżej |
+| `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtr po statusie, szukanie, paginacja |
+| `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
+| `POST /tickets/{id}/attachments` | planowane | multipart, autoryzacja przez `uploadToken` |
+| `PATCH /tickets/{id}/status` | planowane | wymaga `If-Match` z `rowVersion`, konflikt daje 409 |
+| `DELETE /tickets/{id}` | planowane | tombstone opisany wyżej |
+| `POST /tickets/{id}/comments` | planowane | dodanie komentarza |
+| `GET /tickets/{id}/comments` | planowane | lista komentarzy z paginacją |
+| `DELETE /projects/{id}` | planowane | zablokowane, dopóki projekt ma zgłoszenia |
 
-```
-POST /api/v1/tickets
-```
+### POST /tickets
+
+Jedyny endpoint integrowany spoza naszego kodu, więc kontrakt zapisany wprost.
 
 ```json
 {
-  "projectKey": "acme-shop",
+  "projectKey": "demo",
   "description": "Koszyk gubi produkty po odswiezeniu",
   "pageUrl": "https://acme.example/cart",
   "userAgent": "Mozilla/5.0 ...",
@@ -144,105 +167,70 @@ POST /api/v1/tickets
 }
 ```
 
-`consoleLog` nie leci w JSON — idzie razem z załącznikami (multipart) z `Kind = 'ConsoleLog'`.
+Odpowiedź `201 Created` z identyfikatorem zgłoszenia.
 
-Nagłówki wymagane:
-- `Idempotency-Key` — UUID od widgetu, retry nie tworzy duplikatu
-- `Origin` — walidowany względem `PROJECT_ORIGIN` powiązanych z `projectKey`
+Wymagane są `projectKey` i `description`. Opis do 1200 znaków, czyli tyle samo co limit w widgecie. `pageUrl` musi być poprawnym adresem. Nieznany `projectKey` daje 400 z błędem walidacji na tym polu.
 
-Odpowiedź `201 Created`:
+Błędy walidacji wracają jako `ProblemDetails` zgodnie z RFC 9110, z mapą `errors` po nazwach pól.
 
-```json
-{ "id": "uuid", "uploadToken": "opaque-string" }
-```
+Do dorobienia w kolejnym sprincie: nagłówek `Idempotency-Key`, walidacja nagłówka `Origin` względem `project_origins`, rate limit per IP i per `projectKey` oraz zwracanie `uploadToken` do wysyłki załączników.
 
-Zabezpieczenia endpointu:
-- walidacja `Origin` vs lista `PROJECT_ORIGIN`
-- rate-limit per IP i per `projectKey`
-- serwer stempluje `ReceivedAt` niezależnie od `reportedAt` z klienta
+### Zachowania listy
 
-### Załączniki
+Rzeczy, których nie widać z sygnatury endpointu:
 
-```
-POST /api/v1/tickets/{id}/attachments
-```
+- `pageSize` jest przycinany do 100, `page` do minimum 1
+- bez podanego `status` lista pomija tickety skasowane, bo tombstone nie ma czego pokazać. Jawne `status=Deleted` je zwróci
+- `search` szuka po opisie i po adresie strony, bez rozróżniania wielkości liter
+- `sort` przyjmuje `receivedAt:desc`, `receivedAt:asc`, `reportedAt:desc` i `reportedAt:asc`. Nierozpoznana wartość wpada w domyślne `receivedAt:desc`
 
-- autoryzacja przez `uploadToken` zwrócony przy tworzeniu ticketu
-- token: 5 min TTL, hashowany w bazie, powiązany z konkretnym `ticketId`, licznik użyć = limit załączników (5 plików × 10 MiB, plus `ConsoleLog` jako osobny „załącznik")
-- multipart
+## Pliki
 
-Walidacja plików:
-- whitelist typów: `image/png`, `image/jpeg`, `application/pdf`, `text/plain` (dla ConsoleLog)
-- weryfikacja przez sprawdzenie magic bytes + strukturalną walidację zawartości (odpowiednik Apache Tiki — w .NET np. `MimeDetective`); nagłówek `Content-Type` od klienta jest ignorowany, bo łatwo go podrobić i przemycić RCE pod zwykłym obrazkiem
-- obrazy muszą się zdekodować (`ImageSharp`), PDF musi mieć `%PDF-` i poprawny trailer
-- rozmiar sprawdzany strumieniowo przed zapisem na dysk
+Pliki nie trafiają do bazy. Baza trzyma `uri`, plik leży na wolumenie i serwuje go nginx z nagłówkami `Content-Disposition: attachment` oraz `X-Content-Type-Options: nosniff`.
 
-### Dla dashboardu
+Nazwa pliku na dysku to `{uuid}.{rozszerzenie}`. Nazwa podana przez klienta jest trzymana wyłącznie jako metadana i nigdy nie trafia do ścieżki.
 
-```
-GET    /api/v1/projects/{projectId}/tickets?status=&search=&sort=&page=&pageSize=
-GET    /api/v1/tickets/{id}
-PATCH  /api/v1/tickets/{id}/status
-DELETE /api/v1/tickets/{id}
-POST   /api/v1/tickets/{id}/comments
-GET    /api/v1/tickets/{id}/comments?page=&pageSize=
-DELETE /api/v1/projects/{id}
-```
+Limity po stronie API: pięć plików po 10 MiB, plus logi konsoli jako osobny załącznik z limitem 256 KiB.
 
-`GET .../tickets` — `search` po `Description` i `PageUrl`. `sort` domyślnie `receivedAt:desc`. Odpowiedź:
+Dozwolone typy: `image/png`, `image/jpeg`, `application/pdf` oraz `text/plain` dla logów konsoli.
 
-```json
-{ "items": [...], "total": 123, "page": 1, "pageSize": 20 }
-```
+Typ rozpoznajemy po zawartości pliku, a nie po nagłówku `Content-Type` od klienta, bo ten łatwo podrobić i przemycić coś wykonywalnego pod zwykłym obrazkiem. Do tego walidacja strukturalna: obrazy muszą się zdekodować, PDF musi mieć nagłówek `%PDF-` i poprawny trailer. Rozmiar sprawdzany strumieniowo przed zapisem na dysk.
 
-`GET /api/v1/tickets/{id}` — kształt odpowiedzi:
+Logi konsoli są zwykłym załącznikiem z `kind = console_log`, a nie kolumną w bazie. Konsekwencja: wyszukiwanie nie obejmuje ich treści.
 
-```json
-{
-  "id": "uuid",
-  "projectId": "uuid",
-  "projectKey": "acme-shop",
-  "description": "...",
-  "pageUrl": "...",
-  "userAgent": "...",
-  "status": "InProgress",
-  "reportedAt": "2026-08-24T09:12:33+02:00",
-  "receivedAt": "2026-08-24T07:12:34Z",
-  "createdAt": "...",
-  "updatedAt": "...",
-  "rowVersion": "opaque-string",
-  "attachments": [
-    { "id": "uuid", "kind": "Screenshot", "uri": "https://.../abc.png",
-      "fileName": "shot.png", "contentType": "image/png", "sizeBytes": 12345 }
-  ],
-  "consoleLogUri": "https://.../console.log",
-  "commentCount": 4,
-  "statusHistory": [
-    { "fromStatus": "New", "toStatus": "InProgress",
-      "changedBy": "bartek", "changedAt": "..." }
-  ]
-}
-```
+## Sanityzacja
 
-`PATCH .../status`:
+Model danych jest przygotowany, logiki jeszcze nie ma.
 
-```json
-{ "status": "InProgress", "changedBy": "bartek" }
-```
+Reguły siedzą w `sanitization_rules`, a nie w kolumnie `jsonb`, żeby dało się je indeksować i audytować pojedynczo. `project_id` równe `null` oznacza regułę globalną, na przykład dla adresów e-mail, numerów kart czy tokenów. Reguły projektowe rozszerzają globalne.
 
-Wymaga nagłówka `If-Match: <rowVersion>`. Konflikt → `409 Conflict`. Backend odrzuca nieznane wartości statusu (enum). Twardej state machine dozwolonych przejść na MVP nie ma.
+Maskowanie ma się odbywać po stronie backendu przed zapisem, dla opisu, adresu strony i user agenta w bazie oraz dla logów konsoli na wolumenie. Trafienia trafiają do `sanitization_logs` z nazwą pola i liczbą dopasowań, bez zapisywania oryginału. Ticket wraca do klienta zawsze w wersji zamaskowanej.
 
-`POST .../comments`:
+## CORS
 
-```json
-{ "author": "bartek", "body": "Odtworzone na stagingu" }
-```
+Widget działa na cudzych domenach, więc `POST /tickets` ma osobną politykę dopuszczającą wyłącznie metodę `POST` i nagłówek `Content-Type`. Dashboard ma drugą, szerszą.
 
-`GET .../comments` — paginacja `page`/`pageSize`, sort `createdAt:asc`.
+Dozwolone adresy są dziś czytane ze statycznej konfiguracji, z sekcji `Cors` w `appsettings`. Docelowo mają wynikać z tabeli `project_origins` powiązanej z `projectKey` ze zgłoszenia. To świadome uproszczenie na czas szkieletu.
 
-## TODO / poza zakresem MVP
+## Dane startowe
 
-- Systemowe logowanie (structured logs, audit trail poza `SANITIZATION_LOG`) — świadomie odkładamy, hooki w kodzie zostawiamy żeby dopiąć bez refaktoru.
-- Twarda state machine przejść statusów.
-- Autoryzacja użytkownika w dashboardzie — pole `changedBy`/`author` obecnie z body, docelowo z sesji/JWT. Następny etap dyskusji.
-- Dopisać do głównego README informację o sanityzacji i walidacji (odesłanie do tego dokumentu).
+Migracja tworzy jeden projekt, żeby dało się cokolwiek wywołać lokalnie.
+
+| Pole | Wartość |
+|---|---|
+| `id` | `11111111-1111-1111-1111-111111111111` |
+| `key` | `demo` |
+| `name` | `Projekt demo` |
+| dozwolony origin | `http://127.0.0.1:5500` |
+
+Origin odpowiada adresowi, pod którym uruchamia się lokalnie widget.
+
+Baza nie migruje się sama. `docker compose` stawia kontenery, ale schemat trzeba założyć osobno przez `dotnet ef database update`. Podpięcie tego do startu aplikacji albo do `Makefile` jest jeszcze do ustalenia.
+
+## Poza zakresem
+
+- uwierzytelnianie w dashboardzie. Pola `author` i `changedBy` przychodzą dziś z ciała żądania, więc można podać się za kogokolwiek. Docelowo mają pochodzić z sesji
+- systemowe logowanie i audyt poza `sanitization_logs`. Miejsca wpięcia zostawiamy w kodzie, żeby dało się to dopiąć bez przepisywania warstwy
+- odesłanie do sanityzacji i walidacji plików w głównym `README`
+- twarda maszyna stanów przejść między statusami
+- Redis jako cache przed Postgresem
