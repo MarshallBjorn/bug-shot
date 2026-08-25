@@ -44,6 +44,13 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/openapi/v1.json", "Bug-shot API v1");
+        options.RoutePrefix = "swagger";
+        options.DocumentTitle = "Bug-shot API";
+    });
 }
 
 app.UseCors();

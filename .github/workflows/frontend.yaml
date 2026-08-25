@@ -2,9 +2,16 @@ name: NPM CI
 
 on:
   push:
-    branches: [ "main" ]
+    paths:
+      - 'frontend/**'
+      - 'widget/**'
+      - '.github/workflows/npm.yaml'
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'frontend/**'
+      - 'widget/**'
+      - '.github/workflows/npm.yaml'
 
 jobs:
   build:
