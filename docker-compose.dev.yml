@@ -36,6 +36,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: development
     depends_on:
       - backend
     environment:
