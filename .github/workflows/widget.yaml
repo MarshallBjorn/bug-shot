@@ -1,0 +1,99 @@
+name: widget
+
+on:
+  push:
+    paths:
+      - 'widget/**'
+      - '.github/workflows/widget.yaml'
+      - 'Makefile'
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+
+      - name: Check JS syntax
+        run: |
+          for f in widget/*.js; do
+            [ -f "$f" ] && node --check "$f"
+          done
+
+      - name: Validate HTML
+        run: npx --yes html-validate widget/*.html || true
+
+  build-test:
+    if: hashFiles('widget/package.json') != ''
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./widget
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+          cache-dependency-path: ./widget/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint --if-present
+      - run: npm run build
+      - run: npm test --if-present
+
+      - name: Upload static bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: widget-${{ github.sha }}
+          path: widget/dist/
+          if-no-files-found: error
+
+  publish-npm:
+    if: |
+      hashFiles('widget/package.json') != '' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    needs: build-test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./widget
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@${{ github.repository_owner }}'
+          cache: 'npm'
+          cache-dependency-path: ./widget/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # publish-cdn:
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   needs: build-test
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         name: widget-${{ github.sha }}
+  #         path: dist/
+  #     - name: Upload to CDN
+  #       run: echo "TODO: rsync/aws s3 cp dist/ do docelowej domeny + wersjonowana sciezka /widget/vX.Y.Z/ + /latest/"
