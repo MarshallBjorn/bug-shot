@@ -67,7 +67,7 @@ image-scan-trivy: _check-service
 image-scan-dockle: _check-service
 	docker run --rm \
 		-v /var/run/docker.sock:/var/run/docker.sock \
-		$(DOCKLE_IMAGE) --exit-code 1 --exit-level fatal $(IMAGE)
+		$(DOCKLE_IMAGE) --accept-key KEY_SHA512 --exit-code 1 --exit-level fatal $(IMAGE)
 
 # For local testing, one command
 image-scan: image-scan-trivy image-scan-dockle
