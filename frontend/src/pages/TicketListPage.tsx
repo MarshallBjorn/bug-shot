@@ -1,15 +1,24 @@
 import { useParams } from 'react-router'
 import TicketTable from '../components/TicketTable'
-import { mockTickets } from '../mocks/tickets'
+import { useTickets } from '../hooks/useTickets'
 
 function TicketListPage() {
   const { projectId = '' } = useParams()
+  const tickets = useTickets(projectId)
 
   return (
     <>
       <h2>Zgłoszenia</h2>
-      <p>Wyświetlane {mockTickets.items.length} z {mockTickets.total}</p>
-      <TicketTable projectId={projectId} items={mockTickets.items} />
+      {tickets.status === 'loading' && <p>Ładowanie...</p>}
+      {tickets.status === 'error' && (
+        <p role="alert">Nie udało się pobrać zgłoszeń. {tickets.message}</p>
+      )}
+      {tickets.status === 'loaded' && (
+        <>
+          <p>Wyświetlane {tickets.result.items.length} z {tickets.result.total}</p>
+          <TicketTable projectId={projectId} items={tickets.result.items} />
+        </>
+      )}
     </>
   )
 }
