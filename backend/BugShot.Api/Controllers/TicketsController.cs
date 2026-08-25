@@ -1,0 +1,89 @@
+using BugShot.Api.Contracts;
+using BugShot.Api.Data;
+using BugShot.Api.Models;
+using Microsoft.AspNetCore.Cors;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace BugShot.Api.Controllers;
+
+[ApiController]
+[Route("api/v1/tickets")]
+public class TicketsController(BugShotDbContext db) : ControllerBase
+{
+    [HttpPost]
+    [EnableCors(CorsPolicies.Widget)]
+    [ProducesResponseType<CreatedTicketResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<CreatedTicketResponse>> Create(
+        CreateTicketRequest request,
+        CancellationToken cancellationToken)
+    {
+        var projectId = await db.Projects
+            .Where(p => p.Key == request.ProjectKey)
+            .Select(p => p.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (projectId == Guid.Empty)
+        {
+            ModelState.AddModelError(nameof(request.ProjectKey), "Unknown project key.");
+            return ValidationProblem(ModelState);
+        }
+
+        var ticket = new Ticket
+        {
+            ProjectId = projectId,
+            Description = request.Description,
+            PageUrl = request.PageUrl,
+            UserAgent = request.UserAgent,
+            // timestamptz przyjmuje tylko UTC a klient przysyla swoje przesuniecie
+            ReportedAt = request.ReportedAt?.ToUniversalTime(),
+            Status = TicketStatus.New
+        };
+
+        db.Tickets.Add(ticket);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return CreatedAtAction(nameof(GetById), new { id = ticket.Id }, new CreatedTicketResponse(ticket.Id));
+    }
+
+    [HttpGet("{id:guid}")]
+    [EnableCors(CorsPolicies.Dashboard)]
+    [ProducesResponseType<TicketDetails>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TicketDetails>> GetById(Guid id, CancellationToken cancellationToken)
+    {
+        var ticket = await db.Tickets
+            .AsNoTracking()
+            .Where(t => t.Id == id)
+            .Select(t => new TicketDetails(
+                t.Id,
+                t.ProjectId,
+                t.Project.Key,
+                t.Description,
+                t.PageUrl,
+                t.UserAgent,
+                t.Status,
+                t.ReportedAt,
+                t.ReceivedAt,
+                t.CreatedAt,
+                t.UpdatedAt,
+                Convert.ToBase64String(t.RowVersion),
+                t.Attachments
+                    .Where(a => a.Kind != AttachmentKind.ConsoleLog)
+                    .Select(a => new TicketAttachmentResponse(a.Id, a.Kind, a.Uri, a.FileName, a.ContentType, a.SizeBytes))
+                    .ToList(),
+                t.Attachments
+                    .Where(a => a.Kind == AttachmentKind.ConsoleLog)
+                    .Select(a => a.Uri)
+                    .FirstOrDefault(),
+                t.Comments.Count,
+                t.StatusHistory
+                    .OrderBy(h => h.ChangedAt)
+                    .Select(h => new TicketStatusChangeResponse(h.FromStatus, h.ToStatus, h.ChangedBy, h.ChangedAt))
+                    .ToList()))
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return ticket is null ? NotFound() : Ok(ticket);
+    }
+}
