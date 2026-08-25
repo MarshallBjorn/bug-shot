@@ -363,14 +363,41 @@
       first.focus();
     }
   }
+  function submitReport({ description }) {
+    const payload = {
+      projectKey: "demo",
+      description,
+      pageUrl: window.location.href,
+      userAgent: navigator.userAgent,
+      reportedAt: new Date().toISOString(),
+    };
 
-  function submitReport() {
-    // Temporary local transport. Replace only this function with the real POST.
-    return new Promise((resolve) => {
-      sendTimer = window.setTimeout(() => {
-        sendTimer = null;
-        resolve({ accepted: true });
-      }, 700);
+    return fetch("http://localhost:5110/api/v1/tickets", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }).then(async (response) => {
+      if (!response.ok) {
+        let message = `Request failed with status ${response.status}.`;
+
+        try {
+          const errorBody = await response.json();
+          message = errorBody?.detail || errorBody?.title || message;
+        } catch {
+          // Keep the HTTP status message when the response is not JSON.
+        }
+
+        throw new Error(message);
+      }
+
+      const data = await response.json();
+
+      return {
+        accepted: true,
+        id: data.id,
+      };
     });
   }
 
