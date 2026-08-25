@@ -19,8 +19,8 @@ COPY . .
 RUN npm run build
 
 # --- production (domyslny stage bez --target, uzywany przez CI i prod) ---
-FROM nginx:1.28-alpine AS production
-RUN apk update && apk upgrade --no-cache
+FROM nginx:1.31.4-alpine AS production
+RUN apk update && apk upgrade --no-cache && apk add --upgrade --no-cache nginx
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
