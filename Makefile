@@ -66,7 +66,7 @@ image-scan-trivy: _check-service
 
 image-scan-dockle: _check-service
 	docker run --rm \
-		-v /var/run/dockle.sock:/var/run/docker.sock \
+		-v /var/run/docker.sock:/var/run/docker.sock \
 		$(DOCKLE_IMAGE) --exit-code 1 --exit-level fatal $(IMAGE)
 
 # For local testing, one command
