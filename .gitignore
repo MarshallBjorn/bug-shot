@@ -803,3 +803,5 @@ Temporary Items
 # Vite
 dist-ssr/
 *.local
+
+widget/config.js
