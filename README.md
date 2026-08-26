@@ -71,11 +71,17 @@ flowchart LR
         s3["S3 / B2<br/>backupy pg_dump + wolumen"]
     end
 
-    subgraph cicd["CI/CD"]
-        gh["GitHub Actions"]
-        ghcr["GHCR<br/>obrazy: api, dashboard, nginx"]
-        npm["NPM + jsDelivr<br/>widget"]
+    subgraph dist["Dystrybucja widgetu"]
+        npm2["NPM<br/>@bug-shot/widget"]
+        ghrel["GitHub Release<br/>dist + SHA256"]
     end
+    
+    nginx -. "/widget*.js<br/>own CDN" .-> widget
+    npm2 -.-> widget
+    ghrel -.-> widget
+    gh -- "widget-v* tag" --> npm2
+    gh -- "widget-v* tag" --> ghrel
+    gh -- "widget-v* tag<br/>rsync" --> nginx
 
     dev(["Developer / QA"])
     admin(["Admin projektu"])
