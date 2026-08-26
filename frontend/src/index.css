@@ -7,3 +7,28 @@ body {
   margin: 0;
   padding: 1rem;
 }
+
+.app-header {
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+}
+
+.app-header a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ticket-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.ticket-table th,
+.ticket-table td {
+  border-bottom: 1px solid #ddd;
+  padding: 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}

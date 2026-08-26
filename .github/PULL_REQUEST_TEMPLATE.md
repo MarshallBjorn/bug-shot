@@ -39,3 +39,8 @@
 - [ ]
 - [ ]
 - [ ]
+
+
+## Notes
+
+<!-- Optional. Mention conscious omissions, known limitations, dependencies, or anything reviewers should be aware of. -->
