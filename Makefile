@@ -42,6 +42,15 @@ DOCKLE_IMAGE   = goodwithtech/dockle:$(DOCKLE_VERSION)
 
 CI_CACHE       ?= $(HOME)/.cache/bugshot-ci
 
+secret_scan:
+	@echo "==> Trivy Secrets Scan"
+	docker run --rm \
+		-v $(CURDIR):/src \
+		aquasec/trivy \
+		fs --scanners secret /src \
+			--severity HIGH,CRITICAL \
+			--exit-code 1
+
 _check-service:
 	@if [ -z "$(SERVICE)" ]; then \
 	    echo "SERVICE required <backend|frontend|wiget>"; exit 1; fi
