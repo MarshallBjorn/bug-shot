@@ -43,7 +43,7 @@ jobs:
           done
 
       - name: Validate HTML
-        run: npx --yes html-validate widget/*.html || true
+        run: npx --yes html-validate widget/*.html
 
   build-test:
     needs: detect

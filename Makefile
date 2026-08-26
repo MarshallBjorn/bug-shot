@@ -46,7 +46,7 @@ secret_scan:
 	@echo "==> Trivy Secrets Scan"
 	docker run --rm \
 		-v $(CURDIR):/src \
-		aquasec/trivy \
+		$(TRIVY_IMAGE) \
 		fs --scanners secret /src \
 			--severity HIGH,CRITICAL \
 			--exit-code 1
