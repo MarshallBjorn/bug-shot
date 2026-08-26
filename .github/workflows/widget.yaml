@@ -14,6 +14,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      has_package: ${{ steps.check.outputs.has_package }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          if [ -f widget/package.json ]; then
+            echo "has_package=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_package=false" >> "$GITHUB_OUTPUT"
+          fi
+
   smoke:
     runs-on: ubuntu-latest
     steps:
@@ -32,7 +46,8 @@ jobs:
         run: npx --yes html-validate widget/*.html || true
 
   build-test:
-    if: hashFiles('widget/package.json') != ''
+    needs: detect
+    if: needs.detect.outputs.has_package == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -58,11 +73,11 @@ jobs:
           if-no-files-found: error
 
   publish-npm:
+    needs: [detect, build-test]
     if: |
-      hashFiles('widget/package.json') != '' &&
+      needs.detect.outputs.has_package == 'true' &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
-    needs: build-test
     runs-on: ubuntu-latest
     defaults:
       run:

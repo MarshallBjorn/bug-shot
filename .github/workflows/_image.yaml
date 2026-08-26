@@ -24,12 +24,14 @@ jobs:
         run: |
           OWNER=${GITHUB_REPOSITORY_OWNER,,}
           TAG=${GITHUB_SHA::7}
-          echo "owner=$OWNER"                                >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG"                                    >> "$GITHUB_OUTPUT"
-          echo "image=ghcr.io/$OWNER/bugshot-$SERVICE:$TAG"  >> "$GITHUB_OUTPUT"
+          {
+            echo "owner=$OWNER"
+            echo "tag=$TAG"
+            echo "image=ghcr.io/$OWNER/bugshot-$SERVICE:$TAG"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Hadolint
-        run: make image-lint SERVICE=$SERVICE
+        run: make image-lint SERVICE="$SERVICE"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -70,7 +72,7 @@ jobs:
             trivy-db-${{ runner.os }}-
 
       - name: Trivy scan
-        run: make image-scan-trivy SERVICE=$SERVICE IMAGE_TAG=$IMAGE_TAG
+        run: make image-scan-trivy SERVICE="$SERVICE" IMAGE_TAG="$IMAGE_TAG"
 
   scan-dockle:
     needs: build
@@ -92,7 +94,7 @@ jobs:
           cache-from: type=gha,scope=${{ inputs.service }}
 
       - name: Dockle Scan
-        run: make image-scan-dockle SERVICE=$SERVICE IMAGE_TAG=$IMAGE_TAG
+        run: make image-scan-dockle SERVICE="$SERVICE" IMAGE_TAG="$IMAGE_TAG"
 
   push:
     needs: [build, scan-trivy, scan-dockle]
