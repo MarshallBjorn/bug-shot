@@ -36,12 +36,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: development
     depends_on:
       - backend
     environment:
       NODE_ENV: development
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
       VITE_PROJECT_ID: ${VITE_PROJECT_ID:-}
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
     volumes:
