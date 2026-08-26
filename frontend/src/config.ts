@@ -1,0 +1,4 @@
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+
+// zanim będzie logowanie dashboard nie ma skąd wziąć listy projektów
+export const defaultProjectId = import.meta.env.VITE_PROJECT_ID ?? ''
