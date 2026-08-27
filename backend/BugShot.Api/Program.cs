@@ -1,7 +1,9 @@
 using System.Text.Json.Serialization;
 using BugShot.Api;
+using BugShot.Api.Attachments;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
+using BugShot.Api.Security;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,12 +12,17 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string DefaultConnection is not configured.");
 
+// katalog zalacznikow zawsze z env bo w kazdym srodowisku montuje sie gdzie indziej
+var attachmentsPath = builder.Configuration["Storage:AttachmentsPath"]
+    ?? throw new InvalidOperationException("Storage:AttachmentsPath is not configured.");
+
 var widgetOrigins = builder.Configuration.GetSection("Cors:WidgetOrigins").Get<string[]>() ?? [];
 var dashboardOrigins = builder.Configuration.GetSection("Cors:DashboardOrigins").Get<string[]>() ?? [];
 
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
+builder.Services.AddSingleton(new AttachmentStorageOptions(attachmentsPath));
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<BugShotDbContext>(options => options
     .UseNpgsql(connectionString, npgsql =>
@@ -32,6 +39,12 @@ builder.Services.AddCors(options =>
         .WithOrigins(widgetOrigins)
         .WithMethods("POST")
         .WithHeaders("Content-Type"));
+
+    // wysylka zalacznikow potrzebuje wlasnego naglowka wiec nie miesci sie w polityce wyzej
+    options.AddPolicy(CorsPolicies.WidgetUpload, policy => policy
+        .WithOrigins(widgetOrigins)
+        .WithMethods("POST")
+        .WithHeaders("Content-Type", UploadToken.HeaderName));
 
     options.AddPolicy(CorsPolicies.Dashboard, policy => policy
         .WithOrigins(dashboardOrigins)

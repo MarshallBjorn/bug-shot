@@ -158,7 +158,7 @@ Prefiks wersji `/api/v1`. Kolumna stanu mówi, czy endpoint istnieje w kodzie. Z
 | `POST /tickets` | działa | zgłoszenie z widgetu, zwraca `uploadToken`, patrz niżej |
 | `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtr po statusie, szukanie, paginacja |
 | `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
-| `POST /tickets/{id}/attachments` | planowane | multipart, autoryzacja przez `uploadToken` |
+| `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken` |
 | `PATCH /tickets/{id}/status` | planowane | wymaga `If-Match` z `rowVersion`, konflikt daje 409 |
 | `DELETE /tickets/{id}` | planowane | tombstone opisany wyżej |
 | `POST /tickets/{id}/comments` | planowane | dodanie komentarza |
@@ -189,13 +189,46 @@ Odpowiedź `201 Created` z identyfikatorem zgłoszenia i jednorazowym tokenem do
 }
 ```
 
-Token wraca wyłącznie w tej odpowiedzi. W bazie leży sam skrót SHA-256, więc nie da się go odzyskać ani odtworzyć po stronie serwera. Ważność to 15 minut od utworzenia zgłoszenia, licząc do momentu walidacji, a nie do rozpoczęcia wysyłki. Token jest jednorazowy: pierwsze udane użycie stempluje `used_at` i kolejna próba dostaje 401.
+Token wraca wyłącznie w tej odpowiedzi. W bazie leży sam skrót SHA-256, więc nie da się go odzyskać ani odtworzyć po stronie serwera. Ważność to 15 minut od utworzenia zgłoszenia, licząc do momentu walidacji, a nie do rozpoczęcia wysyłki. Token jest jednorazowy: pierwsze udane użycie stempluje `used_at` i kolejna próba dostaje 401. Sposób przekazania tokena opisuje sekcja `POST /tickets/{id}/attachments`.
 
 Wymagane są `projectKey` i `description`. Opis do 1200 znaków, czyli tyle samo co limit w widgecie. `pageUrl` musi być poprawnym adresem. Nieznany `projectKey` daje 400 z błędem walidacji na tym polu.
 
 Błędy walidacji wracają jako `ProblemDetails` zgodnie z RFC 9110, z mapą `errors` po nazwach pól.
 
 Do dorobienia w kolejnym sprincie: nagłówek `Idempotency-Key`, walidacja nagłówka `Origin` względem `project_origins` oraz rate limit per IP i per `projectKey`.
+
+### POST /tickets/{id}/attachments
+
+Drugi endpoint wołany spoza naszego kodu, zaraz po `POST /tickets`.
+
+Token idzie w nagłówku `X-Upload-Token`, a nie w ciele, żeby dało się odrzucić żądanie przed odczytem strumienia. Dlatego ta trasa ma własną politykę CORS, opisaną niżej.
+
+Ciało to `multipart/form-data` z trzema rozpoznawanymi polami. Każde jest opcjonalne, ale puste żądanie dostaje 400.
+
+| Pole | Ile | Limit | `kind` w bazie |
+|---|---|---|---|
+| `screenshot` | 1 | 10 MiB | `screenshot` |
+| `files` | do 5 łącznie ze zrzutem | 10 MiB każdy | `user_upload` |
+| `consoleLog` | 1 | 256 KiB | `console_log` |
+
+Odpowiedź `201 Created` z listą zapisanych załączników, każdy z `id`, `kind`, `uri`, `fileName`, `contentType` i `sizeBytes`.
+
+Kody błędów:
+
+| Kod | Kiedy |
+|---|---|
+| 400 | zawartość pliku nie pasuje do żadnego dozwolonego typu, nieznane pole formularza, ciało nie jest multipart albo nie przyszedł żaden plik |
+| 401 | brak nagłówka, token nieznany, wygasły, zużyty albo wystawiony dla innego zgłoszenia |
+| 413 | pojedynczy plik lub log przekracza swój limit |
+
+Kolejność sprawdzeń jest sztywna: nagłówek z tokenem, potem `Content-Length` i typ ciała, dopiero na końcu zawartość plików. Licznik bajtów leci własny, w trakcie zapisu, więc plik ponad limit przerywa transfer zamiast czekać na koniec strumienia.
+
+Całość idzie w jednej transakcji, a token jest stemplowany jednym atomowym zapisem, zanim ruszy odczyt plików. Wynikają z tego dwie rzeczy istotne dla klienta:
+
+- dwa równoległe żądania z tym samym tokenem nie przejdą oba, drugie dostanie 401
+- odpowiedź 400 i 413 nie zużywa tokena, bo transakcja się cofa i pliki znikają z dysku. Ponowienie po poprawieniu pliku zadziała. Zużywa go dopiero 201
+
+Nazwa pliku na dysku to `{uuid}.{rozszerzenie}`, a `uri` w odpowiedzi i w bazie jest ścieżką względną pod `/media/`, którą wystawia nginx.
 
 ### Zachowania listy
 
@@ -216,7 +249,9 @@ Limity po stronie API: pięć plików po 10 MiB, plus logi konsoli jako osobny z
 
 Dozwolone typy: `image/png`, `image/jpeg`, `application/pdf` oraz `text/plain` dla logów konsoli.
 
-Typ rozpoznajemy po zawartości pliku, a nie po nagłówku `Content-Type` od klienta, bo ten łatwo podrobić i przemycić coś wykonywalnego pod zwykłym obrazkiem. Do tego walidacja strukturalna: obrazy muszą się zdekodować, PDF musi mieć nagłówek `%PDF-` i poprawny trailer. Rozmiar sprawdzany strumieniowo przed zapisem na dysk.
+Typ rozpoznajemy po zawartości pliku, a nie po nagłówku `Content-Type` od klienta, bo ten łatwo podrobić i przemycić coś wykonywalnego pod zwykłym obrazkiem. Sprawdzamy sygnaturę na początku pliku i domknięcie na końcu: PNG kończy się chunkiem `IEND`, JPEG znacznikiem `FF D9`, PDF trailerem `%%EOF`. Log konsoli musi być poprawnym UTF-8. Rozmiar sprawdzany strumieniowo w trakcie zapisu.
+
+Nie dekodujemy obrazów w całości, bo wymagałoby to dociągnięcia biblioteki graficznej. Plik z poprawną sygnaturą i poprawnym domknięciem, ale uszkodzony w środku, przejdzie walidację i wyświetli się jako zepsuty obrazek w dashboardzie.
 
 Logi konsoli są zwykłym załącznikiem z `kind = console_log`, a nie kolumną w bazie. Konsekwencja: wyszukiwanie nie obejmuje ich treści.
 
@@ -231,6 +266,8 @@ Maskowanie ma się odbywać po stronie backendu przed zapisem, dla opisu, adresu
 ## CORS
 
 Widget działa na cudzych domenach, więc `POST /tickets` ma osobną politykę dopuszczającą wyłącznie metodę `POST` i nagłówek `Content-Type`. Dashboard ma drugą, szerszą.
+
+Wysyłka załączników ma trzecią, `widget-upload`, identyczną z polityką widgetu poza dodatkowym nagłówkiem `X-Upload-Token`. Rozdzielenie jest celowe: gdyby obie trasy dzieliły jedną politykę, poszerzenie nagłówków pod załączniki rozluźniłoby przy okazji `POST /tickets`.
 
 Dozwolone adresy są dziś czytane ze statycznej konfiguracji, z sekcji `Cors` w `appsettings`. Docelowo mają wynikać z tabeli `project_origins` powiązanej z `projectKey` ze zgłoszenia. To świadome uproszczenie na czas szkieletu.
 
