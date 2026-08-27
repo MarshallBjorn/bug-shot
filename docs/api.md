@@ -217,9 +217,9 @@ Kody błędów:
 
 | Kod | Kiedy |
 |---|---|
-| 400 | zawartość pliku nie pasuje do żadnego dozwolonego typu, nieznane pole formularza, ciało nie jest multipart albo nie przyszedł żaden plik |
+| 400 | zawartość pliku nie pasuje do żadnego dozwolonego typu, drugi zrzut lub drugi log w jednym żądaniu, więcej niż pięć plików, nieznane pole formularza, ciało nie jest multipart albo nie przyszedł żaden plik |
 | 401 | brak nagłówka, token nieznany, wygasły, zużyty albo wystawiony dla innego zgłoszenia |
-| 413 | pojedynczy plik lub log przekracza swój limit |
+| 413 | pojedynczy plik lub log przekracza swój limit, albo całe żądanie przekracza sumę limitów |
 
 Kolejność sprawdzeń jest sztywna: nagłówek z tokenem, potem `Content-Length` i typ ciała, dopiero na końcu zawartość plików. Licznik bajtów leci własny, w trakcie zapisu, więc plik ponad limit przerywa transfer zamiast czekać na koniec strumienia.
 
@@ -284,7 +284,7 @@ Migracja tworzy jeden projekt, żeby dało się cokolwiek wywołać lokalnie.
 
 Origin odpowiada adresowi, pod którym uruchamia się lokalnie widget.
 
-Baza nie migruje się sama. `docker compose` stawia kontenery, ale schemat trzeba założyć osobno przez `dotnet ef database update`. Podpięcie tego do startu aplikacji albo do `Makefile` jest jeszcze do ustalenia.
+W środowisku `Development` migracje wykonują się przy starcie API. Poza nim schemat zakłada się przez `make migrate`.
 
 ## Poza zakresem
 
