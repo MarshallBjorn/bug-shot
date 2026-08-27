@@ -22,7 +22,10 @@ var dashboardOrigins = builder.Configuration.GetSection("Cors:DashboardOrigins")
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-builder.Services.AddSingleton(new AttachmentStorageOptions(attachmentsPath));
+var attachmentStorage = new AttachmentStorageOptions(attachmentsPath);
+attachmentStorage.EnsureWritable();
+
+builder.Services.AddSingleton(attachmentStorage);
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<BugShotDbContext>(options => options
     .UseNpgsql(connectionString, npgsql =>
