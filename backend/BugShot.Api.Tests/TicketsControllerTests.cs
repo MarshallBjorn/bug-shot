@@ -7,16 +7,33 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BugShot.Api.Tests;
 
+[CollectionDefinition("PostgreSQL tests", DisableParallelization = true)]
+public class PostgreSqlTestCollection
+{
+}
+
+[Collection("PostgreSQL tests")]
 public class TicketsControllerTests
 {
     private static BugShotDbContext NewContext()
     {
-        var db = new BugShotDbContext(new DbContextOptionsBuilder<BugShotDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options);
+        var connectionString =
+            Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+            ?? throw new InvalidOperationException(
+                "ConnectionStrings__DefaultConnection is not configured.");
 
-        // InMemory wstawia dane z HasData dopiero po tym wywolaniu
-        db.Database.EnsureCreated();
+        var options = new DbContextOptionsBuilder<BugShotDbContext>()
+            .UseNpgsql(connectionString, npgsql =>
+            {
+                npgsql.MapEnum<TicketStatus>("ticket_status");
+                npgsql.MapEnum<AttachmentKind>("attachment_kind");
+            })
+            .UseSnakeCaseNamingConvention()
+            .Options;
+
+        var db = new BugShotDbContext(options);
+        db.Tickets.ExecuteDelete();
+
         return db;
     }
 

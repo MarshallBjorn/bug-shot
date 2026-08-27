@@ -43,6 +43,16 @@ Konteneryzacja: Docker + docker-compose
 CI/CD: GitHub Actions
 ```
 
+## Migracje bazy danych
+
+W środowisku `Development` migracje Entity Framework Core są uruchamiane automatycznie przy starcie API.
+
+Migrację można również uruchomić ręcznie z katalogu głównego repozytorium:
+
+```powershell
+make migrate
+```
+
 ## Architektura
 
 ```mermaid
