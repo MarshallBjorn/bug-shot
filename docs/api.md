@@ -12,6 +12,7 @@ erDiagram
     PROJECT ||--o{ PROJECT_ORIGIN : "ma"
     PROJECT ||--o{ SANITIZATION_RULE : "ma"
     TICKET ||--o{ TICKET_ATTACHMENT : "ma"
+    TICKET ||--o{ TICKET_UPLOAD_TOKEN : "ma"
     TICKET ||--o{ TICKET_COMMENT : "ma"
     TICKET ||--o{ TICKET_STATUS_CHANGE : "ma"
     TICKET ||--o{ SANITIZATION_LOG : "ma"
@@ -74,6 +75,15 @@ erDiagram
         timestamptz created_at
     }
 
+    TICKET_UPLOAD_TOKEN {
+        uuid id PK
+        uuid ticket_id FK
+        bytea token_hash
+        timestamptz expires_at
+        timestamptz used_at "null dopoki nie zuzyty"
+        timestamptz created_at
+    }
+
     TICKET_COMMENT {
         uuid id PK
         uuid ticket_id FK
@@ -116,6 +126,8 @@ Dodanie nowej wartości wymaga migracji z `ALTER TYPE ... ADD VALUE`. Zmiana naz
 - `ticket_comments(ticket_id, created_at)`
 - `ticket_status_changes(ticket_id, changed_at)`
 - `ticket_attachments(ticket_id)`
+- `ticket_upload_tokens(ticket_id)`
+- unikalny `ticket_upload_tokens(token_hash)`
 - unikalny `projects(key)`
 - unikalny `project_origins(project_id, origin)`
 
@@ -143,7 +155,7 @@ Prefiks wersji `/api/v1`. Kolumna stanu mówi, czy endpoint istnieje w kodzie. Z
 
 | Endpoint | Stan | Opis |
 |---|---|---|
-| `POST /tickets` | działa | zgłoszenie z widgetu, patrz niżej |
+| `POST /tickets` | działa | zgłoszenie z widgetu, zwraca `uploadToken`, patrz niżej |
 | `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtr po statusie, szukanie, paginacja |
 | `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
 | `POST /tickets/{id}/attachments` | planowane | multipart, autoryzacja przez `uploadToken` |
@@ -167,13 +179,23 @@ Jedyny endpoint integrowany spoza naszego kodu, więc kontrakt zapisany wprost.
 }
 ```
 
-Odpowiedź `201 Created` z identyfikatorem zgłoszenia.
+Odpowiedź `201 Created` z identyfikatorem zgłoszenia i jednorazowym tokenem do wysyłki załączników.
+
+```json
+{
+  "id": "6f1c2a54-0f9d-4f2e-9a8b-2f7d1c3b5e10",
+  "uploadToken": "<token, 43 znaki base64url>",
+  "uploadTokenExpiresAt": "2026-08-27T12:18:41+00:00"
+}
+```
+
+Token wraca wyłącznie w tej odpowiedzi. W bazie leży sam skrót SHA-256, więc nie da się go odzyskać ani odtworzyć po stronie serwera. Ważność to 15 minut od utworzenia zgłoszenia, licząc do momentu walidacji, a nie do rozpoczęcia wysyłki. Token jest jednorazowy: pierwsze udane użycie stempluje `used_at` i kolejna próba dostaje 401.
 
 Wymagane są `projectKey` i `description`. Opis do 1200 znaków, czyli tyle samo co limit w widgecie. `pageUrl` musi być poprawnym adresem. Nieznany `projectKey` daje 400 z błędem walidacji na tym polu.
 
 Błędy walidacji wracają jako `ProblemDetails` zgodnie z RFC 9110, z mapą `errors` po nazwach pól.
 
-Do dorobienia w kolejnym sprincie: nagłówek `Idempotency-Key`, walidacja nagłówka `Origin` względem `project_origins`, rate limit per IP i per `projectKey` oraz zwracanie `uploadToken` do wysyłki załączników.
+Do dorobienia w kolejnym sprincie: nagłówek `Idempotency-Key`, walidacja nagłówka `Origin` względem `project_origins` oraz rate limit per IP i per `projectKey`.
 
 ### Zachowania listy
 
