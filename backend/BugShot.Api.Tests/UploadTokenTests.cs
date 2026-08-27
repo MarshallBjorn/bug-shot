@@ -2,21 +2,34 @@ using System.Text;
 using BugShot.Api.Contracts;
 using BugShot.Api.Controllers;
 using BugShot.Api.Data;
+using BugShot.Api.Models;
 using BugShot.Api.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace BugShot.Api.Tests;
 
+[Collection("PostgreSQL tests")]
 public class UploadTokenTests
 {
     private static BugShotDbContext NewContext()
     {
-        var db = new BugShotDbContext(new DbContextOptionsBuilder<BugShotDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options);
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+            ?? throw new InvalidOperationException("ConnectionStrings__DefaultConnection is not configured.");
 
-        db.Database.EnsureCreated();
+        var options = new DbContextOptionsBuilder<BugShotDbContext>()
+            .UseNpgsql(connectionString, npgsql =>
+            {
+                npgsql.MapEnum<TicketStatus>("ticket_status");
+                npgsql.MapEnum<AttachmentKind>("attachment_kind");
+            })
+            .UseSnakeCaseNamingConvention()
+            .Options;
+
+        var db = new BugShotDbContext(options);
+
+        // kasowanie zgloszen zabiera tokeny kaskada wiec kazdy test startuje z pustej tabeli
+        db.Tickets.ExecuteDelete();
         return db;
     }
 
