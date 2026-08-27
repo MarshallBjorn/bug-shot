@@ -1,6 +1,7 @@
 using BugShot.Api.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Configuration;
 
 namespace BugShot.Api.Data;
 
@@ -9,7 +10,17 @@ public class BugShotDbContextFactory : IDesignTimeDbContextFactory<BugShotDbCont
 {
     public BugShotDbContext CreateDbContext(string[] args)
     {
-        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+        // ten sam lancuch zrodel co w aplikacji zeby migracje nie widzialy innej konfiguracji niz API
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", optional: true)
+            .AddJsonFile($"appsettings.{environment}.json", optional: true)
+            .AddEnvironmentVariables()
+            .Build();
+
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string DefaultConnection is not configured.");
 
         var options = new DbContextOptionsBuilder<BugShotDbContext>()
