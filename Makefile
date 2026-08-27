@@ -83,3 +83,8 @@ image-scan: image-scan-trivy image-scan-dockle
 
 image-push: _check-service
 	docker push $(IMAGE)
+
+.PHONY: migrate
+
+migrate:
+	dotnet ef database update --project backend/BugShot.Api/BugShot.Api.csproj --startup-project backend/BugShot.Api/BugShot.Api.csproj
