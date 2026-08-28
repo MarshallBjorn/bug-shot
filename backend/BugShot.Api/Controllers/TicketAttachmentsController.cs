@@ -166,6 +166,9 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
         long size,
         List<string> written)
     {
+        DetectedContent detected;
+
+        // uchwyt musi byc zamkniety przed Rename bo Windows nie pozwala przeniesc otwartego pliku
         using (var file = System.IO.File.OpenRead(temporaryPath))
         {
             if (kind == AttachmentKind.ConsoleLog)
@@ -176,19 +179,23 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
                     return null;
                 }
 
-                return Rename(temporaryPath, new DetectedContent("text/plain", "txt"), kind, clientFileName, size, written);
+                detected = new DetectedContent("text/plain", "txt");
             }
-
-            var detected = AttachmentContentInspector.Detect(file);
-
-            if (detected is null)
+            else
             {
-                ModelState.AddModelError(field, "File content does not match an accepted type.");
-                return null;
-            }
+                var inspected = AttachmentContentInspector.Detect(file);
 
-            return Rename(temporaryPath, detected, kind, clientFileName, size, written);
+                if (inspected is null)
+                {
+                    ModelState.AddModelError(field, "File content does not match an accepted type.");
+                    return null;
+                }
+
+                detected = inspected;
+            }
         }
+
+        return Rename(temporaryPath, detected, kind, clientFileName, size, written);
     }
 
     private TicketAttachment Rename(
