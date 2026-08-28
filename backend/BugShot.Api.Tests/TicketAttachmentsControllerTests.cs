@@ -134,7 +134,7 @@ public class TicketAttachmentsControllerTests : IDisposable
         Assert.Equal(AttachmentKind.Screenshot, attachment.Kind);
         Assert.Equal("image/png", attachment.ContentType);
         Assert.Equal(Png.Length, attachment.SizeBytes);
-        Assert.StartsWith("/media/", attachment.Uri);
+        Assert.StartsWith("/attachments/", attachment.Uri);
 
         var onDisk = Path.Combine(root, Path.GetFileName(attachment.Uri));
         Assert.True(File.Exists(onDisk));
