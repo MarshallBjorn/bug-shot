@@ -805,3 +805,5 @@ dist-ssr/
 *.local
 
 widget/config.js
+
+bug-shot-*/
