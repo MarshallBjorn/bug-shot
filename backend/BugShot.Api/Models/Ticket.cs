@@ -39,5 +39,7 @@ public class Ticket : ICreatedAt
 
     public ICollection<TicketStatusChange> StatusHistory { get; set; } = [];
 
+    public ICollection<TicketUploadToken> UploadTokens { get; set; } = [];
+
     public ICollection<SanitizationLog> SanitizationLogs { get; set; } = [];
 }

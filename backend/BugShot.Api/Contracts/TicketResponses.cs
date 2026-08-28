@@ -2,7 +2,7 @@ using BugShot.Api.Models;
 
 namespace BugShot.Api.Contracts;
 
-public record CreatedTicketResponse(Guid Id);
+public record CreatedTicketResponse(Guid Id, string UploadToken, DateTimeOffset UploadTokenExpiresAt);
 
 public record TicketListItem(
     Guid Id,

@@ -13,6 +13,8 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
 
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
 
+    public DbSet<TicketUploadToken> TicketUploadTokens => Set<TicketUploadToken>();
+
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
 
     public DbSet<TicketStatusChange> TicketStatusChanges => Set<TicketStatusChange>();
@@ -139,6 +141,17 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             entity.HasOne(a => a.Ticket)
                 .WithMany(t => t.Attachments)
                 .HasForeignKey(a => a.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TicketUploadToken>(entity =>
+        {
+            // wyszukanie tokena przy wysylce zalacznikow idzie po skrocie
+            entity.HasIndex(t => t.TokenHash).IsUnique();
+
+            entity.HasOne(t => t.Ticket)
+                .WithMany(t => t.UploadTokens)
+                .HasForeignKey(t => t.TicketId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

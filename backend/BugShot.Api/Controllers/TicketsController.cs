@@ -1,6 +1,7 @@
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
+using BugShot.Api.Security;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -42,9 +43,24 @@ public class TicketsController(BugShotDbContext db) : ControllerBase
         };
 
         db.Tickets.Add(ticket);
+
+        var uploadToken = UploadToken.Create();
+        var expiresAt = DateTimeOffset.UtcNow.Add(UploadToken.Lifetime);
+
+        db.TicketUploadTokens.Add(new TicketUploadToken
+        {
+            Ticket = ticket,
+            TokenHash = UploadToken.Hash(uploadToken),
+            ExpiresAt = expiresAt
+        });
+
         await db.SaveChangesAsync(cancellationToken);
 
-        return CreatedAtAction(nameof(GetById), new { id = ticket.Id }, new CreatedTicketResponse(ticket.Id));
+        // token wraca w odpowiedzi jeden raz bo w bazie zostaje sam skrot
+        return CreatedAtAction(
+            nameof(GetById),
+            new { id = ticket.Id },
+            new CreatedTicketResponse(ticket.Id, uploadToken, expiresAt));
     }
 
     [HttpGet("{id:guid}")]
