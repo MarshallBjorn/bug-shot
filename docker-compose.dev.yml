@@ -29,8 +29,11 @@ services:
       ASPNETCORE_URLS: http://+:8080
       APP_DLL: ${BACKEND_APP_DLL:-}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-bugshot_dev};Username=${POSTGRES_USER:-bugshot};Password=${POSTGRES_PASSWORD:-change-me-dev-only}
+      Storage__AttachmentsPath: /var/lib/bugshot/media
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - media_data:/var/lib/bugshot/media
 
   frontend:
     build:
@@ -53,3 +56,4 @@ services:
 
 volumes:
   postgres_data:
+  media_data:
