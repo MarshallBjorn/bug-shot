@@ -13,8 +13,23 @@ const dateTimeFormat = new Intl.DateTimeFormat('pl-PL', {
   timeStyle: 'short',
 })
 
+const pluralRules = new Intl.PluralRules('pl-PL')
+
+const resultForms: Record<Intl.LDMLPluralRule, string> = {
+  zero: 'wyników',
+  one: 'wynik',
+  two: 'wyniki',
+  few: 'wyniki',
+  many: 'wyników',
+  other: 'wyników',
+}
+
 export function formatStatus(status: TicketStatus) {
   return statusLabels[status] ?? status
+}
+
+export function formatResultCount(total: number) {
+  return `${total} ${resultForms[pluralRules.select(total)]}`
 }
 
 export function formatDateTime(value: string | null) {
