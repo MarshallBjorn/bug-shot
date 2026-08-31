@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router'
 import Pagination from '../components/Pagination'
 import TicketFilters from '../components/TicketFilters'
 import TicketTable from '../components/TicketTable'
+import TicketsEmptyState from '../components/TicketsEmptyState'
 import { useTickets } from '../hooks/useTickets'
 import { parseTicketQuery, ticketQueryToParams, type TicketQuery } from '../ticketQuery'
 
@@ -39,13 +40,23 @@ function TicketListPage() {
 
       {tickets.result && (
         <div className={tickets.loading ? 'is-stale' : undefined}>
-          <TicketTable projectId={projectId} items={tickets.result.items} />
-          <Pagination
-            page={tickets.result.page}
-            pageSize={tickets.result.pageSize}
-            total={tickets.result.total}
-            onPageChange={(page) => updateQuery({ page })}
-          />
+          {tickets.result.items.length === 0 ? (
+            <TicketsEmptyState
+              query={query}
+              total={tickets.result.total}
+              onChange={updateQuery}
+            />
+          ) : (
+            <>
+              <TicketTable projectId={projectId} items={tickets.result.items} />
+              <Pagination
+                page={tickets.result.page}
+                pageSize={tickets.result.pageSize}
+                total={tickets.result.total}
+                onPageChange={(page) => updateQuery({ page })}
+              />
+            </>
+          )}
         </div>
       )}
     </>

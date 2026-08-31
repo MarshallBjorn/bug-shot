@@ -67,6 +67,28 @@ body {
   cursor: default;
 }
 
+.empty-state {
+  border: 1px dashed #ccc;
+  border-radius: 3px;
+  color: #555;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.empty-state p {
+  margin: 0 0 0.5rem;
+}
+
+.empty-state button {
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.75rem;
+}
+
 /* odświeżanie w tle nie chowa tabeli tylko ją przygasza */
 .is-stale {
   opacity: 0.6;

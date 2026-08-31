@@ -43,6 +43,11 @@ export function parseTicketQuery(params: URLSearchParams): TicketQuery {
   }
 }
 
+// sortowanie i numer strony nie zmieniają tego co pasuje więc nie liczą się jako filtr
+export function isFiltered(query: TicketQuery) {
+  return query.status !== null || query.search !== ''
+}
+
 // wartości domyślne pomijamy bo backend ma dokładnie te same
 export function ticketQueryToParams(query: TicketQuery): URLSearchParams {
   const params = new URLSearchParams()

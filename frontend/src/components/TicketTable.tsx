@@ -8,10 +8,6 @@ interface TicketTableProps {
 }
 
 function TicketTable({ projectId, items }: TicketTableProps) {
-  if (items.length === 0) {
-    return <p>Brak zgłoszeń.</p>
-  }
-
   return (
     <table className="ticket-table">
       <thead>
