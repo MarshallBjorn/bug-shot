@@ -48,7 +48,11 @@ function TicketListPage() {
             />
           ) : (
             <>
-              <TicketTable projectId={projectId} items={tickets.result.items} />
+              <TicketTable
+                projectId={projectId}
+                items={tickets.result.items}
+                listSearch={searchParams.toString()}
+              />
               <Pagination
                 page={tickets.result.page}
                 pageSize={tickets.result.pageSize}

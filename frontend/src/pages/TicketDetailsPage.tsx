@@ -1,14 +1,20 @@
-import { Link, useParams } from 'react-router'
+import { Link, useLocation, useParams } from 'react-router'
 import AttachmentGallery from '../components/AttachmentGallery'
 import { formatDateTime, formatStatus } from '../format'
 import { useTicket } from '../hooks/useTicket'
 import { attachmentUrl } from '../media'
+import { readListSearch } from '../navigation'
 
 function TicketDetailsPage() {
   const { projectId = '', ticketId = '' } = useParams()
+  const { state } = useLocation()
   const { ticket, missing, error, loading } = useTicket(ticketId)
 
-  const backLink = <Link to={`/projects/${projectId}/tickets`}>Wróć do listy</Link>
+  const backLink = (
+    <Link to={{ pathname: `/projects/${projectId}/tickets`, search: readListSearch(state) }}>
+      Wróć do listy
+    </Link>
+  )
 
   if (loading) {
     return <p>Ładowanie...</p>
