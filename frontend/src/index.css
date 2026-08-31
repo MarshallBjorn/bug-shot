@@ -67,6 +67,60 @@ body {
   cursor: default;
 }
 
+.ticket-meta {
+  display: grid;
+  gap: 0.25rem 1rem;
+  grid-template-columns: max-content 1fr;
+  margin: 1rem 0;
+}
+
+.ticket-meta dt {
+  color: #555;
+  font-size: 0.85rem;
+}
+
+.ticket-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.attachments li {
+  max-width: 14rem;
+}
+
+.attachments img {
+  border: 1px solid #ddd;
+  display: block;
+  max-height: 10rem;
+  object-fit: contain;
+  width: 100%;
+}
+
+.attachment-file {
+  align-items: center;
+  border: 1px solid #ddd;
+  display: flex;
+  height: 10rem;
+  justify-content: center;
+  color: #555;
+  font-size: 0.85rem;
+}
+
+.attachment-meta {
+  font-size: 0.85rem;
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
+}
+
 .empty-state {
   border: 1px dashed #ccc;
   border-radius: 3px;

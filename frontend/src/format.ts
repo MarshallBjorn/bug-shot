@@ -1,4 +1,10 @@
-import type { TicketStatus } from './types'
+import type { AttachmentKind, TicketStatus } from './types'
+
+const attachmentKindLabels: Record<AttachmentKind, string> = {
+  Screenshot: 'Zrzut ekranu',
+  UserUpload: 'Plik użytkownika',
+  ConsoleLog: 'Log konsoli',
+}
 
 const statusLabels: Record<TicketStatus, string> = {
   New: 'Nowe',
@@ -28,8 +34,23 @@ export function formatStatus(status: TicketStatus) {
   return statusLabels[status] ?? status
 }
 
+export function formatAttachmentKind(kind: AttachmentKind) {
+  return attachmentKindLabels[kind] ?? kind
+}
+
 export function formatResultCount(total: number) {
   return `${total} ${resultForms[pluralRules.select(total)]}`
+}
+
+// jednostki dwójkowe bo takie same limity opisuje docs/api.md
+export function formatFileSize(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`
+  }
+
+  const kib = bytes / 1024
+
+  return kib < 1024 ? `${kib.toFixed(1)} KiB` : `${(kib / 1024).toFixed(1)} MiB`
 }
 
 export function formatDateTime(value: string | null) {
