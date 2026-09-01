@@ -3,6 +3,175 @@
 
   const API_BASE_URL = window.BUGSHOT_CONFIG.apiBaseUrl;
 
+  const MAX_LOG_BYTES = 256 * 1024;
+  const MAX_ENTRY_BYTES = 32 * 1024;
+
+  const diagnosticLogs = [];
+
+  const originalConsole = {
+    log: console.log,
+    warn: console.warn,
+    error: console.error,
+  };
+
+  function safeStringify(value) {
+    if (value instanceof Error) {
+      return JSON.stringify({
+        name: value.name,
+        message: value.message,
+        stack: value.stack || null,
+      });
+    }
+
+    if (typeof value === "string") {
+      return value;
+    }
+
+    if (
+      value === null ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint" ||
+      typeof value === "undefined"
+    ) {
+      return String(value);
+    }
+
+    try {
+      const seen = new WeakSet();
+
+      return JSON.stringify(value, function (key, nestedValue) {
+        if (typeof nestedValue === "object" && nestedValue !== null) {
+          if (seen.has(nestedValue)) {
+            return "[Circular]";
+          }
+
+          seen.add(nestedValue);
+        }
+
+        if (typeof nestedValue === "bigint") {
+          return String(nestedValue);
+        }
+
+        return nestedValue;
+      });
+    } catch {
+      return String(value);
+    }
+  }
+
+  function formatConsoleArgs(args) {
+    return args.map(safeStringify).join(" ");
+  }
+
+  function truncateToUtf8Bytes(text, maxBytes) {
+    const encoder = new TextEncoder();
+
+    if (encoder.encode(text).length <= maxBytes) {
+      return text;
+    }
+
+    let result = text;
+    let low = 0;
+    let high = text.length;
+
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      const candidate = text.slice(0, middle);
+
+      if (encoder.encode(`${candidate} [truncated]`).length <= maxBytes) {
+        low = middle;
+      } else {
+        high = middle - 1;
+      }
+    }
+
+    result = text.slice(0, low);
+
+    return `${result} [truncated]`;
+  }
+
+  function formatDiagnosticEntry(entry) {
+    return `[${entry.timestamp}] ${entry.level} ${entry.source}: ${entry.message}`;
+  }
+
+  function entrySize(entry) {
+    return new TextEncoder().encode(formatDiagnosticEntry(entry) + "\n").length;
+  }
+
+  function currentLogBytes() {
+    return diagnosticLogs.reduce((total, entry) => total + entrySize(entry), 0);
+  }
+
+  function trimDiagnosticLogs() {
+    let totalBytes = currentLogBytes();
+
+    while (totalBytes > MAX_LOG_BYTES) {
+      const removableIndex = diagnosticLogs.findIndex(
+        (entry) => entry.level === "INFO"
+      );
+
+      if (removableIndex !== -1) {
+        const [removed] = diagnosticLogs.splice(removableIndex, 1);
+        totalBytes -= entrySize(removed);
+        continue;
+      }
+
+      const oldestIndex = 0;
+      const [removed] = diagnosticLogs.splice(oldestIndex, 1);
+      totalBytes -= entrySize(removed);
+    }
+  }
+
+  function addDiagnosticLog(level, source, message) {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      level,
+      source,
+      message: truncateToUtf8Bytes(String(message), MAX_ENTRY_BYTES),
+    };
+
+    diagnosticLogs.push(entry);
+    trimDiagnosticLogs();
+  }
+
+  console.log = function (...args) {
+    addDiagnosticLog("INFO", "console.log", formatConsoleArgs(args));
+    Reflect.apply(originalConsole.log, console, args);
+  };
+
+  console.warn = function (...args) {
+    addDiagnosticLog("WARN", "console.warn", formatConsoleArgs(args));
+    Reflect.apply(originalConsole.warn, console, args);
+  };
+
+  console.error = function (...args) {
+    addDiagnosticLog("ERROR", "console.error", formatConsoleArgs(args));
+    Reflect.apply(originalConsole.error, console, args);
+  };
+
+  window.addEventListener("error", function (event) {
+    const details = [
+      event.message || "Unknown error",
+      event.filename ? `source=${event.filename}` : "",
+      event.lineno ? `line=${event.lineno}` : "",
+      event.colno ? `column=${event.colno}` : "",
+      event.error instanceof Error && event.error.stack
+        ? `stack=${event.error.stack}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
+    addDiagnosticLog("ERROR", "window.onerror", details);
+  });
+
+  function getDiagnosticLogsText() {
+    return diagnosticLogs.map(formatDiagnosticEntry).join("\n");
+  }
+
+  window.getDiagnosticLogsText = getDiagnosticLogsText;
+
   const widget = document.querySelector(".bugshot-widget");
   if (!widget) return;
 
@@ -21,6 +190,10 @@
   const successView = widget.querySelector(".bugshot-success-view");
   const successNewButton = widget.querySelector(".bugshot-success-new");
   const successCloseButton = widget.querySelector(".bugshot-success-close");
+
+  const successTicketId = widget.querySelector(
+    ".bugshot-success-ticket code"
+  );
 
   const MAX_FILES = 5;
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -102,9 +275,10 @@
     successView.hidden = true;
   }
 
-  function showSuccessView() {
+  function showSuccessView(ticketId) {
     form.hidden = true;
     successView.hidden = false;
+    successTicketId.textContent = ticketId;
     setState("success");
     panel.scrollTop = 0;
     successNewButton.focus();
@@ -365,7 +539,93 @@
       first.focus();
     }
   }
-  function submitReport({ description }) {
+
+  const REQUEST_TIMEOUT_MS = 10000;
+  const RETRY_DELAY_MS = 250;
+
+  async function fetchWithRetry(url, options, createBody = null) {
+    let attempt = 0;
+
+    while (attempt < 2) {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => {
+        controller.abort();
+      }, REQUEST_TIMEOUT_MS);
+
+      try {
+        const response = await fetch(url, {
+          ...options,
+          ...(createBody ? { body: createBody() } : {}),
+          signal: controller.signal,
+        });
+
+        if (response.status >= 500 && response.status <= 599 && attempt === 0) {
+          attempt += 1;
+          await new Promise((resolve) =>
+            window.setTimeout(resolve, RETRY_DELAY_MS)
+          );
+          continue;
+        }
+
+        return response;
+      } catch (error) {
+        const shouldRetry =
+          attempt === 0 &&
+          (error?.name === "AbortError" || error instanceof TypeError);
+
+        if (!shouldRetry) {
+          throw error;
+        }
+
+        attempt += 1;
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, RETRY_DELAY_MS)
+        );
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+    }
+
+    throw new Error("Request failed after retry.");
+  }
+
+  async function uploadAttachments(ticketId, uploadToken, attachments) {
+    const response = await fetchWithRetry(
+      `${API_BASE_URL}/api/v1/tickets/${ticketId}/attachments`,
+      {
+        method: "POST",
+        headers: {
+          "X-Upload-Token": uploadToken,
+        },
+      },
+      () => {
+        const formData = new FormData();
+
+        for (const file of attachments) {
+          formData.append("files", file, file.name);
+        }
+
+        const logs = getDiagnosticLogsText();
+        if (logs) {
+          formData.append(
+            "consoleLog",
+            new Blob([logs], { type: "text/plain;charset=utf-8" }),
+            "console.log"
+          );
+        }
+
+        return formData;
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Attachment upload failed with status ${response.status}.`);
+    }
+
+    return response.json();
+  }
+
+  async function submitReport({ description, attachments }) {
     const payload = {
       projectKey: "demo",
       description,
@@ -374,33 +634,47 @@
       reportedAt: new Date().toISOString(),
     };
 
-    return fetch(`${API_BASE_URL}/api/v1/tickets`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const response = await fetchWithRetry(
+      `${API_BASE_URL}/api/v1/tickets`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
       },
-      body: JSON.stringify(payload),
-    }).then(async (response) => {
-      if (!response.ok) {
-        let message = `Request failed with status ${response.status}.`;
+      () => JSON.stringify(payload)
+    );
 
-        try {
-          const errorBody = await response.json();
-          message = errorBody?.detail || errorBody?.title || message;
-        } catch {
-          // Keep the HTTP status message when the response is not JSON.
-        }
+    if (!response.ok) {
+      let message = `Request failed with status ${response.status}.`;
 
-        throw new Error(message);
+      try {
+        const errorBody = await response.json();
+        message = errorBody?.detail || errorBody?.title || message;
+      } catch {
+        // Keep the HTTP status message when the response is not JSON.
       }
 
-      const data = await response.json();
+      throw new Error(message);
+    }
 
-      return {
-        accepted: true,
-        id: data.id,
-      };
-    });
+    const data = await response.json();
+
+    const reportAttachments = attachments || [];
+    const logs = getDiagnosticLogsText();
+
+    if (reportAttachments.length > 0 || logs) {
+      await uploadAttachments(
+        data.id,
+        data.uploadToken,
+        reportAttachments
+      );
+    }
+
+    return {
+      accepted: true,
+      id: data.id,
+    };
   }
 
   async function handleSubmit(event) {
@@ -434,7 +708,7 @@
       revokeAndClearFiles();
       textarea.value = "";
       setStatus("", "");
-      showSuccessView();
+      showSuccessView(result.id);
     } catch (error) {
       setState("error");
       setStatus(
