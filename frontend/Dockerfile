@@ -25,7 +25,8 @@ RUN npm run build
 
 # --- production (domyslny stage bez --target, uzywany przez CI i prod) ---
 FROM nginx:1.31.4-alpine3.24@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913 AS production
-RUN apk upgrade --no-cache
+RUN apk upgrade --no-cache \
+    && apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main libexpat=2.8.4-r0
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
