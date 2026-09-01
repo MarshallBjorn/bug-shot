@@ -45,13 +45,17 @@ public class ProjectTicketsController(BugShotDbContext db) : ControllerBase
             query = query.Where(t => EF.Functions.ILike(t.Description, pattern) || EF.Functions.ILike(t.PageUrl, pattern));
         }
 
-        query = sort switch
+        var ordered = sort switch
         {
             "receivedAt:asc" => query.OrderBy(t => t.ReceivedAt),
-            "reportedAt:desc" => query.OrderByDescending(t => t.ReportedAt),
-            "reportedAt:asc" => query.OrderBy(t => t.ReportedAt),
+            // brak reportedAt schodzi na receivedAt bo taka date pokazuje lista
+            "reportedAt:desc" => query.OrderByDescending(t => t.ReportedAt ?? t.ReceivedAt),
+            "reportedAt:asc" => query.OrderBy(t => t.ReportedAt ?? t.ReceivedAt),
             _ => query.OrderByDescending(t => t.ReceivedAt)
         };
+
+        // rowne znaczniki bez domkniecia kolejnosci potrafia powtorzyc ticket na dwoch stronach
+        query = ordered.ThenBy(t => t.Id);
 
         var total = await query.CountAsync(cancellationToken);
 
