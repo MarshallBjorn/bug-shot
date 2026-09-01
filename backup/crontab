@@ -1,0 +1,16 @@
+# Crontab kontenera backupu. Godziny w UTC (patrz Dockerfile: TZ=UTC).
+#
+# Format: minute hour day-of-month month day-of-week command
+# Kazde zadanie loguje do /var/log/backup.log (i tak trafia na stderr crond
+# przez zbieranie stdout kazdego joba, ale plik ulatwia debug w kontenerze).
+
+# Postgres dump — codziennie 03:00 UTC (05:00 CEST / 04:00 CET)
+0 3 * * *  /scripts/backup-pg.sh    >> /var/log/backup.log 2>&1
+
+# Media tar — w niedziele 04:00 UTC (godzine po pg, zeby nie kolidowaly na IO)
+0 4 * * 0  /scripts/backup-media.sh >> /var/log/backup.log 2>&1
+
+# Cleanup retencji — codziennie 05:00 UTC
+0 5 * * *  /scripts/cleanup.sh      >> /var/log/backup.log 2>&1
+
+# Pusta linia na koncu wymagana przez crond, inaczej ostatnie zadanie moze zostac zignorowane.
