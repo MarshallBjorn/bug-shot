@@ -20,6 +20,134 @@ body {
   text-decoration: none;
 }
 
+.ticket-filters {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ticket-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ticket-filters span {
+  font-size: 0.85rem;
+}
+
+.ticket-filters input,
+.ticket-filters select {
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font: inherit;
+  padding: 0.35rem;
+}
+
+.pagination {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.pagination button {
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.35rem 0.75rem;
+}
+
+.pagination button:disabled {
+  color: #999;
+  cursor: default;
+}
+
+.ticket-meta {
+  display: grid;
+  gap: 0.25rem 1rem;
+  grid-template-columns: max-content 1fr;
+  margin: 1rem 0;
+}
+
+.ticket-meta dt {
+  color: #555;
+  font-size: 0.85rem;
+}
+
+.ticket-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.attachments li {
+  max-width: 14rem;
+}
+
+.attachments img {
+  border: 1px solid #ddd;
+  display: block;
+  max-height: 10rem;
+  object-fit: contain;
+  width: 100%;
+}
+
+.attachment-file {
+  align-items: center;
+  border: 1px solid #ddd;
+  display: flex;
+  height: 10rem;
+  justify-content: center;
+  color: #555;
+  font-size: 0.85rem;
+}
+
+.attachment-meta {
+  font-size: 0.85rem;
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.empty-state {
+  border: 1px dashed #ccc;
+  border-radius: 3px;
+  color: #555;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.empty-state p {
+  margin: 0 0 0.5rem;
+}
+
+.empty-state button {
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.75rem;
+}
+
+/* odświeżanie w tle nie chowa tabeli tylko ją przygasza */
+.is-stale {
+  opacity: 0.6;
+}
+
 .ticket-table {
   border-collapse: collapse;
   width: 100%;

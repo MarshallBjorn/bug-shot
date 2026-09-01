@@ -1,23 +1,67 @@
-import { useParams } from 'react-router'
+import { useCallback, useMemo } from 'react'
+import { useParams, useSearchParams } from 'react-router'
+import Pagination from '../components/Pagination'
+import TicketFilters from '../components/TicketFilters'
 import TicketTable from '../components/TicketTable'
+import TicketsEmptyState from '../components/TicketsEmptyState'
 import { useTickets } from '../hooks/useTickets'
+import { parseTicketQuery, ticketQueryToParams, type TicketQuery } from '../ticketQuery'
 
 function TicketListPage() {
   const { projectId = '' } = useParams()
-  const tickets = useTickets(projectId)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const query = useMemo(() => parseTicketQuery(searchParams), [searchParams])
+  const tickets = useTickets(projectId, query)
+
+  const updateQuery = useCallback(
+    (patch: Partial<TicketQuery>, replace = false) => {
+      setSearchParams((previous) => {
+        const next = { ...parseTicketQuery(previous), ...patch }
+
+        // zmiana filtra cofa na pierwszą stronę bo inaczej trafiamy w pustkę poza zakresem
+        if (patch.page === undefined) next.page = 1
+
+        return ticketQueryToParams(next)
+      }, { replace })
+    },
+    [setSearchParams],
+  )
 
   return (
     <>
       <h2>Zgłoszenia</h2>
-      {tickets.status === 'loading' && <p>Ładowanie...</p>}
-      {tickets.status === 'error' && (
-        <p role="alert">Nie udało się pobrać zgłoszeń. {tickets.message}</p>
-      )}
-      {tickets.status === 'loaded' && (
-        <>
-          <p>Wyświetlane {tickets.result.items.length} z {tickets.result.total}</p>
-          <TicketTable projectId={projectId} items={tickets.result.items} />
-        </>
+
+      <TicketFilters query={query} onChange={updateQuery} />
+
+      {tickets.error && <p role="alert">Nie udało się pobrać zgłoszeń. {tickets.error}</p>}
+
+      {!tickets.result && tickets.loading && <p>Ładowanie...</p>}
+
+      {tickets.result && (
+        <div className={tickets.loading ? 'is-stale' : undefined}>
+          {tickets.result.items.length === 0 ? (
+            <TicketsEmptyState
+              query={query}
+              total={tickets.result.total}
+              onChange={updateQuery}
+            />
+          ) : (
+            <>
+              <TicketTable
+                projectId={projectId}
+                items={tickets.result.items}
+                listSearch={searchParams.toString()}
+              />
+              <Pagination
+                page={tickets.result.page}
+                pageSize={tickets.result.pageSize}
+                total={tickets.result.total}
+                onPageChange={(page) => updateQuery({ page })}
+              />
+            </>
+          )}
+        </div>
       )}
     </>
   )

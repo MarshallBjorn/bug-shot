@@ -228,7 +228,7 @@ Całość idzie w jednej transakcji, a token jest stemplowany jednym atomowym za
 - dwa równoległe żądania z tym samym tokenem nie przejdą oba, drugie dostanie 401
 - odpowiedź 400 i 413 nie zużywa tokena, bo transakcja się cofa i pliki znikają z dysku. Ponowienie po poprawieniu pliku zadziała. Zużywa go dopiero 201
 
-Nazwa pliku na dysku to `{uuid}.{rozszerzenie}`, a `uri` w odpowiedzi i w bazie jest ścieżką względną pod `/media/`, którą wystawia nginx.
+Nazwa pliku na dysku to `{uuid}.{rozszerzenie}`, a `uri` w odpowiedzi i w bazie jest ścieżką względną pod `/attachments/`, którą wystawia nginx.
 
 ### Zachowania listy
 
@@ -241,7 +241,9 @@ Rzeczy, których nie widać z sygnatury endpointu:
 
 ## Pliki
 
-Pliki nie trafiają do bazy. Baza trzyma `uri`, plik leży na wolumenie i serwuje go nginx z nagłówkami `Content-Disposition: attachment` oraz `X-Content-Type-Options: nosniff`.
+Pliki nie trafiają do bazy. Baza trzyma `uri`, plik leży na wolumenie i serwuje go nginx spod `/attachments/` z nagłówkami `Content-Disposition: attachment` oraz `X-Content-Type-Options: nosniff`.
+
+nginx nie wystawia na tej ścieżce nagłówków CORS, bo załączniki są danymi użytkownika. Dashboard może je pokazać w `<img>` i podlinkować do pobrania, ale nie odczyta ich treści przez `fetch`, dopóki działa spod innego origin niż nginx.
 
 Nazwa pliku na dysku to `{uuid}.{rozszerzenie}`. Nazwa podana przez klienta jest trzymana wyłącznie jako metadana i nigdy nie trafia do ścieżki.
 
