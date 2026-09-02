@@ -1,0 +1,6 @@
+# libexpat CVEs — brak fixu w Alpine 3.24 stable repo.
+# Fix (2.8.4-r0) jest tylko w Alpine edge. Nie mixujemy stable+edge.
+# Alpine backportuje w kolku tygodni. Zdjac gdy pojawi sie w stable.
+CVE-2026-14456
+CVE-2026-76641
+CVE-2026-66046

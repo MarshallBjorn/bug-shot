@@ -66,6 +66,7 @@ image-scan-trivy: _check-service
 	docker run --rm \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(CI_CACHE)/trivy:/root/.cache/trivy \
+		-v $(CURDIR)/.trivyignore:/.trivyignore \
 		$(TRIVY_IMAGE) image \
 			--exit-code 1 \
 			--severity HIGH,CRITICAL \

@@ -10,7 +10,9 @@ Standalone client-side widget for submitting bug reports.
 - Per-file size limit: 10 MiB (10 MB in the user-facing validation message); up to 5 files.
 - Click-to-select and drag-and-drop.
 - Local UI states for sending, error and success.
-- No network requests, storage, cookies or browser data collection are implemented yet.
+- Sends bug reports to the configured API.
+- Collects the current page URL, user agent, timestamp, console logs and unhandled browser errors.
+- Uploads selected image attachments and collected console logs to the API.
 
 Client-side file limits are UX/abuse-resistance controls only; they are not a security boundary. The future API must enforce its own file-size, count, request-rate and payload limits because client-side validation cannot be trusted as a security boundary.
 
@@ -28,6 +30,6 @@ Then open `http://127.0.0.1:5500/`. Stop the server with `Ctrl+C`.
 
 ## Integration boundary
 
-The submission transport is isolated in `widget.js` inside `submitReport()`. Replace that function with the approved API integration when the backend endpoint and payload contract are available.
+The submission transport is isolated in `widget.js` inside `submitReport()`, with attachment uploads handled separately. The API base URL is provided by the widget configuration.
 
 The widget uses a scoped CSS namespace and does not intentionally modify host-page layout styles.

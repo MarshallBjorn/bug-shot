@@ -41,6 +41,48 @@ public class AttachmentContentInspectorTests
         var detected = AttachmentContentInspector.Detect(file);
 
         Assert.Equal("image/jpeg", detected?.ContentType);
+        Assert.Equal("jpg", detected?.Extension);
+    }
+
+    [Fact]
+    public void Gif87aZNaglowkiemITrailerem()
+    {
+        using var file = Bytes("GIF87a"u8.ToArray(), [0x01, 0x02, 0x03], [0x3B]);
+
+        var detected = AttachmentContentInspector.Detect(file);
+
+        Assert.NotNull(detected);
+        Assert.Equal("image/gif", detected.ContentType);
+        Assert.Equal("gif", detected.Extension);
+    }
+
+    [Fact]
+    public void Gif89aZNaglowkiemITrailerem()
+    {
+        using var file = Bytes("GIF89a"u8.ToArray(), [0x01, 0x02, 0x03], [0x3B]);
+
+        var detected = AttachmentContentInspector.Detect(file);
+
+        Assert.NotNull(detected);
+        Assert.Equal("image/gif", detected.ContentType);
+        Assert.Equal("gif", detected.Extension);
+    }
+
+    [Fact]
+    public void WebpZKonteneremRiffPrzechodzi()
+    {
+        using var file = Bytes(
+            "RIFF"u8.ToArray(),
+            [0x0C, 0x00, 0x00, 0x00],
+            "WEBP"u8.ToArray(),
+            [0x01, 0x02, 0x03, 0x04]
+        );
+
+        var detected = AttachmentContentInspector.Detect(file);
+
+        Assert.NotNull(detected);
+        Assert.Equal("image/webp", detected.ContentType);
+        Assert.Equal("webp", detected.Extension);
     }
 
     [Fact]
@@ -51,6 +93,7 @@ public class AttachmentContentInspectorTests
         var detected = AttachmentContentInspector.Detect(file);
 
         Assert.Equal("application/pdf", detected?.ContentType);
+        Assert.Equal("pdf", detected?.Extension);
     }
 
     [Fact]
@@ -66,6 +109,39 @@ public class AttachmentContentInspectorTests
     public void ObrazBezTraileraJestOdrzucany()
     {
         using var file = Bytes(PngHeader, [0x01, 0x02, 0x03]);
+
+        Assert.Null(AttachmentContentInspector.Detect(file));
+    }
+
+    [Fact]
+    public void GifBezTraileraJestOdrzucany()
+    {
+        using var file = Bytes("GIF89a"u8.ToArray(), [0x01, 0x02, 0x03]);
+
+        Assert.Null(AttachmentContentInspector.Detect(file));
+    }
+
+    [Fact]
+    public void WebpBezRIFFJestOdrzucany()
+    {
+        using var file = Bytes(
+            [0x00, 0x00, 0x00, 0x00],
+            [0x0C, 0x00, 0x00, 0x00],
+            "WEBP"u8.ToArray()
+        );
+
+        Assert.Null(AttachmentContentInspector.Detect(file));
+    }
+
+    [Fact]
+    public void WebpBezMarkeraWEBPJestOdrzucany()
+    {
+        using var file = Bytes(
+            "RIFF"u8.ToArray(),
+            [0x0C, 0x00, 0x00, 0x00],
+            "XXXX"u8.ToArray(),
+            [0x01, 0x02, 0x03, 0x04]
+        );
 
         Assert.Null(AttachmentContentInspector.Detect(file));
     }

@@ -10,6 +10,11 @@ public static class AttachmentContentInspector
     private static readonly byte[] PngTrailer = [0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82];
     private static readonly byte[] JpegHeader = [0xFF, 0xD8, 0xFF];
     private static readonly byte[] JpegTrailer = [0xFF, 0xD9];
+    private static readonly byte[] Gif87aHeader = "GIF87a"u8.ToArray();
+    private static readonly byte[] Gif89aHeader = "GIF89a"u8.ToArray();
+    private static readonly byte[] GifTrailer = [0x3B];
+    private static readonly byte[] WebpRiffHeader = "RIFF"u8.ToArray();
+    private static readonly byte[] WebpMarker = "WEBP"u8.ToArray();
     private static readonly byte[] PdfHeader = "%PDF-"u8.ToArray();
     private static readonly byte[] PdfTrailer = "%%EOF"u8.ToArray();
 
@@ -24,6 +29,18 @@ public static class AttachmentContentInspector
         if (StartsWith(file, JpegHeader) && EndsWith(file, JpegTrailer))
         {
             return new DetectedContent("image/jpeg", "jpg");
+        }
+
+        if (
+            (StartsWith(file, Gif87aHeader) || StartsWith(file, Gif89aHeader))
+            && EndsWith(file, GifTrailer))
+        {
+            return new DetectedContent("image/gif", "gif");
+        }
+
+        if (IsWebp(file))
+        {
+            return new DetectedContent("image/webp", "webp");
         }
 
         if (StartsWith(file, PdfHeader) && EndsWith(file, PdfTrailer))
@@ -65,6 +82,22 @@ public static class AttachmentContentInspector
         }
 
         return true;
+    }
+
+    private static bool IsWebp(Stream file)
+    {
+        if (file.Length < 12)
+        {
+            return false;
+        }
+
+        file.Position = 0;
+
+        var header = new byte[12];
+        file.ReadExactly(header);
+
+        return header.AsSpan(0, 4).SequenceEqual(WebpRiffHeader)
+            && header.AsSpan(8, 4).SequenceEqual(WebpMarker);
     }
 
     private static bool StartsWith(Stream file, byte[] signature)
