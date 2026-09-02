@@ -27,10 +27,12 @@ mc mb --ignore-existing local/bugshot-backups
 
 # --- 3. Service account z fixed creds ---
 log "creating service account ${BACKUP_ACCESS_KEY_ID} (secret redacted)"
-mc admin user svcacct add local "${MINIO_ROOT_USER}" \
-    --access-key "${BACKUP_ACCESS_KEY_ID}" \
-    --secret-key "${BACKUP_SECRET_ACCESS_KEY}" \
-    2>&1 || log "service account may already exist"
+if ! mc admin user svcacct add local "${MINIO_ROOT_USER}" \
+        --access-key "${BACKUP_ACCESS_KEY_ID}" \
+        --secret-key "${BACKUP_SECRET_ACCESS_KEY}" \
+        >/dev/null 2>&1; then
+    log "service account exists or add failed (idempotent skip)"
+fi
 
 # --- 4. Polityka: read+write tylko na bugshot-backups.
 log "writing policy JSON"
@@ -63,7 +65,5 @@ mc admin user svcacct edit local "${BACKUP_ACCESS_KEY_ID}" \
 # --- 5. Sanity: pokazujemy tylko listy, bez credow ---
 log "final buckets:"
 mc ls local/
-log "service account info:"
-mc admin user svcacct info local "${BACKUP_ACCESS_KEY_ID}"
 
 log "DONE"
