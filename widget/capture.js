@@ -106,11 +106,11 @@
     const height = root.clientHeight;
     const scrollX = window.scrollX;
     const scrollY = window.scrollY;
-    const unmask = window.BUGSHOT_MASK.apply();
+    const maskState = window.BUGSHOT_MASK.prepare();
     const restore = pinFixedElements(scrollX, scrollY);
 
     try {
-      return await window.htmlToImage.toCanvas(root, {
+      const canvas = await window.htmlToImage.toCanvas(root, {
         width,
         height,
         pixelRatio: 1,
@@ -121,20 +121,12 @@
           margin: "0",
         },
       });
+
+      window.BUGSHOT_MASK.apply(canvas, maskState);
+      return canvas;
     } finally {
       restore();
-      unmask();
     }
-  }
-
-  // foreignObject rzuca goly Event bez name i message wiec nazwa zasobu jest jedynym tropem
-  function describeError(error) {
-    if (!error) return "unknown error";
-
-    const source = error.target && error.target.src;
-    if (source) return `resource failed: ${String(source).slice(0, 200)}`;
-
-    return String(error.message || error.type || error);
   }
 
   async function captureScreenshot() {

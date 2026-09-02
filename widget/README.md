@@ -24,13 +24,21 @@ The screenshot is taken with `html-to-image`, at viewport resolution, as a PNG
 under 2 MiB. It is downscaled if it exceeds that limit, and skipped entirely if
 it still does not fit. A failed capture never blocks the report.
 
-Before the page is encoded, likely sensitive fields are masked and restored
-immediately afterwards. Detection runs on heuristics and requires no markup
-from the host page: password inputs, `autocomplete` values in the `cc-*`,
-`one-time-code`, `tel` and `email` families, and text or input values matching
-JWTs, `sk_`/`pk_`/`rk_` API keys, IBANs, card numbers, PESEL numbers, ID card
-numbers, phone numbers and email addresses. A host can also mark an element
-with `data-bugshot-mask`.
+All masking modes operate only on the screenshot canvas and do not mutate
+host-page content. Detection runs before rendering and stores the visible
+bounding rectangles of sensitive elements. After `html-to-image` produces
+the canvas, the selected masking mode is applied directly to that canvas.
+
+Default detection covers password inputs, `autocomplete` values in the
+`cc-*`, `current-password`, `new-password`, `one-time-code`, `tel` and
+`email` families, and text or input values matching JWTs, `sk_`/`pk_`/`rk_`
+API keys, IBANs, card numbers, PESEL numbers, ID card numbers, phone numbers
+and email addresses. A host can also mark an element with
+`data-bugshot-mask`.
+
+For text matches, the detected element containing the match is masked as a
+whole. Invalid selectors and regular expressions are skipped and recorded
+in `window.BUGSHOT_MASK.last` rather than aborting the screenshot.
 
 Configure it through `window.BUGSHOT_CONFIG` in `config.js`, which needs no
 build step:
@@ -47,9 +55,11 @@ window.BUGSHOT_CONFIG = {
 };
 ```
 
-`blur` and `cover` are pure CSS layers and never touch page content. `dots`
-replaces text node values and input values, which reproduces the host layout
-most faithfully but does mutate the page for the duration of the capture.
+The available modes are applied directly to the screenshot canvas:
+`blur` blurs the detected regions, `cover` paints them over and `dots`
+replaces them with a non-sensitive dot pattern. None of the modes modify
+host-page content during capture.
+
 Invalid selectors and patterns are skipped and reported on
 `window.BUGSHOT_MASK.last` rather than breaking the capture.
 

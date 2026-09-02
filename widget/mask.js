@@ -1,10 +1,9 @@
 (function () {
   "use strict";
 
-  const MARK = "data-bugshot-masked";
   const DEFAULT_MODE = "blur";
+  const DEFAULT_BLUR_PX = 7;
 
-  // widget siedzi na cudzej stronie wiec wykrywanie musi dzialac bez markupu od gospodarza
   const DEFAULT_PATTERNS = [
     "\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\b",
     "\\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\\b",
@@ -21,15 +20,22 @@
   const SENSITIVE_AUTOCOMPLETE =
     /^(cc-|current-password|new-password|one-time-code|tel|email)/i;
 
-  const invalid = { patterns: [], selectors: [] };
+  const invalid = {
+    patterns: [],
+    selectors: [],
+  };
 
-  // zly wzorzec z configu hosta nie moze wywalic calego maskowania
   function compile(sources) {
     const compiled = [];
 
     sources.forEach((source) => {
       try {
-        compiled.push(new RegExp(source instanceof RegExp ? source.source : source, "g"));
+        compiled.push(
+          new RegExp(
+            source instanceof RegExp ? source.source : source,
+            "g"
+          )
+        );
       } catch {
         invalid.patterns.push(String(source));
       }
@@ -47,32 +53,29 @@
 
     return {
       mode: config.mode || DEFAULT_MODE,
-      selectors: (useDefaults ? DEFAULT_SELECTORS : []).concat(config.selectors || []),
-      patterns: compile((useDefaults ? DEFAULT_PATTERNS : []).concat(config.patterns || [])),
+      selectors: (useDefaults ? DEFAULT_SELECTORS : []).concat(
+        config.selectors || []
+      ),
+      patterns: compile(
+        (useDefaults ? DEFAULT_PATTERNS : []).concat(config.patterns || [])
+      ),
     };
-  }
-
-  // strona gospodarza nie moze zostac zamaskowana na stale wiec jeden blad nie przerywa reszty
-  function runAll(steps) {
-    const failed = [];
-
-    steps.forEach((step) => {
-      try {
-        step();
-      } catch (error) {
-        failed.push(String(error && error.message ? error.message : error));
-      }
-    });
-
-    if (api.last) api.last.restoreErrors = failed;
   }
 
   function isVisible(element) {
     const rect = element.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return false;
+
+    if (rect.width === 0 || rect.height === 0) {
+      return false;
+    }
 
     const style = window.getComputedStyle(element);
-    return style.visibility !== "hidden" && style.display !== "none" && style.opacity !== "0";
+
+    return (
+      style.visibility !== "hidden" &&
+      style.display !== "none" &&
+      style.opacity !== "0"
+    );
   }
 
   function inWidget(element) {
@@ -86,7 +89,6 @@
     });
   }
 
-  // zaslaniamy caly element a nie sam dopasowany fragment bo tak zostalo sprawdzone w spike
   function detect(config) {
     const found = [];
     const seen = new Set();
@@ -95,24 +97,47 @@
       if (!element || seen.has(element)) return;
       if (inWidget(element) || !isVisible(element)) return;
 
+      const rect = element.getBoundingClientRect();
+
+      if (rect.width <= 0 || rect.height <= 0) {
+        return;
+      }
+
       seen.add(element);
-      found.push({ element, reason });
+
+      found.push({
+        element,
+        reason,
+        rect: {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        },
+      });
     }
 
     config.selectors.forEach((selector) => {
       try {
-        document.querySelectorAll(selector).forEach((element) => push(element, selector));
+        document
+          .querySelectorAll(selector)
+          .forEach((element) => push(element, selector));
       } catch {
         invalid.selectors.push(String(selector));
       }
     });
 
     document.querySelectorAll("input, textarea").forEach((element) => {
-      if (element.type === "password") return push(element, "input[type=password]");
+      if (element.type === "password") {
+        push(element, "input[type=password]");
+        return;
+      }
 
       const autocomplete = element.getAttribute("autocomplete") || "";
+
       if (SENSITIVE_AUTOCOMPLETE.test(autocomplete)) {
-        return push(element, `autocomplete=${autocomplete}`);
+        push(element, `autocomplete=${autocomplete}`);
+        return;
       }
 
       if (element.value && matches(config.patterns, element.value)) {
@@ -120,103 +145,222 @@
       }
     });
 
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          if (!node.nodeValue || !node.nodeValue.trim()) {
+            return NodeFilter.FILTER_REJECT;
+          }
 
-        const parent = node.parentElement;
-        if (!parent || inWidget(parent)) return NodeFilter.FILTER_REJECT;
-        if (parent.closest("script, style, title")) return NodeFilter.FILTER_REJECT;
+          const parent = node.parentElement;
 
-        return NodeFilter.FILTER_ACCEPT;
-      },
-    });
+          if (!parent || inWidget(parent)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          if (parent.closest("script, style, title")) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      }
+    );
 
     let node;
+
     while ((node = walker.nextNode())) {
-      if (matches(config.patterns, node.nodeValue)) push(node.parentElement, "text");
+      if (matches(config.patterns, node.nodeValue)) {
+        push(node.parentElement, "text");
+      }
     }
 
     return found;
   }
 
-  function styleSheet(mode) {
-    if (mode === "blur") {
-      return `[${MARK}]{filter:blur(7px)!important}`;
+  function clipRect(rect, canvas) {
+    const left = Math.max(0, Math.floor(rect.left));
+    const top = Math.max(0, Math.floor(rect.top));
+    const right = Math.min(
+      canvas.width,
+      Math.ceil(rect.left + rect.width)
+    );
+    const bottom = Math.min(
+      canvas.height,
+      Math.ceil(rect.top + rect.height)
+    );
+
+    if (right <= left || bottom <= top) {
+      return null;
     }
 
-    return (
-      `[${MARK}]{background:#111!important;color:transparent!important;text-shadow:none!important}` +
-      `[${MARK}] *{color:transparent!important;background:transparent!important}`
+    return {
+      left,
+      top,
+      width: right - left,
+      height: bottom - top,
+    };
+  }
+
+  function applyBlur(canvas, rect) {
+    const padding = DEFAULT_BLUR_PX * 3;
+
+    const sourceLeft = Math.max(0, rect.left - padding);
+    const sourceTop = Math.max(0, rect.top - padding);
+    const sourceRight = Math.min(
+      canvas.width,
+      rect.left + rect.width + padding
+    );
+    const sourceBottom = Math.min(
+      canvas.height,
+      rect.top + rect.height + padding
+    );
+
+    const sourceWidth = sourceRight - sourceLeft;
+    const sourceHeight = sourceBottom - sourceTop;
+
+    if (sourceWidth <= 0 || sourceHeight <= 0) {
+      return;
+    }
+
+    const temp = document.createElement("canvas");
+    temp.width = sourceWidth;
+    temp.height = sourceHeight;
+
+    const tempContext = temp.getContext("2d");
+
+    if (!tempContext) {
+      return;
+    }
+
+    tempContext.filter = `blur(${DEFAULT_BLUR_PX}px)`;
+    tempContext.drawImage(
+      canvas,
+      sourceLeft,
+      sourceTop,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      sourceWidth,
+      sourceHeight
+    );
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return;
+    }
+
+    context.drawImage(
+      temp,
+      rect.left - sourceLeft,
+      rect.top - sourceTop,
+      rect.width,
+      rect.height,
+      rect.left,
+      rect.top,
+      rect.width,
+      rect.height
     );
   }
 
-  // warstwa CSS nie rusza tresci wiec przywrocenie to zdjecie atrybutu i stylu
-  function applyStyle(targets, mode) {
-    targets.forEach(({ element }) => element.setAttribute(MARK, ""));
+  function applyCover(canvas, rect) {
+    const context = canvas.getContext("2d");
 
-    const style = document.createElement("style");
-    style.textContent = styleSheet(mode);
-    document.head.appendChild(style);
+    if (!context) {
+      return;
+    }
 
-    return function restore() {
-      runAll(
-        targets
-          .map(({ element }) => () => element.removeAttribute(MARK))
-          .concat(() => style.remove())
-      );
-    };
+    context.save();
+    context.fillStyle = "#111";
+    context.fillRect(
+      rect.left,
+      rect.top,
+      rect.width,
+      rect.height
+    );
+    context.restore();
   }
 
-  // podmieniamy wartosci wezlow tekstowych a nie innerHTML bo to zrywa listenery hosta
-  function applyDots(targets) {
-    const undo = [];
+  function applyDots(canvas, rect) {
+    const context = canvas.getContext("2d");
 
-    targets.forEach(({ element }) => {
-      if (element.tagName === "INPUT" || element.tagName === "TEXTAREA") {
-        const was = element.value;
+    if (!context) {
+      return;
+    }
 
-        undo.push(() => {
-          element.value = was;
-        });
-        element.value = "•".repeat(Math.min(was.length || 8, 24));
-        return;
-      }
+    context.save();
 
-      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-      let next;
+    context.fillStyle = "#111";
+    context.fillRect(
+      rect.left,
+      rect.top,
+      rect.width,
+      rect.height
+    );
 
-      while ((next = walker.nextNode())) {
-        const node = next;
-        const was = node.nodeValue;
+    context.fillStyle = "#fff";
+    context.font = `${Math.max(12, Math.min(18, rect.height * 0.6))}px sans-serif`;
+    context.textBaseline = "middle";
 
-        undo.push(() => {
-          node.nodeValue = was;
-        });
-        node.nodeValue = was.replace(/\S/g, "•");
-      }
-    });
+    const dots = "•".repeat(
+      Math.max(1, Math.floor(rect.width / 10))
+    );
 
-    return function restore() {
-      runAll(undo);
-    };
+    context.fillText(
+      dots,
+      rect.left + 4,
+      rect.top + rect.height / 2
+    );
+
+    context.restore();
+  }
+
+  function applyTarget(canvas, target, mode) {
+    const rect = clipRect(target.rect, canvas);
+
+    if (!rect) {
+      return;
+    }
+
+    if (mode === "cover") {
+      applyCover(canvas, rect);
+      return;
+    }
+
+    if (mode === "dots") {
+      applyDots(canvas, rect);
+      return;
+    }
+
+    applyBlur(canvas, rect);
   }
 
   const api = {
     last: null,
 
-    // wolane tuz przed zrzutem a restore zaraz po nim
-    apply() {
+    prepare() {
       const config = settings();
 
       if (config.mode === "off") {
-        api.last = { mode: "off", masked: 0, invalidPatterns: [], invalidSelectors: [] };
-        return function restore() {};
+        api.last = {
+          mode: "off",
+          masked: 0,
+          reasons: [],
+          invalidPatterns: [],
+          invalidSelectors: [],
+        };
+
+        return {
+          mode: "off",
+          targets: [],
+        };
       }
 
       const targets = detect(config);
-      const restore =
-        config.mode === "dots" ? applyDots(targets) : applyStyle(targets, config.mode);
 
       api.last = {
         mode: config.mode,
@@ -226,7 +370,24 @@
         invalidSelectors: invalid.selectors.slice(),
       };
 
-      return restore;
+      return {
+        mode: config.mode,
+        targets,
+      };
+    },
+
+    apply(canvas, state) {
+      if (!canvas || !state || state.mode === "off") {
+        return;
+      }
+
+      state.targets.forEach((target) => {
+        try {
+          applyTarget(canvas, target, state.mode);
+        } catch {
+          // Jeden problem z pojedynczym obszarem nie może przerwać całego capture.
+        }
+      });
     },
   };
 
