@@ -316,6 +316,7 @@
   }
 
   function resetForm({ focus = true } = {}) {
+    window.BUGSHOT_CAPTURE.collect();
     clearSubmissionState();
     textarea.value = "";
     revokeAndClearFiles();
@@ -345,6 +346,8 @@
   }
 
   function openPanel() {
+    window.BUGSHOT_CAPTURE.collect();
+
     lastFocus =
       document.activeElement && document.activeElement !== document.body
         ? document.activeElement
@@ -650,9 +653,7 @@
     const payload = {
       projectKey: "demo",
       description,
-      pageUrl: window.location.href,
-      userAgent: navigator.userAgent,
-      reportedAt: new Date().toISOString(),
+      ...window.BUGSHOT_CAPTURE.payload(),
     };
 
     const response = await fetchWithRetry(
