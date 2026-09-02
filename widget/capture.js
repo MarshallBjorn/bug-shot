@@ -106,6 +106,7 @@
     const height = root.clientHeight;
     const scrollX = window.scrollX;
     const scrollY = window.scrollY;
+    const unmask = window.BUGSHOT_MASK.apply();
     const restore = pinFixedElements(scrollX, scrollY);
 
     try {
@@ -122,6 +123,7 @@
       });
     } finally {
       restore();
+      unmask();
     }
   }
 
@@ -165,6 +167,7 @@
       height: sized.height,
       bytes: blob.size,
       scale,
+      mask: window.BUGSHOT_MASK.last,
     };
   }
 
