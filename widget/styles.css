@@ -495,6 +495,19 @@
   font-weight: 700;
 }
 
+.bugshot-success-ticket {
+  margin: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--bugshot-text);
+  font-size: 0.9rem;
+}
+
+.bugshot-success-ticket code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-weight: 700;
+}
+
 .bugshot-success-copy {
   max-width: 360px;
   overflow-wrap: anywhere;
