@@ -807,3 +807,9 @@ dist-ssr/
 widget/config.js
 
 bug-shot-*/
+
+test-keys/
+backup-out/
+bug-shot-attachments/
+bug-shot-widgets/
+.restore-tmp/
