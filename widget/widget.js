@@ -5,8 +5,12 @@
 
   const MAX_LOG_BYTES = 256 * 1024;
   const MAX_ENTRY_BYTES = 32 * 1024;
+  const REQUEST_TIMEOUT_MS = 10000;
+  const RETRY_DELAY_MS = 250;
 
   const diagnosticLogs = [];
+  const textEncoder = new TextEncoder();
+  let diagnosticLogBytes = 0;
 
   const originalConsole = {
     log: console.log,
@@ -32,24 +36,38 @@
       typeof value === "number" ||
       typeof value === "boolean" ||
       typeof value === "bigint" ||
-      typeof value === "undefined"
+      typeof value === "undefined" ||
+      typeof value === "function" ||
+      typeof value === "symbol"
     ) {
       return String(value);
     }
 
     try {
-      const seen = new WeakSet();
+      const ancestors = [];
 
       return JSON.stringify(value, function (key, nestedValue) {
+        while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) {
+          ancestors.pop();
+        }
+
         if (typeof nestedValue === "object" && nestedValue !== null) {
-          if (seen.has(nestedValue)) {
+          if (ancestors.includes(nestedValue)) {
             return "[Circular]";
           }
 
-          seen.add(nestedValue);
+          ancestors.push(nestedValue);
         }
 
         if (typeof nestedValue === "bigint") {
+          return String(nestedValue);
+        }
+
+        if (typeof nestedValue === "function") {
+          return `[Function ${nestedValue.name || "anonymous"}]`;
+        }
+
+        if (typeof nestedValue === "symbol") {
           return String(nestedValue);
         }
 
@@ -65,9 +83,7 @@
   }
 
   function truncateToUtf8Bytes(text, maxBytes) {
-    const encoder = new TextEncoder();
-
-    if (encoder.encode(text).length <= maxBytes) {
+    if (textEncoder.encode(text).length <= maxBytes) {
       return text;
     }
 
@@ -79,7 +95,7 @@
       const middle = Math.ceil((low + high) / 2);
       const candidate = text.slice(0, middle);
 
-      if (encoder.encode(`${candidate} [truncated]`).length <= maxBytes) {
+      if (textEncoder.encode(`${candidate} [truncated]`).length <= maxBytes) {
         low = middle;
       } else {
         high = middle - 1;
@@ -96,31 +112,30 @@
   }
 
   function entrySize(entry) {
-    return new TextEncoder().encode(formatDiagnosticEntry(entry) + "\n").length;
-  }
-
-  function currentLogBytes() {
-    return diagnosticLogs.reduce((total, entry) => total + entrySize(entry), 0);
+    return textEncoder.encode(formatDiagnosticEntry(entry) + "\n").length;
   }
 
   function trimDiagnosticLogs() {
-    let totalBytes = currentLogBytes();
-
-    while (totalBytes > MAX_LOG_BYTES) {
+    while (diagnosticLogBytes > MAX_LOG_BYTES) {
       const removableIndex = diagnosticLogs.findIndex(
         (entry) => entry.level === "INFO"
       );
 
       if (removableIndex !== -1) {
         const [removed] = diagnosticLogs.splice(removableIndex, 1);
-        totalBytes -= entrySize(removed);
+        diagnosticLogBytes -= entrySize(removed);
         continue;
       }
 
       const oldestIndex = 0;
       const [removed] = diagnosticLogs.splice(oldestIndex, 1);
-      totalBytes -= entrySize(removed);
+      diagnosticLogBytes -= entrySize(removed);
     }
+  }
+
+  function clearDiagnosticLogs() {
+    diagnosticLogs.length = 0;
+    diagnosticLogBytes = 0;
   }
 
   function addDiagnosticLog(level, source, message) {
@@ -132,8 +147,12 @@
     };
 
     diagnosticLogs.push(entry);
+    diagnosticLogBytes += entrySize(entry);
     trimDiagnosticLogs();
   }
+
+  const widget = document.querySelector(".bugshot-widget");
+  if (!widget) return;
 
   console.log = function (...args) {
     addDiagnosticLog("INFO", "console.log", formatConsoleArgs(args));
@@ -166,14 +185,19 @@
     addDiagnosticLog("ERROR", "window.onerror", details);
   });
 
+  window.addEventListener("unhandledrejection", function (event) {
+    const reason = event.reason;
+
+    addDiagnosticLog(
+      "ERROR",
+      "window.unhandledrejection",
+      safeStringify(reason)
+    );
+  });
+
   function getDiagnosticLogsText() {
     return diagnosticLogs.map(formatDiagnosticEntry).join("\n");
   }
-
-  window.getDiagnosticLogsText = getDiagnosticLogsText;
-
-  const widget = document.querySelector(".bugshot-widget");
-  if (!widget) return;
 
   const openButton = widget.querySelector(".bugshot-fab");
   const panel = widget.querySelector(".bugshot-panel");
@@ -540,9 +564,6 @@
     }
   }
 
-  const REQUEST_TIMEOUT_MS = 10000;
-  const RETRY_DELAY_MS = 250;
-
   async function fetchWithRetry(url, options, createBody = null) {
     let attempt = 0;
 
@@ -552,10 +573,12 @@
         controller.abort();
       }, REQUEST_TIMEOUT_MS);
 
+      const body = createBody ? createBody() : undefined;
+
       try {
         const response = await fetch(url, {
           ...options,
-          ...(createBody ? { body: createBody() } : {}),
+          ...(body !== undefined ? { body } : {}),
           signal: controller.signal,
         });
 
@@ -570,8 +593,7 @@
         return response;
       } catch (error) {
         const shouldRetry =
-          attempt === 0 &&
-          (error?.name === "AbortError" || error instanceof TypeError);
+          attempt === 0 && error?.name === "AbortError";
 
         if (!shouldRetry) {
           throw error;
@@ -586,7 +608,6 @@
       }
     }
 
-    throw new Error("Request failed after retry.");
   }
 
   async function uploadAttachments(ticketId, uploadToken, attachments) {
@@ -707,6 +728,7 @@
 
       revokeAndClearFiles();
       textarea.value = "";
+      clearDiagnosticLogs();
       setStatus("", "");
       showSuccessView(result.id);
     } catch (error) {
