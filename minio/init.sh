@@ -9,7 +9,6 @@ log() { echo "[minio-init] $*" >&2; }
 : "${BACKUP_SECRET_ACCESS_KEY:?}"
 
 # --- 1. Czekaj az minio odpowiada. mc alias set retryuje samo przez chwile,
-# ale robimy petle explicite zeby log byl czytelny. ---
 log "waiting for minio server..."
 tries=0
 until mc alias set local http://minio:9000 "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1; do
@@ -22,23 +21,19 @@ until mc alias set local http://minio:9000 "${MINIO_ROOT_USER}" "${MINIO_ROOT_PA
 done
 log "alias 'local' configured"
 
-# Od teraz set -x zeby wszystko bylo widac
-set -x
-
 # --- 2. Bucket ---
+log "creating bucket bugshot-backups (idempotent)"
 mc mb --ignore-existing local/bugshot-backups
 
 # --- 3. Service account z fixed creds ---
-# mc admin user svcacct add - tworzy service account attached do konta root.
-# Idempotentne: jesli konto z tym access key juz istnieje, komenda zwroci
-# error - lapiemy przez || true.
+log "creating service account ${BACKUP_ACCESS_KEY_ID} (secret redacted)"
 mc admin user svcacct add local "${MINIO_ROOT_USER}" \
     --access-key "${BACKUP_ACCESS_KEY_ID}" \
     --secret-key "${BACKUP_SECRET_ACCESS_KEY}" \
     2>&1 || log "service account may already exist"
 
 # --- 4. Polityka: read+write tylko na bugshot-backups.
-# Dopisujemy inline policy dla service accountu.
+log "writing policy JSON"
 cat >/tmp/backup-policy.json <<'EOF'
 {
   "Version": "2012-10-17",
@@ -61,12 +56,14 @@ cat >/tmp/backup-policy.json <<'EOF'
 }
 EOF
 
+log "attaching policy to service account"
 mc admin user svcacct edit local "${BACKUP_ACCESS_KEY_ID}" \
     --policy /tmp/backup-policy.json
 
-# --- 5. Sanity ---
+# --- 5. Sanity: pokazujemy tylko listy, bez credow ---
+log "final buckets:"
 mc ls local/
+log "service account info:"
 mc admin user svcacct info local "${BACKUP_ACCESS_KEY_ID}"
 
-set +x
 log "DONE"
