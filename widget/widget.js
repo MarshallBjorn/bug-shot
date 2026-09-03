@@ -13,6 +13,8 @@
   let diagnosticLogBytes = 0;
 
   const originalConsole = {
+    debug: console.debug,
+    info: console.info,
     log: console.log,
     warn: console.warn,
     error: console.error,
@@ -153,6 +155,16 @@
 
   const widget = document.querySelector(".bugshot-widget");
   if (!widget) return;
+
+  console.debug = function (...args) {
+    addDiagnosticLog("DEBUG", "console.debug", formatConsoleArgs(args));
+    Reflect.apply(originalConsole.debug, console, args);
+  };
+
+  console.info = function (...args) {
+    addDiagnosticLog("INFO", "console.info", formatConsoleArgs(args));
+    Reflect.apply(originalConsole.info, console, args);
+  };
 
   console.log = function (...args) {
     addDiagnosticLog("INFO", "console.log", formatConsoleArgs(args));
