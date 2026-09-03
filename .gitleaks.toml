@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = ".env.example zawiera tylko dev-placeholdery, nie prawdziwe sekrety"
+paths = [
+    '''(^|/)\.env\.example$''',
+]

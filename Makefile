@@ -3,7 +3,7 @@
 # A real local .env can be supplied explicitly:
 #   make ENV_FILE=.env config
 
-.PHONY: dev dev-d down logs config
+.PHONY: dev dev-d down logs config migrate backup-pg backup-media cleanup restore-test
 
 ENV_FILE ?= .env
 COMPOSE = docker compose --env-file $(ENV_FILE) -f docker-compose.dev.yml
@@ -66,6 +66,7 @@ image-scan-trivy: _check-service
 	docker run --rm \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(CI_CACHE)/trivy:/root/.cache/trivy \
+		-v $(CURDIR)/.trivyignore:/.trivyignore \
 		$(TRIVY_IMAGE) image \
 			--exit-code 1 \
 			--severity HIGH,CRITICAL \
@@ -83,3 +84,18 @@ image-scan: image-scan-trivy image-scan-dockle
 
 image-push: _check-service
 	docker push $(IMAGE)
+
+migrate:
+	dotnet ef database update --project backend/BugShot.Api/BugShot.Api.csproj --startup-project backend/BugShot.Api/BugShot.Api.csproj
+
+backup-pg:
+	docker compose -f docker-compose.dev.yml exec backup /scripts/backup-pg.sh
+
+backup-media:
+	docker compose -f docker-compose.dev.yml exec backup /scripts/backup-media.sh
+
+cleanup:
+	docker compose -f docker-compose.dev.yml exec backup /scripts/cleanup.sh
+
+restore-test:
+	@bash scripts/restore-test.sh

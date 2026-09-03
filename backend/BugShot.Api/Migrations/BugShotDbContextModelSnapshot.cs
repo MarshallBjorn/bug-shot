@@ -385,6 +385,47 @@ namespace BugShot.Api.Migrations
                     b.ToTable("ticket_status_changes", (string)null);
                 });
 
+            modelBuilder.Entity("BugShot.Api.Models.TicketUploadToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_upload_tokens");
+
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_ticket_upload_tokens_ticket_id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_ticket_upload_tokens_token_hash");
+
+                    b.ToTable("ticket_upload_tokens", (string)null);
+                });
+
             modelBuilder.Entity("BugShot.Api.Models.ProjectOrigin", b =>
                 {
                     b.HasOne("BugShot.Api.Models.Project", "Project")
@@ -477,6 +518,18 @@ namespace BugShot.Api.Migrations
                     b.Navigation("Ticket");
                 });
 
+            modelBuilder.Entity("BugShot.Api.Models.TicketUploadToken", b =>
+                {
+                    b.HasOne("BugShot.Api.Models.Ticket", "Ticket")
+                        .WithMany("UploadTokens")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_upload_tokens_tickets_ticket_id");
+
+                    b.Navigation("Ticket");
+                });
+
             modelBuilder.Entity("BugShot.Api.Models.Project", b =>
                 {
                     b.Navigation("Origins");
@@ -495,6 +548,8 @@ namespace BugShot.Api.Migrations
                     b.Navigation("SanitizationLogs");
 
                     b.Navigation("StatusHistory");
+
+                    b.Navigation("UploadTokens");
                 });
 #pragma warning restore 612, 618
         }

@@ -8,7 +8,7 @@ on:
       - '.github/workflows/_image.yaml'
       - 'Makefile'
   pull_request:
-    branches: [ "main" ]
+    branches: [ "develop", "main" ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,10 +17,28 @@ concurrency:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: bugshot_test
+          POSTGRES_USER: bugshot
+          POSTGRES_PASSWORD: bugshot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bugshot -d bugshot_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
         working-directory: ./backend
 
+    env:
+      ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=bugshot_test;Username=bugshot;Password=bugshot_test
     steps:
     - uses: actions/checkout@v4
 
@@ -34,6 +52,13 @@ jobs:
 
     - name: Build
       run: dotnet build BugShot.slnx --configuration Release --no-restore
+
+    - name: Restore .NET tools
+      run: dotnet tool restore
+      working-directory: .
+
+    - name: Apply database migrations
+      run: dotnet ef database update --project BugShot.Api/BugShot.Api.csproj --startup-project BugShot.Api/BugShot.Api.csproj
 
     - name: Test
       run: dotnet test BugShot.slnx --configuration Release --no-build --verbosity normal

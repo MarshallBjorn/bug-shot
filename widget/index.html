@@ -14,8 +14,8 @@
         <h1>Przykładowa strona z widżetem zgłaszania błędów</h1>
         <p>
           Ta strona służy wyłącznie do lokalnego testowania widgetu.
-          Nie zbiera danych przeglądarki, nie wykonuje zrzutów ekranu i niczego
-          nie wysyła.
+          Widget wysyła zgłoszenia do skonfigurowanego API oraz zbiera dane
+          diagnostyczne przeglądarki i załączniki wybrane przez użytkownika.
         </p>
       </section>
     </main>
@@ -105,6 +105,7 @@
             <div class="bugshot-success-icon" aria-hidden="true">✓</div>
             <h3 id="bugshot-success-title" class="bugshot-success-title">Potwierdzenie zgłoszenia</h3>
             <p class="bugshot-success-copy">Zgłoszenie zostało przyjęte.</p>
+            <p class="bugshot-success-ticket">ID zgłoszenia: <code></code></p>
             <div class="bugshot-success-actions">
               <button class="bugshot-secondary bugshot-success-close" type="button">Zamknij</button>
               <button class="bugshot-secondary bugshot-success-new" type="button">Nowe zgłoszenie</button>
@@ -115,6 +116,9 @@
     </div>
 
     <script src="./config.js"></script>
+    <script src="./vendor/html-to-image.js"></script>
+    <script src="./mask.js"></script>
+    <script src="./capture.js"></script>
     <script src="./widget.js"></script>
   </body>
 </html>

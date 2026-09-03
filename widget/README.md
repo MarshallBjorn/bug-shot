@@ -10,9 +10,68 @@ Standalone client-side widget for submitting bug reports.
 - Per-file size limit: 10 MiB (10 MB in the user-facing validation message); up to 5 files.
 - Click-to-select and drag-and-drop.
 - Local UI states for sending, error and success.
-- No network requests, storage, cookies or browser data collection are implemented yet.
+- Sends bug reports to the configured API.
+- Collects the current page URL, user agent, timestamp, console logs and unhandled browser errors.
+- Uploads selected image attachments and collected console logs to the API.
+- Captures a PNG screenshot of the visible viewport when a report starts.
+- Masks likely sensitive fields in that screenshot before it is encoded.
 
 Client-side file limits are UX/abuse-resistance controls only; they are not a security boundary. The future API must enforce its own file-size, count, request-rate and payload limits because client-side validation cannot be trusted as a security boundary.
+
+## Screenshot masking
+
+The screenshot is taken with `html-to-image`, at viewport resolution, as a PNG
+under 2 MiB. It is downscaled if it exceeds that limit, and skipped entirely if
+it still does not fit. A failed capture never blocks the report.
+
+All masking modes operate only on the screenshot canvas and do not mutate
+host-page content. Detection runs before rendering and stores the visible
+bounding rectangles of sensitive elements. After `html-to-image` produces
+the canvas, the selected masking mode is applied directly to that canvas.
+
+Default detection covers password inputs, `autocomplete` values in the
+`cc-*`, `current-password`, `new-password`, `one-time-code`, `tel` and
+`email` families, and text or input values matching JWTs, `sk_`/`pk_`/`rk_`
+API keys, IBANs, card numbers, PESEL numbers, ID card numbers, phone numbers
+and email addresses. A host can also mark an element with
+`data-bugshot-mask`.
+
+For text matches, the detected element containing the match is masked as a
+whole. Invalid selectors and regular expressions are skipped and recorded
+in `window.BUGSHOT_MASK.last` rather than aborting the screenshot.
+
+Configure it through `window.BUGSHOT_CONFIG` in `config.js`, which needs no
+build step:
+
+```js
+window.BUGSHOT_CONFIG = {
+  apiBaseUrl: "http://localhost:8080",
+  mask: {
+    mode: "blur",       // blur (default) | cover | dots | off
+    useDefaults: true,  // keep the built-in heuristics
+    selectors: [],      // extra CSS selectors
+    patterns: [],       // extra regular expressions, as strings
+  },
+};
+```
+
+The available modes are applied directly to the screenshot canvas:
+`blur` blurs the detected regions, `cover` paints them over and `dots`
+replaces them with a non-sensitive dot pattern. None of the modes modify
+host-page content during capture.
+
+Invalid selectors and patterns are skipped and reported on
+`window.BUGSHOT_MASK.last` rather than breaking the capture.
+
+### What masking does not cover
+
+Masking is a best-effort reduction of accidental exposure, not a guarantee.
+The heuristics match identifiers with a fixed shape. They do not match
+free-form personal data, and in testing they left names, postal addresses,
+account balances and anything inside a cross-origin iframe fully readable.
+Anyone deploying this widget on a page with sensitive data has to add their own
+selectors and patterns, and should assume a screenshot may still contain
+personal data.
 
 ## Local preview
 
@@ -28,6 +87,6 @@ Then open `http://127.0.0.1:5500/`. Stop the server with `Ctrl+C`.
 
 ## Integration boundary
 
-The submission transport is isolated in `widget.js` inside `submitReport()`. Replace that function with the approved API integration when the backend endpoint and payload contract are available.
+The submission transport is isolated in `widget.js` inside `submitReport()`, with attachment uploads handled separately. The API base URL is provided by the widget configuration.
 
 The widget uses a scoped CSS namespace and does not intentionally modify host-page layout styles.

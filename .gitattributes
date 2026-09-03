@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+# uruchamiany wylacznie na Windowsie
+*.ps1 text eol=crlf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
