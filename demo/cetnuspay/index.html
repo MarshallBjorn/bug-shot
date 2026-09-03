@@ -265,5 +265,26 @@
 <script src="../../widget/mask.js"></script>
 <script src="../../widget/capture.js"></script>
 <script src="../../widget/widget.js"></script>
+
+<script>
+  // przykladowe logi zeby na demo bylo widac ze widget zbiera konsole strony
+  (function () {
+    console.log("CetnusPay init", { module: "dashboard", version: "3.4.1" });
+    console.warn("Saldo pobrane z cache, ostatnia synchronizacja > 5 min temu");
+
+    fetch("/api/nieistniejacy-endpoint")
+      .then((r) => {
+        if (!r.ok) throw new Error(`Nie udalo sie pobrac limitu karty: ${r.status}`);
+      })
+      .catch((error) => console.error("Blad pobierania limitu karty", error));
+
+    setTimeout(function brokenChartRefresh() {
+      const bars = document.querySelectorAll(".chart div");
+      bars.item(bars.length).style.height = "0%";
+    }, 300);
+
+    Promise.reject(new Error("Watek odswiezania powiadomien przerwany"));
+  })();
+</script>
 </body>
 </html>
