@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CetnusPay - demo widgetu</title>
+<link rel="stylesheet" href="./page.css">
+<link rel="stylesheet" href="../../widget/styles.css">
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="app">
+    <div class="logo">CP</div>
+    <div>
+      <h1>CetnusPay - panel klienta</h1>
+      <p class="sub">Sztuczna strona do testow zrzutu ekranu. Wszystkie dane sa wymyslone.</p>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div>
+
+      <section class="card">
+        <h2>Dane logowania</h2>
+        <div class="row">
+          <div>
+            <label for="f-login">Login</label>
+            <input id="f-login" type="text" value="k.nowak@cetnuspay.example" autocomplete="username">
+          </div>
+          <div>
+            <label for="f-pass">Haslo</label>
+            <input id="f-pass" type="password" value="Zaq12wsx!Cetnus" autocomplete="current-password">
+          </div>
+        </div>
+        <label for="f-otp">Kod jednorazowy SMS</label>
+        <input id="f-otp" type="text" inputmode="numeric" value="884213" autocomplete="one-time-code">
+      </section>
+
+      <section class="card">
+        <h2>Metoda platnosci</h2>
+        <label for="f-card">Numer karty</label>
+        <input id="f-card" type="text" value="4539 1488 0343 6467" autocomplete="cc-number">
+        <div class="row">
+          <div>
+            <label for="f-exp">Wazna do</label>
+            <input id="f-exp" type="text" value="11/29" autocomplete="cc-exp">
+          </div>
+          <div>
+            <label for="f-cvc">CVC</label>
+            <input id="f-cvc" type="text" value="731" autocomplete="cc-csc">
+          </div>
+          <div>
+            <label for="f-iban">IBAN</label>
+            <input id="f-iban" type="text" value="PL61109010140000071219812874">
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Dane osobowe</h2>
+        <table class="data">
+          <tr><th>Pole</th><th>Wartosc</th></tr>
+          <tr><td>Imie i nazwisko</td><td>Katarzyna Nowak</td></tr>
+          <tr><td>PESEL</td><td class="mono">89041267123</td></tr>
+          <tr><td>Dowod osobisty</td><td class="mono">ABX 449182</td></tr>
+          <tr><td>Telefon</td><td class="mono">+48 604 118 992</td></tr>
+          <tr><td>Adres</td><td>ul. Wroblewskiego 18/4, 31-148 Krakow</td></tr>
+          <tr><td>Saldo</td><td><span class="pill ok">18 442,19 PLN</span></td></tr>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>Panel deweloperski</h2>
+        <p class="sub" style="margin:0 0 8px">Token sesji odczytany z localStorage</p>
+        <code class="secret">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4ODIxNCIsIm5hbWUiOiJLYXRhcnp5bmEgTm93YWsiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NTY2MzcyMDB9.qX7mJ0vN2pLdR8sWfYtBc4hAeKzUgM6QnVxT1oPjSlE</code>
+        <p class="sub" style="margin:10px 0 8px">Klucz API integracji</p>
+        <code class="secret">sk_live_51Nq8xTGhKmVpZaBcD3fRtYuIoP7lKjHgFdSaQwErTyUiOpAsDfGhJkLzXcVbNm</code>
+      </section>
+
+    </div>
+
+    <div>
+
+      <section class="card">
+        <h2>Zespol projektu</h2>
+        <div class="person">
+          <img class="avatar" alt="" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect width='80' height='80' fill='%232454d6'/%3E%3Ccircle cx='40' cy='30' r='14' fill='%23fff'/%3E%3Cellipse cx='40' cy='68' rx='24' ry='18' fill='%23fff'/%3E%3C/svg%3E">
+          <div>
+            <div class="who">Katarzyna Nowak</div>
+            <div class="meta mono">k.nowak@cetnuspay.example</div>
+          </div>
+        </div>
+        <div class="person">
+          <img class="avatar" alt="" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect width='80' height='80' fill='%237b3ad6'/%3E%3Ccircle cx='40' cy='30' r='14' fill='%23fff'/%3E%3Cellipse cx='40' cy='68' rx='24' ry='18' fill='%23fff'/%3E%3C/svg%3E">
+          <div>
+            <div class="who">Marek Zielinski</div>
+            <div class="meta mono">+48 512 004 771</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Trudne do odrysowania</h2>
+
+        <p class="sub" style="margin:0 0 6px">transform rotate + gradient + shadow</p>
+        <div class="rotated">Przechylony baner</div>
+
+        <p class="sub" style="margin:14px 0 6px">backdrop-filter blur</p>
+        <div class="glassy">Szklana warstwa nad tlem</div>
+
+        <p class="sub" style="margin:14px 0 6px">clip-path</p>
+        <div class="clipped">Sciety wielokat</div>
+
+        <p class="sub" style="margin:14px 0 6px">emoji i znaki spoza latin</p>
+        <div class="emoji">🐛 📸 ✅ 日本語 Ćma zażółć</div>
+
+        <p class="sub" style="margin:14px 0 6px">canvas rysowany skryptem</p>
+        <canvas class="demo" id="demo-canvas" width="600" height="200"></canvas>
+
+        <p class="sub" style="margin:14px 0 6px">iframe same-origin</p>
+        <iframe src="./frame.html" title="Ramka"></iframe>
+      </section>
+
+      <section class="card">
+        <h2>Wykres i przewijanie</h2>
+        <div class="chart">
+          <div style="height:34%"></div><div style="height:61%"></div>
+          <div style="height:47%"></div><div style="height:88%"></div>
+          <div style="height:72%"></div><div style="height:53%"></div>
+          <div style="height:96%"></div>
+        </div>
+        <p class="sub" style="margin:14px 0 6px">kontener przewiniety w dol</p>
+        <div class="scrollbox" id="scrollbox">
+          <p>Wiersz 1 - poczatek listy transakcji</p>
+          <p>Wiersz 2 - przelew przychodzacy 1 200,00</p>
+          <p>Wiersz 3 - platnosc karta 89,99</p>
+          <p>Wiersz 4 - subskrypcja 39,00</p>
+          <p>Wiersz 5 - przelew wychodzacy 450,00</p>
+          <p>Wiersz 6 - zwrot 120,50</p>
+          <p>Wiersz 7 - oplata miesieczna 12,00</p>
+          <p>Wiersz 8 - koniec listy</p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<div class="fixed-badge">position: fixed</div>
+
+<div class="bugshot-widget" data-state="closed">
+  <button
+    class="bugshot-fab"
+    type="button"
+    aria-label="Otwórz formularz zgłoszenia błędu"
+    aria-expanded="false"
+    aria-controls="bugshot-panel"
+  >
+    <span aria-hidden="true">!</span>
+    <span>Zgłoś błąd</span>
+  </button>
+
+  <section
+    class="bugshot-panel"
+    id="bugshot-panel"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="bugshot-title"
+    hidden
+  >
+    <header class="bugshot-header">
+      <div>
+        <p class="bugshot-kicker">BugShot</p>
+        <h2 id="bugshot-title">Zgłoś problem</h2>
+      </div>
+      <button class="bugshot-close" type="button" aria-label="Zamknij formularz">
+        ×
+      </button>
+    </header>
+
+    <form class="bugshot-form" novalidate autocomplete="off">
+      <div class="bugshot-field">
+        <label for="bugshot-description">Opis problemu</label>
+        <textarea
+          id="bugshot-description"
+          name="description"
+          rows="6"
+          maxlength="1200"
+          placeholder="Co poszło nie tak? Opisz krok, oczekiwany rezultat i to, co widzisz teraz."
+          required
+        ></textarea>
+        <div class="bugshot-field-meta">
+          <span class="bugshot-hint">Nie wpisuj haseł, tokenów ani danych prywatnych.</span>
+          <span class="bugshot-count" aria-live="polite">0/1200</span>
+        </div>
+      </div>
+
+      <div
+        class="bugshot-attachment"
+        type="button"
+        tabindex="0"
+        aria-label="Dodaj załączniki"
+        aria-describedby="bugshot-attachment-help"
+      >
+        <input
+          class="bugshot-file-input"
+          id="bugshot-files"
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          tabindex="-1"
+          multiple
+        >
+        <div class="bugshot-attachment-icon" aria-hidden="true"></div>
+        <div class="bugshot-attachment-copy">
+          <p>Załączniki</p>
+          <span id="bugshot-attachment-help">Kliknij lub przeciągnij obrazy tutaj. Maksymalnie 5 załączników.</span>
+        </div>
+      </div>
+
+      <div class="bugshot-file-list" aria-live="polite"></div>
+
+      <p class="bugshot-status" role="status" aria-live="polite" aria-atomic="true"></p>
+
+      <div class="bugshot-actions">
+        <button class="bugshot-secondary" type="button">Anuluj</button>
+        <button class="bugshot-submit" type="submit" disabled>Wyślij</button>
+      </div>
+    </form>
+
+    <section class="bugshot-success-view" hidden aria-live="polite" aria-labelledby="bugshot-success-title">
+      <p class="bugshot-success-kicker">BugShot</p>
+      <div class="bugshot-success-content">
+        <div class="bugshot-success-icon" aria-hidden="true">✓</div>
+        <h3 id="bugshot-success-title" class="bugshot-success-title">Potwierdzenie zgłoszenia</h3>
+        <p class="bugshot-success-copy">Zgłoszenie zostało przyjęte.</p>
+        <p class="bugshot-success-ticket">ID zgłoszenia: <code></code></p>
+        <div class="bugshot-success-actions">
+          <button class="bugshot-secondary bugshot-success-close" type="button">Zamknij</button>
+          <button class="bugshot-secondary bugshot-success-new" type="button">Nowe zgłoszenie</button>
+        </div>
+      </div>
+    </section>
+  </section>
+</div>
+
+<script>
+  (function () {
+    const c = document.getElementById("demo-canvas").getContext("2d");
+    const g = c.createLinearGradient(0, 0, 600, 0);
+    g.addColorStop(0, "#2454d6"); g.addColorStop(1, "#7b3ad6");
+    c.fillStyle = g; c.fillRect(0, 0, 600, 200);
+    c.strokeStyle = "rgba(255,255,255,.85)"; c.lineWidth = 4; c.beginPath();
+    for (let x = 0; x <= 600; x += 10) c.lineTo(x, 100 + Math.sin(x / 34) * 56);
+    c.stroke();
+    c.fillStyle = "#fff"; c.font = "bold 20px sans-serif";
+    c.fillText("canvas 2d", 20, 34);
+    document.getElementById("scrollbox").scrollTop = 92;
+  })();
+</script>
+
+<script src="./config.js"></script>
+<script src="../../widget/vendor/html-to-image.js"></script>
+<script src="../../widget/mask.js"></script>
+<script src="../../widget/capture.js"></script>
+<script src="../../widget/widget.js"></script>
+</body>
+</html>
