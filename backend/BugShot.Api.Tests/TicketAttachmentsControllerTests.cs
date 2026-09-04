@@ -60,7 +60,7 @@ public class TicketAttachmentsControllerTests : IDisposable
             UserAgent = "Mozilla/5.0"
         };
 
-        var result = await new TicketsController(db).Create(request, CancellationToken.None);
+        var result = await new TicketsController(db, new AttachmentStorageOptions(Path.GetTempPath())).Create(request, CancellationToken.None);
         return (CreatedTicketResponse)((CreatedAtActionResult)result.Result!).Value!;
     }
 
