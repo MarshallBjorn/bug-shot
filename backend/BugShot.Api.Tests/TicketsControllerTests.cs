@@ -30,6 +30,10 @@ public class TicketsControllerTests
         Directory.CreateDirectory(rootPath);
         return new AttachmentStorageOptions(rootPath);
     }
+
+    // origin zaseedowany dla projektu demo w InitialCreate
+    private const string AllowedOrigin = "http://127.0.0.1:5500";
+
     private static BugShotDbContext NewContext()
     {
         var connectionString =
@@ -52,9 +56,6 @@ public class TicketsControllerTests
         return db;
     }
 
-    // origin zaseedowany dla projektu demo w InitialCreate
-    private const string AllowedOrigin = "http://127.0.0.1:5500";
-
     private static CreateTicketRequest Request(string projectKey) => new()
     {
         ProjectKey = projectKey,
@@ -67,7 +68,8 @@ public class TicketsControllerTests
         BugShotDbContext db,
         string? origin = AllowedOrigin,
         string? idempotencyKey = null,
-        AttachmentStorageOptions? storage = null)
+        AttachmentStorageOptions? storage = null,
+        IDistributedCache? cache = null)
     {
         var context = new DefaultHttpContext();
 
@@ -81,7 +83,7 @@ public class TicketsControllerTests
             context.Request.Headers["Idempotency-Key"] = idempotencyKey;
         }
 
-        return new TicketsController(db, storage ?? NewStorage(), NewCache(), NullLogger<TicketsController>.Instance)
+        return new TicketsController(db, storage ?? NewStorage(), cache ?? NewCache(), NullLogger<TicketsController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = context }
         };
@@ -660,6 +662,10 @@ public class TicketsControllerTests
 
         var result = await controller.Create(Request(project.Key), CancellationToken.None);
 
+        // projekt nie znika z NewContext bo czyszczone sa tylko tickety
+        db.Projects.Remove(project);
+        await db.SaveChangesAsync();
+
         var problem = Assert.IsType<ObjectResult>(result.Result);
         Assert.Equal(StatusCodes.Status403Forbidden, problem.StatusCode);
         Assert.Empty(db.Tickets);
@@ -670,17 +676,11 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var cache = NewCache();
-        var context = new DefaultHttpContext();
-        context.Request.Headers.Origin = AllowedOrigin;
-        context.Request.Headers["Idempotency-Key"] = "klucz-1";
 
-        TicketsController NewControllerSharedCache() => new(db, NewStorage(), cache, NullLogger<TicketsController>.Instance)
-        {
-            ControllerContext = new ControllerContext { HttpContext = context }
-        };
-
-        var first = await NewControllerSharedCache().Create(Request("demo"), CancellationToken.None);
-        var second = await NewControllerSharedCache().Create(Request("demo"), CancellationToken.None);
+        var first = await NewController(db, idempotencyKey: "klucz-1", cache: cache)
+            .Create(Request("demo"), CancellationToken.None);
+        var second = await NewController(db, idempotencyKey: "klucz-1", cache: cache)
+            .Create(Request("demo"), CancellationToken.None);
 
         var firstPayload = Assert.IsType<CreatedTicketResponse>(Assert.IsType<CreatedAtActionResult>(first.Result).Value);
         var secondPayload = Assert.IsType<CreatedTicketResponse>(Assert.IsType<CreatedAtActionResult>(second.Result).Value);
@@ -695,21 +695,15 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var cache = NewCache();
-        var context = new DefaultHttpContext();
-        context.Request.Headers.Origin = AllowedOrigin;
-        context.Request.Headers["Idempotency-Key"] = "klucz-2";
 
-        TicketsController NewControllerSharedCache() => new(db, NewStorage(), cache, NullLogger<TicketsController>.Instance)
-        {
-            ControllerContext = new ControllerContext { HttpContext = context }
-        };
-
-        await NewControllerSharedCache().Create(Request("demo"), CancellationToken.None);
+        await NewController(db, idempotencyKey: "klucz-2", cache: cache)
+            .Create(Request("demo"), CancellationToken.None);
 
         var innyOpis = Request("demo");
-        innyOpis.Description = "Inny opis, ten sam klucz";
+        innyOpis.Description = "Inny opis pod tym samym kluczem";
 
-        var result = await NewControllerSharedCache().Create(innyOpis, CancellationToken.None);
+        var result = await NewController(db, idempotencyKey: "klucz-2", cache: cache)
+            .Create(innyOpis, CancellationToken.None);
 
         var problem = Assert.IsType<ObjectResult>(result.Result);
         Assert.Equal(StatusCodes.Status409Conflict, problem.StatusCode);

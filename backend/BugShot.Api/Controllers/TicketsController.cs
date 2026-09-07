@@ -48,7 +48,8 @@ public class TicketsController(
 
         var origin = Request.Headers.Origin.ToString();
 
-        // pusta lista originow blokuje wszystko, brak naglowka traktujemy tak samo bo CORS tego nie zlapie poza przegladarka
+        // pusta lista originow blokuje wszystko a brak naglowka traktujemy tak samo
+        // bo poza przegladarka CORS niczego nie sprawdza
         if (string.IsNullOrEmpty(origin) || !project.Origins.Contains(origin))
         {
             return Problem(title: "Origin is not allowed for this project.", statusCode: StatusCodes.Status403Forbidden);
@@ -127,15 +128,6 @@ public class TicketsController(
             nameof(GetById),
             new { id = ticket.Id },
             new CreatedTicketResponse(ticket.Id, uploadToken, expiresAt));
-    }
-
-    private static string CacheKey(Guid projectId, string idempotencyKey) =>
-        $"idempotency:tickets:{projectId}:{idempotencyKey}";
-
-    private static string HashRequestBody(CreateTicketRequest request)
-    {
-        var json = JsonSerializer.Serialize(request);
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
     }
 
     [HttpGet("{id:guid}")]
@@ -358,5 +350,15 @@ public class TicketsController(
         }
 
         return NoContent();
+    }
+
+    private static string CacheKey(Guid projectId, string idempotencyKey) =>
+        $"idempotency:tickets:{projectId}:{idempotencyKey}";
+
+    // skrot liczony z modelu po zbindowaniu bo strumien ciala jest juz wtedy przeczytany
+    private static string HashRequestBody(CreateTicketRequest request)
+    {
+        var json = JsonSerializer.Serialize(request);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
     }
 }
