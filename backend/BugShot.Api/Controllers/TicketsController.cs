@@ -50,7 +50,8 @@ public class TicketsController(
 
         // pusta lista originow blokuje wszystko a brak naglowka traktujemy tak samo
         // bo poza przegladarka CORS niczego nie sprawdza
-        if (string.IsNullOrEmpty(origin) || !project.Origins.Contains(origin))
+        // przegladarka wysyla origin lowercase ale w project_origins moze wpisac go czlowiek
+        if (string.IsNullOrEmpty(origin) || !project.Origins.Contains(origin, StringComparer.OrdinalIgnoreCase))
         {
             return Problem(title: "Origin is not allowed for this project.", statusCode: StatusCodes.Status403Forbidden);
         }

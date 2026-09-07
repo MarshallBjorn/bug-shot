@@ -201,6 +201,8 @@ Do dorobienia w kolejnym sprincie: rate limit per IP i per `projectKey`.
 
 Walidacja dzieje się w kontrolerze, niezależnie od polityki CORS: CORS chroni tylko żądania z przeglądarki, a `POST /tickets` da się odpytać też spoza niej. Nagłówek `Origin` musi znaleźć się w `project_origins` projektu wskazanego przez `projectKey`. Brak nagłówka i pusta lista originów projektu kończą się tak samo, `403` z `ProblemDetails`.
 
+Porównanie ignoruje wielkość liter. Przeglądarka zgodnie z RFC 6454 i tak wysyła schemat oraz host małymi literami, ale wartości w `project_origins` wpisuje człowiek, więc `https://Sklep.example` w bazie nie może cicho blokować ruchu. Reszta normalizacji, na przykład ucięcie końcowego ukośnika, należy do ekranu administracyjnego przy zapisie, a nie do tego sprawdzenia.
+
 Nagłówek `Idempotency-Key` jest opcjonalny. Jego brak tylko loguje ostrzeżenie, request idzie dalej bez ochrony przed duplikatem. Gdy jest obecny:
 
 - pierwsze użycie klucza zapisuje w cache skrót żądania razem z wynikiem, na 24h

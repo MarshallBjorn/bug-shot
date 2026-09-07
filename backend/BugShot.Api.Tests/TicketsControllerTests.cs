@@ -654,6 +654,18 @@ public class TicketsControllerTests
     }
 
     [Fact]
+    public async Task OriginPorownywanyJestBezWzgleduNaWielkoscLiter()
+    {
+        using var db = NewContext();
+        var controller = NewController(db, origin: "HTTP://127.0.0.1:5500");
+
+        var result = await controller.Create(Request("demo"), CancellationToken.None);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.Single(db.Tickets);
+    }
+
+    [Fact]
     public async Task PustaListaOriginowProjektuBlokujeKazdeZadanie()
     {
         using var db = NewContext();
