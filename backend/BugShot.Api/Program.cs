@@ -27,6 +27,9 @@ attachmentStorage.EnsureWritable();
 
 builder.Services.AddSingleton(attachmentStorage);
 builder.Services.AddOpenApi();
+
+// backend Idempotency-Key, podmiana na Redis to jedna linia
+builder.Services.AddDistributedMemoryCache();
 builder.Services.AddDbContext<BugShotDbContext>(options => options
     .UseNpgsql(connectionString, npgsql =>
     {
