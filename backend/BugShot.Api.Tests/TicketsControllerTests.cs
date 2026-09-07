@@ -3,8 +3,13 @@ using BugShot.Api.Contracts;
 using BugShot.Api.Controllers;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace BugShot.Api.Tests;
 
@@ -47,6 +52,9 @@ public class TicketsControllerTests
         return db;
     }
 
+    // origin zaseedowany dla projektu demo w InitialCreate
+    private const string AllowedOrigin = "http://127.0.0.1:5500";
+
     private static CreateTicketRequest Request(string projectKey) => new()
     {
         ProjectKey = projectKey,
@@ -55,12 +63,48 @@ public class TicketsControllerTests
         UserAgent = "Mozilla/5.0"
     };
 
+    private static TicketsController NewController(
+        BugShotDbContext db,
+        string? origin = AllowedOrigin,
+        string? idempotencyKey = null,
+        AttachmentStorageOptions? storage = null)
+    {
+        var context = new DefaultHttpContext();
+
+        if (origin is not null)
+        {
+            context.Request.Headers.Origin = origin;
+        }
+
+        if (idempotencyKey is not null)
+        {
+            context.Request.Headers["Idempotency-Key"] = idempotencyKey;
+        }
+
+        return new TicketsController(db, storage ?? NewStorage(), NewCache(), NullLogger<TicketsController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = context }
+        };
+    }
+
+    private static IDistributedCache NewCache() =>
+        new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+
+    private static async Task<Project> CreateProjectWithoutOrigins(BugShotDbContext db)
+    {
+        var project = new Project { Name = "Bez originow", Key = $"bez-originow-{Guid.NewGuid():N}" };
+        db.Projects.Add(project);
+        await db.SaveChangesAsync();
+
+        return project;
+    }
+
     [Fact]
     public async Task ZgloszenieZnanegoProjektuJestZapisywane()
     {
         using var db = NewContext();
         var project = await db.Projects.SingleAsync(p => p.Key == "demo");
-        var controller = new TicketsController(db, new AttachmentStorageOptions(Path.GetTempPath()));
+        var controller = NewController(db);
 
         var result = await controller.Create(Request("demo"), CancellationToken.None);
 
@@ -77,7 +121,7 @@ public class TicketsControllerTests
     public async Task ZapisUstawiaZnacznikiCzasu()
     {
         using var db = NewContext();
-        var controller = new TicketsController(db, new AttachmentStorageOptions(Path.GetTempPath()));
+        var controller = NewController(db);
 
         await controller.Create(Request("demo"), CancellationToken.None);
 
@@ -90,7 +134,7 @@ public class TicketsControllerTests
     public async Task NieznanyKluczProjektuJestOdrzucany()
     {
         using var db = NewContext();
-        var controller = new TicketsController(db, new AttachmentStorageOptions(Path.GetTempPath()));
+        var controller = NewController(db);
 
         var result = await controller.Create(Request("nie-istnieje"), CancellationToken.None);
 
@@ -103,7 +147,7 @@ public class TicketsControllerTests
     public async Task SzczegolyNieistniejacegoZgloszeniaDaja404()
     {
         using var db = NewContext();
-        var controller = new TicketsController(db, new AttachmentStorageOptions(Path.GetTempPath()));
+        var controller = NewController(db);
 
         var result = await controller.GetById(Guid.NewGuid(), CancellationToken.None);
 
@@ -114,7 +158,7 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = new TicketsController(db, storage);
+        var controller = NewController(db, storage: storage);
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
         var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
@@ -136,7 +180,7 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = new TicketsController(db, storage);
+        var controller = NewController(db, storage: storage);
 
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
@@ -159,7 +203,7 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = new TicketsController(db, storage);
+        var controller = NewController(db, storage: storage);
 
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
@@ -185,7 +229,7 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = new TicketsController(db, storage);
+        var controller = NewController(db, storage: storage);
 
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
@@ -211,7 +255,7 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = new TicketsController(db, storage);
+        var controller = NewController(db, storage: storage);
 
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
@@ -251,7 +295,7 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = new TicketsController(db, storage);
+        var controller = NewController(db, storage: storage);
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
         var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
@@ -278,7 +322,7 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = new TicketsController(db, storage);
+        var controller = NewController(db, storage: storage);
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
         var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
@@ -316,7 +360,7 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = new TicketsController(db, storage);
+        var controller = NewController(db, storage: storage);
 
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
@@ -363,7 +407,7 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = new TicketsController(db, storage);
+        var controller = NewController(db, storage: storage);
 
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
@@ -428,7 +472,7 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = new TicketsController(db, storage);
+        var controller = NewController(db, storage: storage);
 
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
@@ -467,7 +511,7 @@ public class TicketsControllerTests
     public async Task NieistniejacyTicketDlaKomentarzaDaje404()
     {
         using var db = NewContext();
-        var controller = new TicketsController(db, NewStorage());
+        var controller = NewController(db);
 
         var result = await controller.AddComment(
             Guid.NewGuid(),
@@ -481,7 +525,7 @@ public class TicketsControllerTests
     public async Task NieistniejacyTicketDlaListyKomentarzyDaje404()
     {
         using var db = NewContext();
-        var controller = new TicketsController(db, NewStorage());
+        var controller = NewController(db);
 
         var result = await controller.GetComments(
             Guid.NewGuid(),
@@ -494,7 +538,7 @@ public class TicketsControllerTests
     public async Task UsuniecieNieistniejacegoTicketuDaje404()
     {
         using var db = NewContext();
-        var controller = new TicketsController(db, NewStorage());
+        var controller = NewController(db);
 
         var result = await controller.Delete(
             Guid.NewGuid(),
@@ -507,7 +551,7 @@ public class TicketsControllerTests
     public async Task UsuniecieTicketuUsuwaWszystkieKomentarze()
     {
         using var db = NewContext();
-        var controller = new TicketsController(db, NewStorage());
+        var controller = NewController(db);
 
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
@@ -541,7 +585,7 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = new TicketsController(db, storage);
+        var controller = NewController(db, storage: storage);
 
         var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
         var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
@@ -579,5 +623,112 @@ public class TicketsControllerTests
         Assert.Equal(
             0,
             await db.TicketAttachments.CountAsync(a => a.TicketId == payload.Id));
+    }
+
+    [Fact]
+    public async Task BrakNaglowkaOriginJestOdrzucany()
+    {
+        using var db = NewContext();
+        var controller = NewController(db, origin: null);
+
+        var result = await controller.Create(Request("demo"), CancellationToken.None);
+
+        var problem = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status403Forbidden, problem.StatusCode);
+        Assert.Empty(db.Tickets);
+    }
+
+    [Fact]
+    public async Task OriginSpozaListyProjektuJestOdrzucany()
+    {
+        using var db = NewContext();
+        var controller = NewController(db, origin: "https://ktos-obcy.example");
+
+        var result = await controller.Create(Request("demo"), CancellationToken.None);
+
+        var problem = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status403Forbidden, problem.StatusCode);
+        Assert.Empty(db.Tickets);
+    }
+
+    [Fact]
+    public async Task PustaListaOriginowProjektuBlokujeKazdeZadanie()
+    {
+        using var db = NewContext();
+        var project = await CreateProjectWithoutOrigins(db);
+        var controller = NewController(db, origin: "https://cokolwiek.example");
+
+        var result = await controller.Create(Request(project.Key), CancellationToken.None);
+
+        var problem = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status403Forbidden, problem.StatusCode);
+        Assert.Empty(db.Tickets);
+    }
+
+    [Fact]
+    public async Task PowtorkaZTymSamymKluczemICialemZwracaOryginalnyWynik()
+    {
+        using var db = NewContext();
+        var cache = NewCache();
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Origin = AllowedOrigin;
+        context.Request.Headers["Idempotency-Key"] = "klucz-1";
+
+        TicketsController NewControllerSharedCache() => new(db, NewStorage(), cache, NullLogger<TicketsController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = context }
+        };
+
+        var first = await NewControllerSharedCache().Create(Request("demo"), CancellationToken.None);
+        var second = await NewControllerSharedCache().Create(Request("demo"), CancellationToken.None);
+
+        var firstPayload = Assert.IsType<CreatedTicketResponse>(Assert.IsType<CreatedAtActionResult>(first.Result).Value);
+        var secondPayload = Assert.IsType<CreatedTicketResponse>(Assert.IsType<CreatedAtActionResult>(second.Result).Value);
+
+        Assert.Equal(firstPayload.Id, secondPayload.Id);
+        Assert.Equal(firstPayload.UploadToken, secondPayload.UploadToken);
+        Assert.Single(db.Tickets);
+    }
+
+    [Fact]
+    public async Task PowtorkaZTymSamymKluczemIInnymCialemDaje409()
+    {
+        using var db = NewContext();
+        var cache = NewCache();
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Origin = AllowedOrigin;
+        context.Request.Headers["Idempotency-Key"] = "klucz-2";
+
+        TicketsController NewControllerSharedCache() => new(db, NewStorage(), cache, NullLogger<TicketsController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = context }
+        };
+
+        await NewControllerSharedCache().Create(Request("demo"), CancellationToken.None);
+
+        var innyOpis = Request("demo");
+        innyOpis.Description = "Inny opis, ten sam klucz";
+
+        var result = await NewControllerSharedCache().Create(innyOpis, CancellationToken.None);
+
+        var problem = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status409Conflict, problem.StatusCode);
+        Assert.Single(db.Tickets);
+    }
+
+    [Fact]
+    public async Task BrakKluczaIdempotencjiNieBlokujeZgloszenia()
+    {
+        using var db = NewContext();
+        var controller = NewController(db, idempotencyKey: null);
+
+        var first = await controller.Create(Request("demo"), CancellationToken.None);
+        var second = await controller.Create(Request("demo"), CancellationToken.None);
+
+        var firstPayload = Assert.IsType<CreatedTicketResponse>(Assert.IsType<CreatedAtActionResult>(first.Result).Value);
+        var secondPayload = Assert.IsType<CreatedTicketResponse>(Assert.IsType<CreatedAtActionResult>(second.Result).Value);
+
+        Assert.NotEqual(firstPayload.Id, secondPayload.Id);
+        Assert.Equal(2, await db.Tickets.CountAsync());
     }
 }

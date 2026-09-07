@@ -8,6 +8,10 @@ using BugShot.Api.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace BugShot.Api.Tests;
 
@@ -60,7 +64,20 @@ public class TicketAttachmentsControllerTests : IDisposable
             UserAgent = "Mozilla/5.0"
         };
 
-        var result = await new TicketsController(db, new AttachmentStorageOptions(Path.GetTempPath())).Create(request, CancellationToken.None);
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Origin = "http://127.0.0.1:5500";
+
+        var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        var ticketsController = new TicketsController(
+            db,
+            new AttachmentStorageOptions(Path.GetTempPath()),
+            cache,
+            NullLogger<TicketsController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = context }
+        };
+
+        var result = await ticketsController.Create(request, CancellationToken.None);
         return (CreatedTicketResponse)((CreatedAtActionResult)result.Result!).Value!;
     }
 
