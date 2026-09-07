@@ -195,7 +195,21 @@ Wymagane są `projectKey` i `description`. Opis do 1200 znaków, czyli tyle samo
 
 Błędy walidacji wracają jako `ProblemDetails` zgodnie z RFC 9110, z mapą `errors` po nazwach pól.
 
-Do dorobienia w kolejnym sprincie: nagłówek `Idempotency-Key`, walidacja nagłówka `Origin` względem `project_origins` oraz rate limit per IP i per `projectKey`.
+Do dorobienia w kolejnym sprincie: rate limit per IP i per `projectKey`.
+
+### Origin i Idempotency-Key
+
+Walidacja dzieje się w kontrolerze, niezależnie od polityki CORS: CORS chroni tylko żądania z przeglądarki, a `POST /tickets` da się odpytać też spoza niej. Nagłówek `Origin` musi znaleźć się w `project_origins` projektu wskazanego przez `projectKey`. Brak nagłówka i pusta lista originów projektu kończą się tak samo, `403` z `ProblemDetails`.
+
+Nagłówek `Idempotency-Key` jest opcjonalny. Jego brak tylko loguje ostrzeżenie, request idzie dalej bez ochrony przed duplikatem. Gdy jest obecny:
+
+- pierwsze użycie klucza zapisuje w cache skrót żądania razem z wynikiem, na 24h
+- powtórka z tym samym kluczem i tym samym ciałem zwraca dokładnie ten sam `201`, z tym samym `id` i `uploadToken`, bez tworzenia nowego ticketu
+- powtórka z tym samym kluczem i innym ciałem dostaje `409`
+
+Klucz jest scope'owany per projekt, więc ten sam klucz w dwóch różnych projektach nie koliduje. Skrót liczony jest z modelu `CreateTicketRequest` po walidacji, a nie z surowych bajtów ciała, bo model bindingu i tak konsumuje strumień przed wejściem do akcji.
+
+Cache siedzi za `IDistributedCache`, dziś zarejestrowanym jako `AddDistributedMemoryCache()` w `Program.cs`. Podmiana na Redis to jedna linia tam, bez zmian w kontrolerze. Świadome uproszczenie: brak blokady na czas zapisu do cache, więc dwa równoległe żądania z tym samym kluczem i pustym cache mogą oba trafić do bazy zanim pierwsze zdąży się zapisać.
 
 ### POST /tickets/{id}/attachments
 
