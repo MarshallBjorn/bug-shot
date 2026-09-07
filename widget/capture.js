@@ -98,6 +98,19 @@
     return target;
   }
 
+  // tlo strony siedzi zwykle na body a jego pudelko konczy sie na tresci wiec krotka strona
+  // dostaje biala rame ponizej zawartosci zamiast koloru ktory widzi uzytkownik
+  function pageBackground() {
+    const transparent = /^(transparent|rgba\(0, 0, 0, 0\))$/;
+    const root = window.getComputedStyle(document.documentElement).backgroundColor;
+    if (!transparent.test(root)) return root;
+
+    const body = window.getComputedStyle(document.body).backgroundColor;
+    if (!transparent.test(body)) return body;
+
+    return "#ffffff";
+  }
+
   // korzeniem jest documentElement bo na body modern renderery gubia wyzerowany margines
   // a tlo malowane na html ucieka razem z transformem i krawedzie zrzutu wychodza biale
   async function renderViewport() {
@@ -114,6 +127,7 @@
         width,
         height,
         pixelRatio: 1,
+        backgroundColor: pageBackground(),
         filter: keepNode,
         style: {
           transform: `translate(${-scrollX}px, ${-scrollY}px)`,
