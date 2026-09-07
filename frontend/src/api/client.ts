@@ -35,3 +35,9 @@ function send(path: string, signal?: AbortSignal) {
     signal,
   })
 }
+
+export async function apiPost<T>(path: string, body: unknown) {
+  const response = await sendMutation<T>(path, 'POST', body)
+
+  return response
+}
