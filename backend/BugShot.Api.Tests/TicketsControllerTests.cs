@@ -187,51 +187,6 @@ public class TicketsControllerTests
         Assert.IsType<NotFoundResult>(result.Result);
     }
     [Fact]
-    public async Task PustyKomentarzJestOdrzucany()
-    {
-        using var db = NewContext();
-        var storage = NewStorage();
-        var controller = NewController(db, storage: storage);
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
-
-        var request = new CreateTicketCommentRequest("tester", "   ");
-
-        var result = await controller.AddComment(
-            payload.Id,
-            request,
-            CancellationToken.None);
-
-        Assert.IsType<ObjectResult>(result.Result);
-        Assert.False(controller.ModelState.IsValid);
-        Assert.False(await db.TicketComments.AnyAsync());
-    }
-
-    [Fact]
-    public async Task WhitespaceWAutorzeJestOdrzucany()
-    {
-        using var db = NewContext();
-        var storage = NewStorage();
-        var controller = NewController(db, storage: storage);
-
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
-
-        var request = new CreateTicketCommentRequest("   ", "Komentarz");
-
-        var result = await controller.AddComment(
-            payload.Id,
-            request,
-            CancellationToken.None);
-
-        Assert.IsType<ObjectResult>(result.Result);
-        Assert.False(controller.ModelState.IsValid);
-        Assert.False(await db.TicketComments.AnyAsync());
-    }
-
-    [Fact]
     public async Task KomentarzNaSkasowanymTickecieDaje409()
     {
         using var db = NewContext();

@@ -209,18 +209,6 @@ public class TicketsController(
             return TombstoneConflict(ticket);
         }
 
-        if (string.IsNullOrWhiteSpace(request.Author))
-        {
-            ModelState.AddModelError(nameof(request.Author), "Comment author cannot be empty.");
-            return ValidationProblem(ModelState);
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Body))
-        {
-            ModelState.AddModelError(nameof(request.Body), "Comment body cannot be empty.");
-            return ValidationProblem(ModelState);
-        }
-
         var comment = new TicketComment
         {
             TicketId = id,

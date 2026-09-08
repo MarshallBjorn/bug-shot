@@ -32,6 +32,16 @@ public class ContractLimitsTests
             .Single()
             .Length;
 
+    private static RegularExpressionAttribute ParameterPattern<TRequest>(string parameterName) =>
+        typeof(TRequest)
+            .GetConstructors()
+            .Single()
+            .GetParameters()
+            .Single(p => p.Name == parameterName)
+            .GetCustomAttributes(typeof(RegularExpressionAttribute), inherit: false)
+            .Cast<RegularExpressionAttribute>()
+            .Single();
+
     [Theory]
     [InlineData("Author")]
     [InlineData("Body")]
@@ -44,5 +54,28 @@ public class ContractLimitsTests
     public void NazwaPlikuMaTakiSamLimitCoKolumna()
     {
         Assert.Equal(AttachmentLimits.MaxFileNameLength, ColumnLength<TicketAttachment>(nameof(TicketAttachment.FileName)));
+    }
+
+    [Theory]
+    [InlineData("Author")]
+    [InlineData("Body")]
+    public void SamaSpacjaNiePrzechodziReguly(string name)
+    {
+        Assert.False(ParameterPattern<CreateTicketCommentRequest>(name).IsValid("   "));
+    }
+
+    [Theory]
+    [InlineData("Author")]
+    [InlineData("Body")]
+    public void ZwyklaWartoscPrzechodziReguly(string name)
+    {
+        Assert.True(ParameterPattern<CreateTicketCommentRequest>(name).IsValid("tester"));
+    }
+
+    // DataAnnotations dopasowuje caly napis wiec bez (?s) kropka nie objelaby zlamania linii
+    [Fact]
+    public void WielolinijkowaTrescKomentarzaPrzechodziReguly()
+    {
+        Assert.True(ParameterPattern<CreateTicketCommentRequest>("Body").IsValid("Pierwsza linia\nDruga linia"));
     }
 }
