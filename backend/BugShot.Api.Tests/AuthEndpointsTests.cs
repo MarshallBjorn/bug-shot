@@ -207,38 +207,21 @@ public class AuthEndpointsTests : IDisposable
     [Fact]
     public async Task DezaktywacjaZamykaSesjeIBlokujeLogowanie()
     {
-        Guid developerId;
-
-        using (var db = OpenContext())
-        {
-            var developer = new User
-            {
-                Email = "dev@bug-shot.test",
-                PasswordHash = PasswordHasher.Hash(AdminPassword),
-                IsAdmin = false
-            };
-
-            db.Users.Add(developer);
-            await db.SaveChangesAsync();
-
-            developerId = developer.Id;
-        }
-
-        var developerRefresh = CookieValue(await Login(client, "dev@bug-shot.test", AdminPassword));
+        var developer = await CreateDeveloper();
+        var developerRefresh = CookieValue(await Login(client, DeveloperEmail, AdminPassword));
         var admin = await Read(await Login(client, AdminEmail, AdminPassword));
 
-        using var request = new HttpRequestMessage(
+        var deactivated = await Send(
             HttpMethod.Patch,
-            $"/api/v1/users/{developerId}/deactivate");
+            $"/api/v1/users/{developer.User.Id}/deactivate",
+            admin.AccessToken);
 
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", admin.AccessToken);
-
-        Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(request)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, deactivated.StatusCode);
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await Refresh(client, developerRefresh)).StatusCode);
         Assert.Equal(
             HttpStatusCode.Unauthorized,
-            (await Login(client, "dev@bug-shot.test", AdminPassword)).StatusCode);
+            (await Login(client, DeveloperEmail, AdminPassword)).StatusCode);
     }
 
     [Fact]
@@ -310,11 +293,6 @@ public class AuthEndpointsTests : IDisposable
         Assert.True(response.Headers.CacheControl!.NoStore);
         Assert.True(response.Headers.CacheControl.Private);
     }
-
-    // traceId jest inne w kazdej odpowiedzi wiec porownujemy sam opis bledu
-    private static async Task<string?> Title(HttpResponseMessage response) =>
-        (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Title;
-
 
     [Fact]
     public async Task PowtorzonyTokenPoOknieNaDubleZamykaWszystkieSesje()
@@ -448,6 +426,11 @@ public class AuthEndpointsTests : IDisposable
         var admin = await Read(await Login(client, AdminEmail, AdminPassword));
         var drugi = await CreateAdmin("drugi-admin@bug-shot.test");
 
+        // token dostal dopiero co wiec jest wazny jeszcze kwadrans
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await Send(HttpMethod.Get, "/api/v1/auth/me", drugi.AccessToken)).StatusCode);
+
         await Send(HttpMethod.Patch, $"/api/v1/users/{drugi.User.Id}/deactivate", admin.AccessToken);
 
         // access token zyje jeszcze kwadrans wiec kazdy endpoint musi sam sprawdzic czy konto nadal istnieje
@@ -465,25 +448,6 @@ public class AuthEndpointsTests : IDisposable
         Assert.Equal(
             HttpStatusCode.Unauthorized,
             (await Send(HttpMethod.Post, "/api/v1/users", drugi.AccessToken, body)).StatusCode);
-    }
-
-    [Fact]
-    public async Task WylaczoneKontoTraciDostepMimoWaznegoTokena()
-    {
-        var developer = await CreateDeveloper();
-        var admin = await Read(await Login(client, AdminEmail, AdminPassword));
-
-        // token dostal dopiero co wiec jest wazny jeszcze kwadrans
-        Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/v1/auth/me", developer.AccessToken)).StatusCode);
-
-        await Send(
-            HttpMethod.Patch,
-            $"/api/v1/users/{developer.User.Id}/deactivate",
-            admin.AccessToken);
-
-        Assert.Equal(
-            HttpStatusCode.Unauthorized,
-            (await Send(HttpMethod.Get, "/api/v1/auth/me", developer.AccessToken)).StatusCode);
     }
 
     [Fact]
@@ -555,6 +519,10 @@ public class AuthEndpointsTests : IDisposable
 
         return client.SendAsync(request);
     }
+
+    // traceId jest inne w kazdej odpowiedzi wiec porownujemy sam opis bledu
+    private static async Task<string?> Title(HttpResponseMessage response) =>
+        (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Title;
 
     private static async Task<Session> Read(HttpResponseMessage response)
     {
