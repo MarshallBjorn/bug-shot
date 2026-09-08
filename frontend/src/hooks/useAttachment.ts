@@ -16,6 +16,12 @@ export function useAttachment(attachmentId: string): AttachmentState {
 
     fetchAttachment(attachmentId, controller.signal)
       .then((url) => {
+        // odmontowanie mogło wejść między utworzeniem adresu a tym miejscem
+        if (controller.signal.aborted) {
+          URL.revokeObjectURL(url)
+          return
+        }
+
         created = url
         setState({ url, failed: false })
       })
