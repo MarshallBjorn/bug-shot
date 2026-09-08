@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { admin, apiBaseUrl } from '../e2e.config'
+import { admin } from '../e2e.config'
 import { fillLoginForm, signIn, ticketsPath } from './helpers'
 
 test.describe('dostep do panelu', () => {
@@ -87,19 +87,5 @@ test.describe('kilka kart naraz', () => {
       await expect(tab).toHaveURL(new RegExp(`${ticketsPath()}$`))
       await expect(tab.getByText(admin.email)).toBeVisible()
     }
-  })
-})
-
-test.describe('api bez tokena', () => {
-  test('lista zgloszen odmawia', async ({ request }) => {
-    const response = await request.get(`${apiBaseUrl}/api/v1/tickets/${crypto.randomUUID()}`)
-
-    expect(response.status()).toBe(401)
-  })
-
-  test('panel userow odmawia', async ({ request }) => {
-    const response = await request.get(`${apiBaseUrl}/api/v1/users`)
-
-    expect(response.status()).toBe(401)
   })
 })

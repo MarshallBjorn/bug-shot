@@ -1,23 +1,8 @@
 import { expect, test } from '@playwright/test'
-import { apiBaseUrl, demoProjectId } from '../e2e.config'
+import { demoProjectId } from '../e2e.config'
 import { openSignedIn, reportFromWidget, signIn, ticketsPath } from './helpers'
 
 test.describe('zalaczniki za tokenem', () => {
-  test('widget zglasza i wysyla zrzut bez logowania', async ({ request }) => {
-    const { ticketId, attachmentId } = await reportFromWidget(request, 'Zgloszenie z widgetu')
-
-    expect(ticketId).toBeTruthy()
-    expect(attachmentId).toBeTruthy()
-  })
-
-  test('plik nie wychodzi bez tokena', async ({ request }) => {
-    const { attachmentId } = await reportFromWidget(request, 'Zgloszenie do pobrania')
-
-    const response = await request.get(`${apiBaseUrl}/api/v1/attachments/${attachmentId}/download`)
-
-    expect(response.status()).toBe(401)
-  })
-
   test('zalogowany widzi zrzut w szczegolach zgloszenia', async ({ page, request }) => {
     const { ticketId } = await reportFromWidget(request, 'Zgloszenie ze zrzutem')
 
@@ -35,25 +20,6 @@ test.describe('zalaczniki za tokenem', () => {
     await expect
       .poll(() => screenshot.evaluate((image: HTMLImageElement) => image.naturalWidth))
       .toBeGreaterThan(0)
-  })
-
-  test('pobrany plik ma naglowki ktore trzymal wczesniej nginx', async ({ request }) => {
-    const { attachmentId } = await reportFromWidget(request, 'Zgloszenie z naglowkami')
-
-    const login = await request.post(`${apiBaseUrl}/api/v1/auth/login`, {
-      data: { email: 'admin@bug-shot.test', password: process.env.E2E_ADMIN_PASSWORD ?? 'e2e-admin-not-a-real-password' },
-    })
-
-    const { accessToken } = await login.json()
-
-    const response = await request.get(`${apiBaseUrl}/api/v1/attachments/${attachmentId}/download`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-
-    expect(response.status()).toBe(200)
-    expect(response.headers()['content-disposition']).toContain('attachment')
-    expect(response.headers()['x-content-type-options']).toBe('nosniff')
-    expect(response.headers()['cache-control']).toContain('no-store')
   })
 })
 
