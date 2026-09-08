@@ -51,7 +51,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       APP_DLL: ${BACKEND_APP_DLL:?BACKEND_APP_DLL required}
       # CORS whitelist — tylko origin frontu; backend czyta i wpisuje do polityki CORS.
-      Cors__AllowedOrigins__0: https://app.bugshot.app
+      Cors__AllowedOrigins__0: https://bugshot.on-labs.dev
     networks:
       db_internal: {}
       storage_internal: {}
