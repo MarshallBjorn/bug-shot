@@ -7,6 +7,7 @@ using BugShot.Api.Data;
 using BugShot.Api.Idempotency;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +27,8 @@ public class TicketsController(
     private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromHours(24);
 
     [HttpPost]
+    // widget zglasza z cudzej domeny i nie ma skad wziac tokena wiec chroni go Origin i projectKey
+    [AllowAnonymous]
     [EnableCors(CorsPolicies.Widget)]
     [ProducesResponseType<CreatedTicketResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

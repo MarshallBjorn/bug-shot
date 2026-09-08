@@ -32,6 +32,9 @@ services:
       APP_DLL: ${BACKEND_APP_DLL:-}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-bugshot_dev};Username=${POSTGRES_USER:-bugshot};Password=${POSTGRES_PASSWORD:-change-me-dev-only}
       Storage__AttachmentsPath: /var/lib/bugshot/attachments
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     volumes:
