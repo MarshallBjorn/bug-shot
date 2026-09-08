@@ -350,13 +350,14 @@ public class TicketsController(
             {
                 System.IO.File.Delete(attachmentPath);
             }
-            catch (DirectoryNotFoundException)
+            // tombstone jest juz zapisany wiec nieudane sprzatniecie pliku nie moze wywalic zadania
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // DB tombstone has already been committed.
-            }
-            catch (IOException)
-            {
-                // DB tombstone has already been committed.
+                logger.LogWarning(
+                    exception,
+                    "Nie udalo sie usunac pliku {Path} przy kasowaniu zgloszenia {TicketId}",
+                    attachmentPath,
+                    ticket.Id);
             }
         }
 
