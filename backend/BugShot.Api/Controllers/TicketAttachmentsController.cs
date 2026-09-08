@@ -22,6 +22,7 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
     [ProducesResponseType<IReadOnlyList<TicketAttachmentResponse>>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     public async Task<IActionResult> Upload(Guid ticketId, CancellationToken cancellationToken)
     {
@@ -50,6 +51,25 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
         if (!await ConsumeToken(ticketId, provided!, cancellationToken))
         {
             return Unauthorized();
+        }
+
+        // status sprawdzamy dopiero po tokenie zeby nie zdradzac stanu zgloszenia bez uprawnien
+        var status = await db.Tickets
+            .AsNoTracking()
+            .Where(t => t.Id == ticketId)
+            .Select(t => t.Status)
+            .SingleAsync(cancellationToken);
+
+        // tombstone stracil juz swoje dane wiec doklejenie pliku cofneloby skutek kasowania
+        if (status == TicketStatus.Deleted)
+        {
+            var conflict = Problem(
+                title: "Deleted ticket cannot be modified.",
+                statusCode: StatusCodes.Status409Conflict);
+
+            ((ProblemDetails)conflict.Value!).Extensions["currentStatus"] = status;
+
+            return conflict;
         }
 
         var written = new List<string>();
