@@ -3,7 +3,7 @@
 # A real local .env can be supplied explicitly:
 #   make ENV_FILE=.env config
 
-.PHONY: dev dev-d down logs config migrate backup-pg backup-media cleanup restore-test
+.PHONY: dev dev-d down logs config migrate test test-backend test-frontend e2e backup-pg backup-media cleanup restore-test
 
 ENV_FILE ?= .env
 COMPOSE = docker compose --env-file $(ENV_FILE) -f docker-compose.dev.yml
@@ -22,6 +22,23 @@ logs:
 
 config:
 	$(COMPOSE) config
+
+# --- testy ---
+# Baza deweloperska, ta sama co w compose. Testy backendu czyszcza tabele tickets i users,
+# wiec po ich uruchomieniu lokalny administrator wraca dopiero po restarcie API.
+TEST_CONNECTION ?= Host=127.0.0.1;Port=5433;Database=bugshot_dev;Username=bugshot;Password=change-me-dev-only
+
+test: test-backend test-frontend
+
+test-backend:
+	cd backend && ConnectionStrings__DefaultConnection="$(TEST_CONNECTION)" dotnet test BugShot.slnx
+
+test-frontend:
+	cd frontend && npm test
+
+# stawia wlasne API i panel na osobnych portach i wlasnej bazie wiec nie koliduje z make dev
+e2e:
+	cd e2e && npm test
 
 # --- image pipeline (CI + local repro) ---
 # Uzycie: make image-scan SERVICE=backend
