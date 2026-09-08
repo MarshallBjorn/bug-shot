@@ -336,10 +336,12 @@ Rzeczy, których nie widać z sygnatury endpointu:
 
 Panel chroni JWT. Zasada jest odwrócona względem listy wyjątków: autoryzacja jest wymagana domyślnie i to endpoint musi powiedzieć, że jej nie chce. Nowa trasa dodana bez namysłu jest wtedy zamknięta, a nie otwarta.
 
-Bez tokena działają dokładnie trzy rzeczy:
+Bez tokena działa dokładnie pięć tras:
 
 - `POST /tickets` i `POST /tickets/{id}/attachments`, bo woła je widget z cudzej domeny i nie ma skąd wziąć konta. Chroni je `projectKey`, `Origin` i jednorazowy `uploadToken`
 - `/auth/login`, `/auth/refresh` i `/auth/logout`, bo to jest właśnie zakładanie i zamykanie sesji. Wylogowanie jest anonimowe celowo, żeby działało też z wygasłym access tokenem
+
+Poza tą listą otwarty jest jeszcze dokument OpenAPI pod `/openapi/v1.json`, ale wyłącznie w środowisku `Development`.
 
 ### Tokeny
 
