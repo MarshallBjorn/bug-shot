@@ -47,6 +47,25 @@ builder.Services
         // nazwy claimow zostaja takie jak w tokenie bo mapowanie na typy WS-Federation tylko myli
         options.MapInboundClaims = false;
 
+        options.Events = new JwtBearerEvents
+        {
+            // token niesie stan konta z chwili logowania wiec bez zajrzenia do bazy
+            // wylaczone konto pracowaloby dalej az do wygasniecia swojego access tokena
+            OnTokenValidated = async context =>
+            {
+                var db = context.HttpContext.RequestServices.GetRequiredService<BugShotDbContext>();
+                var userId = context.Principal!.UserId();
+
+                var active = await db.Users
+                    .AsNoTracking()
+                    .AnyAsync(u => u.Id == userId && u.IsActive, context.HttpContext.RequestAborted);
+
+                if (!active)
+                {
+                    context.Fail("Account is no longer active.");
+                }
+            }
+        };
     });
 
 // nowy endpoint jest chroniony dopoki sam nie powie inaczej

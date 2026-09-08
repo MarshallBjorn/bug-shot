@@ -364,6 +364,8 @@ Token zużyty albo unieważniony, podany po raz drugi, kończy się `401` i unie
 
 Dezaktywacja konta i reset hasła też unieważniają wszystkie jego tokeny. Bez tego wyłączone konto zostawałoby w panelu do końca ważności refresha.
 
+Sam access token to za mało, żeby przejść dalej: przy każdym żądaniu sprawdzane jest, czy konto nadal jest aktywne. Bez tego wyłączone konto pracowałoby jeszcze kwadrans, do wygaśnięcia tokena, który dostało przed wyłączeniem.
+
 ### Konta
 
 `users` trzyma `email`, `password_hash`, `is_admin` i `is_active`. Każdy zalogowany widzi wszystkie projekty tej instancji, podziału uprawnień na projekty nie ma.

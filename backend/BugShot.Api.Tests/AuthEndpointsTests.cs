@@ -443,6 +443,31 @@ public class AuthEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task WylaczonyAdminNieDzialaNaZadnymEndpoincie()
+    {
+        var admin = await Read(await Login(client, AdminEmail, AdminPassword));
+        var drugi = await CreateAdmin("drugi-admin@bug-shot.test");
+
+        await Send(HttpMethod.Patch, $"/api/v1/users/{drugi.User.Id}/deactivate", admin.AccessToken);
+
+        // access token zyje jeszcze kwadrans wiec kazdy endpoint musi sam sprawdzic czy konto nadal istnieje
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await Send(HttpMethod.Get, "/api/v1/auth/me", drugi.AccessToken)).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await Send(HttpMethod.Get, "/api/v1/users", drugi.AccessToken)).StatusCode);
+
+        // bez tego wylaczony administrator zakladal sobie nowe konto i wracal nim po wygasnieciu tokena
+        var body = new { email = "tylne-drzwi@bug-shot.test", password = "konto-po-wylaczeniu", isAdmin = true };
+
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await Send(HttpMethod.Post, "/api/v1/users", drugi.AccessToken, body)).StatusCode);
+    }
+
+    [Fact]
     public async Task WylaczoneKontoTraciDostepMimoWaznegoTokena()
     {
         var developer = await CreateDeveloper();
@@ -472,6 +497,23 @@ public class AuthEndpointsTests : IDisposable
             session.AccessToken);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    private async Task<Session> CreateAdmin(string email)
+    {
+        using (var db = OpenContext())
+        {
+            db.Users.Add(new User
+            {
+                Email = email,
+                PasswordHash = PasswordHasher.Hash(AdminPassword),
+                IsAdmin = true
+            });
+
+            await db.SaveChangesAsync();
+        }
+
+        return await Read(await Login(client, email, AdminPassword));
     }
 
     private async Task<Session> CreateDeveloper()
