@@ -149,15 +149,15 @@ Kasowanie ticketu to tombstone. Zostają `id`, `project_id`, `status` ustawiony 
 
 Kasowanie jest idempotentne. Powtórzone `DELETE` na tombstone zwraca `204`, ale niczego nie zapisuje: nie dopisuje wpisu do historii statusów i nie nadpisuje `deleted_at` ani `deleted_by`, więc oryginalny czas kasowania zostaje.
 
+Pliki z wolumenu kasowane są po zatwierdzeniu tombstone i jest to best effort. Gdy któregoś nie da się usunąć, na przykład przez uprawnienia na wolumenie, zgłoszenie i tak zostaje skasowane, a nieudane sprzątnięcie zostawia ostrzeżenie w logu. Kolejność jest celowa: osierocony plik bez wiersza w bazie jest mniej szkodliwy niż wiersz wskazujący na plik, którego już nie ma, a tak kończyło się kasowanie plików przed zatwierdzeniem transakcji.
+
 Kasowanie unieważnia też niezużyte tokeny uploadu tego zgłoszenia, bo inaczej wysyłka rozpoczęta przed kasowaniem dokleiłaby plik do tombstone. Robi to jako pierwszą operację w transakcji, więc wysyłka będąca w locie zatrzymuje się na blokadzie wiersza tokena, a kasowanie widzi jej załącznik i sprząta go razem z resztą.
 
-Tombstone zostaje widoczny dla odczytów. `GET /tickets/{id}` zwraca go z pustymi polami i statusem `Deleted`, a lista pokazuje go po jawnym `status=Deleted`. Skoro odczyt działa, to zapis na tombstone nie jest brakiem zasobu, tylko konfliktem z jego stanem, i dostaje `409` z `currentStatus` w `ProblemDetails`.
+Tombstone zostaje widoczny dla odczytów. `GET /tickets/{id}` zwraca go z pustymi polami i statusem `Deleted`, a lista pokazuje go po jawnym `status=Deleted`. Skoro odczyt działa, to zapis na tombstone nie jest brakiem zasobu, tylko konfliktem z jego stanem, i dostaje `409` z `currentStatus` w `ProblemDetails`. Dotyczy to `PATCH /tickets/{id}/status`, `POST /tickets/{id}/comments` oraz `POST /tickets/{id}/attachments`.
 
 W praktyce wysyłka załącznika po skasowaniu dostanie `401`, bo token stracił ważność wcześniej niż dojdzie do sprawdzenia statusu. `409` zostaje jako druga linia obrony, na wypadek zgłoszenia, które trafiło w stan `Deleted` inną drogą.
 
 Kasowanie projektu, który ma zgłoszenia, jest zablokowane na poziomie klucza obcego.
-
-Tombstone zostaje widoczny. `GET /tickets/{id}` zwraca go z pustymi polami i statusem `Deleted`, a lista pokazuje go po jawnym `status=Deleted`. Skoro odczyt działa, to zapis na tombstone nie jest brakiem zasobu, tylko konfliktem z jego stanem, i dostaje `409` z `currentStatus` w `ProblemDetails`. Dotyczy to dziś `PATCH /tickets/{id}/status` oraz `POST /tickets/{id}/comments`.
 
 ## Endpointy
 
