@@ -1,4 +1,5 @@
 using System.Text;
+using BugShot.Api.Attachments;
 using BugShot.Api.Contracts;
 using BugShot.Api.Controllers;
 using BugShot.Api.Data;
@@ -43,7 +44,7 @@ public class UploadTokenTests
 
     private static async Task<CreatedTicketResponse> CreateTicket(BugShotDbContext db)
     {
-        var result = await new TicketsController(db).Create(Request(), CancellationToken.None);
+        var result = await new TicketsController(db, new AttachmentStorageOptions(Path.GetTempPath())).Create(Request(), CancellationToken.None);
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         return Assert.IsType<CreatedTicketResponse>(created.Value);
     }

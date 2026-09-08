@@ -1,3 +1,4 @@
+using BugShot.Api.Attachments;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
@@ -10,7 +11,9 @@ namespace BugShot.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/tickets")]
-public class TicketsController(BugShotDbContext db) : ControllerBase
+public class TicketsController(
+    BugShotDbContext db,
+    AttachmentStorageOptions storage) : ControllerBase
 {
     [HttpPost]
     [EnableCors(CorsPolicies.Widget)]
@@ -67,7 +70,9 @@ public class TicketsController(BugShotDbContext db) : ControllerBase
     [EnableCors(CorsPolicies.Dashboard)]
     [ProducesResponseType<TicketDetails>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<TicketDetails>> GetById(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<TicketDetails>> GetById(
+        Guid id,
+        CancellationToken cancellationToken)
     {
         var ticket = await db.Tickets
             .AsNoTracking()
@@ -87,7 +92,13 @@ public class TicketsController(BugShotDbContext db) : ControllerBase
                 Convert.ToBase64String(t.RowVersion),
                 t.Attachments
                     .Where(a => a.Kind != AttachmentKind.ConsoleLog)
-                    .Select(a => new TicketAttachmentResponse(a.Id, a.Kind, a.Uri, a.FileName, a.ContentType, a.SizeBytes))
+                    .Select(a => new TicketAttachmentResponse(
+                        a.Id,
+                        a.Kind,
+                        a.Uri,
+                        a.FileName,
+                        a.ContentType,
+                        a.SizeBytes))
                     .ToList(),
                 t.Attachments
                     .Where(a => a.Kind == AttachmentKind.ConsoleLog)
@@ -96,10 +107,184 @@ public class TicketsController(BugShotDbContext db) : ControllerBase
                 t.Comments.Count,
                 t.StatusHistory
                     .OrderBy(h => h.ChangedAt)
-                    .Select(h => new TicketStatusChangeResponse(h.FromStatus, h.ToStatus, h.ChangedBy, h.ChangedAt))
+                    .Select(h => new TicketStatusChangeResponse(
+                        h.FromStatus,
+                        h.ToStatus,
+                        h.ChangedBy,
+                        h.ChangedAt))
                     .ToList()))
             .SingleOrDefaultAsync(cancellationToken);
 
         return ticket is null ? NotFound() : Ok(ticket);
+    }
+
+    [HttpPost("{id:guid}/comments")]
+    [EnableCors(CorsPolicies.Dashboard)]
+    [ProducesResponseType<TicketCommentResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TicketCommentResponse>> AddComment(
+        Guid id,
+        CreateTicketCommentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var ticket = await db.Tickets
+            .Where(t => t.Id == id)
+            .Select(t => new { t.Status })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (ticket is null || ticket.Status == TicketStatus.Deleted)
+        {
+            return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Author))
+        {
+            ModelState.AddModelError(nameof(request.Author), "Comment author cannot be empty.");
+            return ValidationProblem(ModelState);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Body))
+        {
+            ModelState.AddModelError(nameof(request.Body), "Comment body cannot be empty.");
+            return ValidationProblem(ModelState);
+        }
+
+        var comment = new TicketComment
+        {
+            TicketId = id,
+            Author = request.Author,
+            Body = request.Body
+        };
+
+        db.TicketComments.Add(comment);
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        return CreatedAtAction(
+            nameof(GetComments),
+            new { id },
+            new TicketCommentResponse(
+                comment.Id,
+                comment.Author,
+                comment.Body,
+                comment.CreatedAt));
+    }
+
+    [HttpGet("{id:guid}/comments")]
+    [EnableCors(CorsPolicies.Dashboard)]
+    [ProducesResponseType<PagedResult<TicketCommentResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<PagedResult<TicketCommentResponse>>> GetComments(
+        Guid id,
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
+    {
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var ticketExists = await db.Tickets
+            .AsNoTracking()
+            .AnyAsync(t => t.Id == id, cancellationToken);
+
+        if (!ticketExists)
+        {
+            return NotFound();
+        }
+
+        var query = db.TicketComments
+            .AsNoTracking()
+            .Where(c => c.TicketId == id)
+            .OrderBy(c => c.CreatedAt)
+            .ThenBy(c => c.Id);
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(c => new TicketCommentResponse(
+                c.Id,
+                c.Author,
+                c.Body,
+                c.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+        return Ok(new PagedResult<TicketCommentResponse>(
+            items,
+            total,
+            page,
+            pageSize));
+    }
+
+    [HttpDelete("{id:guid}")]
+    [EnableCors(CorsPolicies.Dashboard)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var ticket = await db.Tickets
+            .Include(t => t.Attachments)
+            .Include(t => t.Comments)
+            .SingleOrDefaultAsync(t => t.Id == id, cancellationToken);
+
+        if (ticket is null)
+        {
+            return NotFound();
+        }
+
+        var attachmentPaths = ticket.Attachments
+            .Select(a => Path.GetFileName(a.Uri))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => Path.Combine(storage.RootPath, name))
+            .ToList();
+
+        var fromStatus = ticket.Status;
+
+        ticket.Description = string.Empty;
+        ticket.PageUrl = string.Empty;
+        ticket.UserAgent = string.Empty;
+        ticket.Status = TicketStatus.Deleted;
+        ticket.DeletedAt = DateTimeOffset.UtcNow;
+        ticket.DeletedBy = "system";
+
+        db.TicketStatusChanges.Add(new TicketStatusChange
+        {
+            TicketId = ticket.Id,
+            FromStatus = fromStatus,
+            ToStatus = TicketStatus.Deleted,
+            ChangedBy = "system",
+            ChangedAt = DateTimeOffset.UtcNow
+        });
+
+        await using var transaction =
+            await db.Database.BeginTransactionAsync(cancellationToken);
+
+        db.TicketComments.RemoveRange(ticket.Comments);
+        db.TicketAttachments.RemoveRange(ticket.Attachments);
+
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        foreach (var attachmentPath in attachmentPaths)
+        {
+            try
+            {
+                System.IO.File.Delete(attachmentPath);
+            }
+            catch (DirectoryNotFoundException)
+            {
+                // DB tombstone has already been committed.
+            }
+            catch (IOException)
+            {
+                // DB tombstone has already been committed.
+            }
+        }
+
+        return NoContent();
     }
 }
