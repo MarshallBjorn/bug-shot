@@ -59,7 +59,8 @@ public class UsersController(BugShotDbContext db) : ControllerBase
 
         await db.SaveChangesAsync(cancellationToken);
 
-        return CreatedAtAction(nameof(GetList), AuthController.Describe(user));
+        // bez Location bo konto nie ma wlasnego adresu i zostaje sama lista
+        return Created((string?)null, AuthController.Describe(user));
     }
 
     [HttpPatch("{id:guid}/deactivate")]
