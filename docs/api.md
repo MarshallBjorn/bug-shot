@@ -147,6 +147,14 @@ Rozdzielenie pól jest celowe. `reported_at` pochodzi od klienta, którego zegar
 
 Kasowanie ticketu to tombstone. Zostają `id`, `project_id`, `status` ustawiony na `Deleted`, `deleted_at`, `deleted_by` oraz wpis w historii statusów. Znikają opis, adres strony, user agent, komentarze i załączniki, te ostatnie fizycznie z wolumenu.
 
+Kasowanie jest idempotentne. Powtórzone `DELETE` na tombstone zwraca `204`, ale niczego nie zapisuje: nie dopisuje wpisu do historii statusów i nie nadpisuje `deleted_at` ani `deleted_by`, więc oryginalny czas kasowania zostaje.
+
+Kasowanie unieważnia też niezużyte tokeny uploadu tego zgłoszenia, bo inaczej wysyłka rozpoczęta przed kasowaniem dokleiłaby plik do tombstone. Robi to jako pierwszą operację w transakcji, więc wysyłka będąca w locie zatrzymuje się na blokadzie wiersza tokena, a kasowanie widzi jej załącznik i sprząta go razem z resztą.
+
+Tombstone zostaje widoczny dla odczytów. `GET /tickets/{id}` zwraca go z pustymi polami i statusem `Deleted`, a lista pokazuje go po jawnym `status=Deleted`. Skoro odczyt działa, to zapis na tombstone nie jest brakiem zasobu, tylko konfliktem z jego stanem, i dostaje `409` z `currentStatus` w `ProblemDetails`.
+
+W praktyce wysyłka załącznika po skasowaniu dostanie `401`, bo token stracił ważność wcześniej niż dojdzie do sprawdzenia statusu. `409` zostaje jako druga linia obrony, na wypadek zgłoszenia, które trafiło w stan `Deleted` inną drogą.
+
 Kasowanie projektu, który ma zgłoszenia, jest zablokowane na poziomie klucza obcego.
 
 Tombstone zostaje widoczny. `GET /tickets/{id}` zwraca go z pustymi polami i statusem `Deleted`, a lista pokazuje go po jawnym `status=Deleted`. Skoro odczyt działa, to zapis na tombstone nie jest brakiem zasobu, tylko konfliktem z jego stanem, i dostaje `409` z `currentStatus` w `ProblemDetails`. Dotyczy to dziś `PATCH /tickets/{id}/status` oraz `POST /tickets/{id}/comments`.
@@ -160,10 +168,10 @@ Prefiks wersji `/api/v1`. Kolumna stanu mówi, czy endpoint istnieje w kodzie. Z
 | `POST /tickets` | działa | zgłoszenie z widgetu, zwraca `uploadToken`, patrz niżej |
 | `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtr po statusie, szukanie, paginacja |
 | `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
-| `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken` |
+| `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken`, tombstone daje 409 |
 | `PATCH /tickets/{id}/status` | działa | wymaga `If-Match` z `rowVersion`, konflikt daje 409 |
 | `DELETE /tickets/{id}` | działa | tombstone ticketu i usunięcie danych/załączników |
-| `POST /tickets/{id}/comments` | działa | dodanie komentarza, tombstone daje 409 |
+| `POST /tickets/{id}/comments` | działa | dodanie komentarza, autor do 128 znaków, treść do 5000, puste i same białe znaki odrzucane, tombstone daje 409 |
 | `GET /tickets/{id}/comments` | działa | lista komentarzy z paginacją |
 | `DELETE /projects/{id}` | planowane | zablokowane, dopóki projekt ma zgłoszenia |
 
@@ -237,6 +245,7 @@ Kody błędów:
 |---|---|
 | 400 | zawartość pliku nie pasuje do żadnego dozwolonego typu, drugi zrzut lub drugi log w jednym żądaniu, więcej niż pięć plików, nieznane pole formularza, ciało nie jest multipart albo nie przyszedł żaden plik |
 | 401 | brak nagłówka, token nieznany, wygasły, zużyty albo wystawiony dla innego zgłoszenia |
+| 409 | zgłoszenie zostało skasowane, więc nie ma do czego doklejać pliku. W praktyce takie żądanie zwykle nie dojdzie tak daleko, bo kasowanie unieważnia token i wcześniej pada `401` |
 | 413 | pojedynczy plik lub log przekracza swój limit, albo całe żądanie przekracza sumę limitów |
 
 Kolejność sprawdzeń jest sztywna: nagłówek z tokenem, potem `Content-Length` i typ ciała, dopiero na końcu zawartość plików. Licznik bajtów leci własny, w trakcie zapisu, więc plik ponad limit przerywa transfer zamiast czekać na koniec strumienia.
@@ -244,9 +253,11 @@ Kolejność sprawdzeń jest sztywna: nagłówek z tokenem, potem `Content-Length
 Całość idzie w jednej transakcji, a token jest stemplowany jednym atomowym zapisem, zanim ruszy odczyt plików. Wynikają z tego dwie rzeczy istotne dla klienta:
 
 - dwa równoległe żądania z tym samym tokenem nie przejdą oba, drugie dostanie 401
-- odpowiedź 400 i 413 nie zużywa tokena, bo transakcja się cofa i pliki znikają z dysku. Ponowienie po poprawieniu pliku zadziała. Zużywa go dopiero 201
+- odpowiedź 400, 409 i 413 nie zużywa tokena, bo transakcja się cofa i pliki znikają z dysku. Ponowienie po poprawieniu pliku zadziała. Zużywa go dopiero 201
 
 Nazwa pliku na dysku to `{uuid}.{rozszerzenie}`, a `uri` w odpowiedzi i w bazie jest ścieżką względną pod `/attachments/`, którą wystawia nginx.
+
+Nazwa podana przez klienta jest tylko metadaną, więc dłuższa niż 260 znaków zostaje przycięta z zachowaniem rozszerzenia, zamiast odrzucać poprawną wysyłkę.
 
 ### PATCH /tickets/{id}/status
 
