@@ -20,6 +20,16 @@ flowchart LR
     dockle --> ghcr["GHCR"]
 ```
 
+### Warstwy testów
+
+| Warstwa | Gdzie | Czego pilnuje |
+|---|---|---|
+| jednostkowe i kontraktowe | `backend/BugShot.Api.Tests`, `frontend/src/**/*.test.ts` | reguły walidacji, wystawianie tokenów, odnawianie sesji, ponawianie żądania po 401 |
+| integracyjne | `backend/BugShot.Api.Tests` przez `WebApplicationFactory` | cały pipeline razem z autoryzacją, na prawdziwej bazie |
+| end to end | `e2e` | panel w przeglądarce razem z API, załącznikami i cookie |
+
+Uruchomienie lokalne: `make test` dla dwóch pierwszych warstw, `make e2e` dla trzeciej.
+
 ### Backend
 
 Workflow odpala PostgreSQL jako service container i wykonuje `dotnet restore`, `dotnet build`, migracje EF Core, `dotnet test`. Po zielonych testach wchodzi wspólny workflow budowania obrazu.
@@ -31,6 +41,12 @@ Node.js 24. Pipeline uruchamia `npm ci`, potem lint, build i test, a wynik trafi
 ### Widget
 
 Widget jest osobnym artefaktem JS/HTML, bez własnego obrazu Docker. Walidacja to `node --check`, walidacja HTML oraz testy/build zależne od konfiguracji pakietu. Dystrybucja przez NPM i własny CDN jest osobnym etapem, nie częścią głównego pipeline'u aplikacji.
+
+### E2E
+
+Osobny workflow stawia PostgreSQL jako service container, buduje API, instaluje zależności panelu i Chromium, po czym uruchamia Playwrighta. Testy jadą przez prawdziwą przeglądarkę po prawdziwym API, więc łapią rzeczy, których warstwy niżej nie widzą: politykę cookie, guard na trasach i to, czy załącznik faktycznie pojawia się na ekranie.
+
+Testy mają własną bazę i własne porty, więc nie kolidują z `make dev`. Schemat zakłada skrypt `pretest`, bo Playwright startuje serwery zanim wykona `globalSetup`.
 
 ### Repo
 

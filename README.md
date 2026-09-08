@@ -68,7 +68,7 @@ flowchart LR
     subgraph app["Aplikacja (docker-compose)"]
         api[".NET Web API<br/>BugShot.Api"]
         dashboard["React Dashboard<br/>panel administracyjny"]
-        nginx["nginx<br/>serwowanie mediów"]
+        nginx["nginx<br/>serwowanie bundli widgetu"]
     end
 
     subgraph data["Warstwa danych"]
@@ -103,13 +103,12 @@ flowchart LR
     caddy --> nginx
 
     api -- "walidacja Origin<br/>rate limit<br/>sanityzacja" --> pg
-    api -- "zapis plików" --> vol
+    api -- "zapis plików<br/>wydawanie za JWT" --> vol
     api -. "walidacja tokena" .-> turnstile
-    nginx -- "serwowanie<br/>Content-Disposition: attachment" --> vol
 
     admin -- "CRUD projektów<br/>rotacja klucza<br/>reguły sanityzacji" --> dashboard
     dev -- "przegląd ticketów<br/>komentarze, statusy" --> dashboard
-    dashboard -- "REST" --> api
+    dashboard -- "REST<br/>Authorization: Bearer" --> api
 
     gh -- "test + build + scan" --> ghcr
     gh -- "publish tag widget-v*" --> npm
@@ -133,6 +132,7 @@ flowchart LR
 
 **Uwagi:**
 - Widget jest jedynym komponentem żyjącym poza naszą infrastrukturą — na cudzej domenie, dostarczany przez CDN
-- Baza trzyma tylko `uri` do plików, same pliki na wolumenie serwowane przez nginx bezpośrednio (API ich nie proxuje)
+- Baza trzyma tylko `uri` do plików, same pliki leżą na wolumenie. Wydaje je API po sprawdzeniu tokena, bo załączniki są danymi użytkownika i nie mogą wisieć pod publicznym adresem. nginx serwuje bezpośrednio już tylko bundle widgetu, który z definicji jest publiczny
+- Panel chroni JWT: access token w nagłówku, token odświeżający w cookie `HttpOnly`. Widget zostaje bez logowania, chroni go `projectKey`, `Origin` i jednorazowy token wysyłki
 - Rate limit i walidacja `Origin` są w API, nie na Caddy — łatwiej ich odpalać per-endpoint
 - Turnstile podłączany warunkowo per projekt (flaga w `projects`)
