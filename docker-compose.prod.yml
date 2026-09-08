@@ -49,6 +49,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=64m
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      APP_DLL: ${BACKEND_APP_DLL:?BACKEND_APP_DLL required}
       # CORS whitelist — tylko origin frontu; backend czyta i wpisuje do polityki CORS.
       Cors__AllowedOrigins__0: https://app.bugshot.app
     networks:
@@ -87,11 +88,16 @@ services:
     <<: *hardened
     restart: unless-stopped
     logging: *default-logging
+    user: "101:101"
     # nginx alpine — non-root działa na oficjalnym obrazie od 1.25+, ale wymaga tmpfs na cache/run
     tmpfs:
-      - /var/cache/nginx:rw,noexec,nosuid,size=32m
-      - /var/run:rw,noexec,nosuid,size=8m
-      - /tmp:rw,noexec,nosuid,size=16m
+      - /var/cache/nginx:rw,noexec,nosuid,size=32m,uid=101,gid=101
+      - /var/run:rw,noexec,nosuid,size=8m,uid=101,gid=101
+      - /tmp:rw,noexec,nosuid,size=16m,uid=101,gid=101
+    sysctls:
+      - net.ipv4.ip_unprivileged_port_start=0
+    cap_add:
+      - NET_BIND_SERVICE
     networks:
       proxy: {}
     healthcheck:
@@ -122,10 +128,16 @@ services:
     <<: *hardened
     restart: unless-stopped
     logging: *default-logging
+    user: "101:101"
+    entrypoint: ["nginx", "-g", "daemon off;"]
     tmpfs:
-      - /var/cache/nginx:rw,noexec,nosuid,size=64m
-      - /var/run:rw,noexec,nosuid,size=8m
-      - /tmp:rw,noexec,nosuid,size=16m
+      - /var/cache/nginx:rw,noexec,nosuid,size=64m,uid=101,gid=101
+      - /var/run:rw,noexec,nosuid,size=8m,uid=101,gid=101
+      - /tmp:rw,noexec,nosuid,size=16m,uid=101,gid=101
+    sysctls:
+      - net.ipv4.ip_unprivileged_port_start=0
+    cap_add:
+      - NET_BIND_SERVICE
     networks:
       proxy: {}
     deploy:
