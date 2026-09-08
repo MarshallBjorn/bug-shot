@@ -641,6 +641,8 @@ web_modules/
 .env.test.local
 .env.production.local
 .env.local
+.env.dev
+.env.prod
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -807,9 +809,6 @@ dist-ssr/
 widget/config.js
 
 bug-shot-*/
-
-.env.dev
-.env.prod
 
 test-keys/
 backup-out/
