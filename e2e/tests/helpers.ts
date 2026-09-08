@@ -61,14 +61,24 @@ export async function reportFromWidget(request: APIRequestContext, description: 
     headers: { 'X-Upload-Token': ticket.uploadToken, Origin: widgetOrigin },
     multipart: {
       screenshot: { name: 'zrzut.png', mimeType: 'image/png', buffer: screenshotBytes() },
+      consoleLog: {
+        name: 'konsola.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from('[error] koszyk nie przelicza rabatu\n'),
+      },
     },
   })
 
   expect(uploaded.status()).toBe(201)
 
-  const attachments = await uploaded.json()
+  const attachments = (await uploaded.json()) as { id: string; kind: string }[]
+  const byKind = (kind: string) => attachments.find((attachment) => attachment.kind === kind)!.id
 
-  return { ticketId: ticket.id as string, attachmentId: attachments[0].id as string }
+  return {
+    ticketId: ticket.id as string,
+    attachmentId: byKind('Screenshot'),
+    consoleLogId: byKind('ConsoleLog'),
+  }
 }
 
 function chunk(type: string, data: Buffer) {

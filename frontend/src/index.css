@@ -180,6 +180,21 @@ body {
   font-size: 0.85rem;
 }
 
+.attachment-download {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.2rem 0.5rem;
+  text-align: left;
+}
+
+.attachment-download:disabled {
+  color: #999;
+  cursor: default;
+}
+
 .attachment-meta {
   font-size: 0.85rem;
   margin: 0.35rem 0 0;

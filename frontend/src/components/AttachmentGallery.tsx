@@ -2,44 +2,37 @@ import { formatAttachmentKind, formatFileSize } from '../format'
 import { useAttachment } from '../hooks/useAttachment'
 import { isImage } from '../media'
 import type { TicketAttachment } from '../types'
+import AttachmentDownload from './AttachmentDownload'
 
 interface AttachmentGalleryProps {
   attachments: TicketAttachment[]
 }
 
-function AttachmentItem({ attachment }: { attachment: TicketAttachment }) {
+// podgląd wchodzi na stronę od razu bo bez bajtów nie ma czego pokazać
+function AttachmentPreview({ attachment }: { attachment: TicketAttachment }) {
   const { url, failed } = useAttachment(attachment.id)
 
   if (failed) {
-    return (
-      <li>
-        <span className="attachment-file">Nie udało się pobrać</span>
-        <p className="attachment-meta">{attachment.fileName}</p>
-      </li>
-    )
+    return <span className="attachment-file">Nie udało się pobrać</span>
   }
 
+  if (!url) {
+    return <span className="attachment-file">Pobieranie...</span>
+  }
+
+  return <img alt={attachment.fileName} src={url} />
+}
+
+function AttachmentItem({ attachment }: { attachment: TicketAttachment }) {
   return (
     <li>
-      {url ? (
-        <a download={attachment.fileName} href={url}>
-          {isImage(attachment.contentType) ? (
-            <img alt={attachment.fileName} loading="lazy" src={url} />
-          ) : (
-            <span className="attachment-file">{attachment.contentType}</span>
-          )}
-        </a>
+      {isImage(attachment.contentType) ? (
+        <AttachmentPreview attachment={attachment} />
       ) : (
-        <span className="attachment-file">Pobieranie...</span>
+        <span className="attachment-file">{attachment.contentType}</span>
       )}
       <p className="attachment-meta">
-        {url ? (
-          <a download={attachment.fileName} href={url}>
-            {attachment.fileName}
-          </a>
-        ) : (
-          attachment.fileName
-        )}
+        <AttachmentDownload attachment={attachment} label={attachment.fileName} />
         <br />
         {formatAttachmentKind(attachment.kind)}, {formatFileSize(attachment.sizeBytes)}
       </p>

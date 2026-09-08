@@ -384,7 +384,7 @@ Pliki nie trafiają do bazy. Baza trzyma `uri`, plik leży na wolumenie, a wydaj
 
 `uri` jest lokalizacją pliku po stronie serwera i nie wychodzi już w odpowiedziach API. Klient dostaje `id` załącznika i tylko ono prowadzi do treści.
 
-Ponieważ `Authorization` nie da się dokleić do `<img src>`, dashboard pobiera załącznik zwykłym żądaniem i pokazuje go jako `blob:`. Przy przeniesieniu plików do S3 albo Garage ten sam endpoint przestanie streamować i zacznie przekierowywać na podpisany adres, bez zmian po stronie klienta.
+Ponieważ `Authorization` nie da się dokleić do `<img src>`, dashboard pobiera zrzut zwykłym żądaniem i pokazuje go jako `blob:`. Pozostałe załączniki i log konsoli schodzą z serwera dopiero po kliknięciu, bo inaczej wejście w zgłoszenie ściągałoby do pamięci karty wszystko naraz. Przy przeniesieniu plików do S3 albo Garage ten sam endpoint przestanie streamować i zacznie przekierowywać na podpisany adres, bez zmian po stronie klienta.
 
 Nazwa pliku na dysku to `{uuid}.{rozszerzenie}`. Nazwa podana przez klienta jest trzymana wyłącznie jako metadana i nigdy nie trafia do ścieżki.
 

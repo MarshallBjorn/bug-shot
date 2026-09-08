@@ -21,6 +21,32 @@ test.describe('zalaczniki za tokenem', () => {
       .poll(() => screenshot.evaluate((image: HTMLImageElement) => image.naturalWidth))
       .toBeGreaterThan(0)
   })
+
+  test('log konsoli schodzi z serwera dopiero po kliknieciu', async ({ page, request }) => {
+    const { ticketId, consoleLogId } = await reportFromWidget(request, 'Zgloszenie z logiem')
+
+    const pobrania: string[] = []
+
+    page.on('request', (call) => {
+      if (call.url().includes(`/attachments/${consoleLogId}/download`)) {
+        pobrania.push(call.url())
+      }
+    })
+
+    await openSignedIn(page, `${ticketsPath()}/${ticketId}`)
+
+    // zrzut musi wejsc na strone od razu wiec czekamy az sie ustoi
+    await expect(page.locator('.attachments img')).toBeVisible()
+
+    expect(pobrania).toHaveLength(0)
+
+    const [pobrany] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Pobierz log konsoli' }).click(),
+    ])
+
+    expect(pobrany.suggestedFilename()).toBe('konsola.txt')
+  })
 })
 
 test.describe('lista zgloszen', () => {

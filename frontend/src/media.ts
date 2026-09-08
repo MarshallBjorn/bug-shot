@@ -8,6 +8,19 @@ export async function fetchAttachment(attachmentId: string, signal?: AbortSignal
   return URL.createObjectURL(await response.blob())
 }
 
+export async function downloadAttachment(attachmentId: string, fileName: string) {
+  const url = await fetchAttachment(attachmentId)
+
+  const link = document.createElement('a')
+  link.download = fileName
+  link.href = url
+  link.click()
+
+  // adres zwalniamy dopiero po oddaniu sterowania przeglądarce bo natychmiastowe
+  // zwolnienie potrafi przerwać rozpoczęte pobieranie
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 export function isImage(contentType: string) {
   return contentType.startsWith('image/')
 }
