@@ -34,7 +34,7 @@ public class TicketsControllerTests
     // origin zaseedowany dla projektu demo w InitialCreate
     private const string AllowedOrigin = "http://127.0.0.1:5500";
 
-    private static BugShotDbContext NewContext()
+    private static BugShotDbContext OpenContext()
     {
         var connectionString =
             Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
@@ -50,7 +50,12 @@ public class TicketsControllerTests
             .UseSnakeCaseNamingConvention()
             .Options;
 
-        var db = new BugShotDbContext(options);
+        return new BugShotDbContext(options);
+    }
+
+    private static BugShotDbContext NewContext()
+    {
+        var db = OpenContext();
         db.Tickets.ExecuteDelete();
 
         return db;
@@ -88,6 +93,32 @@ public class TicketsControllerTests
             ControllerContext = new ControllerContext { HttpContext = context }
         };
     }
+
+    private static UpdateTicketStatusRequest StatusRequest(TicketStatus status) => new(status, "bartek");
+
+    private static async Task<Ticket> NewTicket(BugShotDbContext db)
+    {
+        var projectId = await db.Projects
+            .Where(p => p.Key == "demo")
+            .Select(p => p.Id)
+            .SingleAsync();
+
+        var ticket = new Ticket
+        {
+            ProjectId = projectId,
+            Description = "Koszyk gubi produkty",
+            PageUrl = "https://acme.example/cart",
+            UserAgent = "Mozilla/5.0",
+            Status = TicketStatus.New
+        };
+
+        db.Tickets.Add(ticket);
+        await db.SaveChangesAsync();
+
+        return ticket;
+    }
+
+    private static string RowVersion(Ticket ticket) => Convert.ToBase64String(ticket.RowVersion);
 
     private static IDistributedCache NewCache() =>
         new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
@@ -736,5 +767,201 @@ public class TicketsControllerTests
 
         Assert.NotEqual(firstPayload.Id, secondPayload.Id);
         Assert.Equal(2, await db.Tickets.CountAsync());
+    }
+
+    [Fact]
+    public async Task PoprawnyIfMatchZmieniaStatus()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var previousRowVersion = RowVersion(ticket);
+        var controller = NewController(db);
+
+        var result = await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.InProgress),
+            previousRowVersion,
+            CancellationToken.None);
+
+        var payload = Assert.IsType<TicketStatusResponse>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(TicketStatus.InProgress, payload.Status);
+        Assert.NotEqual(previousRowVersion, payload.RowVersion);
+
+        var saved = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == ticket.Id);
+        Assert.Equal(TicketStatus.InProgress, saved.Status);
+        Assert.Equal(payload.RowVersion, Convert.ToBase64String(saved.RowVersion));
+    }
+
+    [Fact]
+    public async Task NieaktualnyIfMatchDaje409BezZmianyStatusu()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var controller = NewController(db);
+
+        var result = await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.Resolved),
+            Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+            CancellationToken.None);
+
+        var problem = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status409Conflict, problem.StatusCode);
+
+        var details = Assert.IsType<ProblemDetails>(problem.Value);
+        Assert.Equal(TicketStatus.New, details.Extensions["currentStatus"]);
+        Assert.Equal(RowVersion(ticket), details.Extensions["rowVersion"]);
+
+        var saved = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == ticket.Id);
+        Assert.Equal(TicketStatus.New, saved.Status);
+        Assert.Empty(db.TicketStatusChanges.Where(h => h.TicketId == ticket.Id));
+    }
+
+    [Fact]
+    public async Task BrakIfMatchDaje428()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var controller = NewController(db);
+
+        var result = await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.Resolved),
+            null,
+            CancellationToken.None);
+
+        var problem = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status428PreconditionRequired, problem.StatusCode);
+
+        var saved = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == ticket.Id);
+        Assert.Equal(TicketStatus.New, saved.Status);
+    }
+
+    [Fact]
+    public async Task ZmianaStatusuZapisujeWpisWHistorii()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var controller = NewController(db);
+
+        await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.InProgress),
+            RowVersion(ticket),
+            CancellationToken.None);
+
+        await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.Resolved),
+            RowVersion(ticket),
+            CancellationToken.None);
+
+        var history = await db.TicketStatusChanges
+            .AsNoTracking()
+            .Where(h => h.TicketId == ticket.Id)
+            .OrderBy(h => h.ChangedAt)
+            .ToListAsync();
+
+        Assert.Collection(
+            history,
+            first =>
+            {
+                Assert.Equal(TicketStatus.New, first.FromStatus);
+                Assert.Equal(TicketStatus.InProgress, first.ToStatus);
+                Assert.Equal("bartek", first.ChangedBy);
+            },
+            second =>
+            {
+                Assert.Equal(TicketStatus.InProgress, second.FromStatus);
+                Assert.Equal(TicketStatus.Resolved, second.ToStatus);
+            });
+    }
+
+    [Fact]
+    public async Task PowtorzenieTegoSamegoStatusuNieDopisujeHistorii()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var rowVersion = RowVersion(ticket);
+        var controller = NewController(db);
+
+        var result = await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.New),
+            rowVersion,
+            CancellationToken.None);
+
+        var payload = Assert.IsType<TicketStatusResponse>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(rowVersion, payload.RowVersion);
+        Assert.Empty(db.TicketStatusChanges.Where(h => h.TicketId == ticket.Id));
+    }
+
+    [Fact]
+    public async Task StatusDeletedWCieleJestOdrzucany()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var controller = NewController(db);
+
+        var result = await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.Deleted),
+            RowVersion(ticket),
+            CancellationToken.None);
+
+        Assert.IsType<ObjectResult>(result.Result);
+        Assert.False(controller.ModelState.IsValid);
+
+        var saved = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == ticket.Id);
+        Assert.Equal(TicketStatus.New, saved.Status);
+    }
+
+    [Fact]
+    public async Task ZmianaStatusuNieistniejacegoZgloszeniaDaje404()
+    {
+        using var db = NewContext();
+        var controller = NewController(db);
+
+        var result = await controller.UpdateStatus(
+            Guid.NewGuid(),
+            StatusRequest(TicketStatus.InProgress),
+            Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+            CancellationToken.None);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task ZapisMiedzyOdczytemAZapisemDaje409()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var rowVersion = RowVersion(ticket);
+        var controller = NewController(db);
+
+        // druga sesja przestawia status zanim pierwsza zdazy zapisac
+        using (var other = OpenContext())
+        {
+            var sameTicket = await other.Tickets.SingleAsync(t => t.Id == ticket.Id);
+            sameTicket.Status = TicketStatus.Rejected;
+            await other.SaveChangesAsync();
+        }
+
+        // kontroler dostaje sledzona encje wiec If-Match zgadza sie mimo nieaktualnej bazy
+        var result = await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.InProgress),
+            rowVersion,
+            CancellationToken.None);
+
+        var problem = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status409Conflict, problem.StatusCode);
+
+        var details = Assert.IsType<ProblemDetails>(problem.Value);
+        Assert.Equal(TicketStatus.Rejected, details.Extensions["currentStatus"]);
+
+        var saved = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == ticket.Id);
+        Assert.Equal(TicketStatus.Rejected, saved.Status);
+        Assert.Empty(db.TicketStatusChanges.Where(h => h.TicketId == ticket.Id));
     }
 }
