@@ -16,8 +16,11 @@ ENV APP_DLL=
 
 EXPOSE 8080
 
-COPY --from=build /app/publish .
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/*
 
+COPY --from=build /app/publish .
 # wolumen zalacznikow dziedziczy wlasciciela z tego katalogu wiec musi powstac przed przelaczeniem uzytkownika
 RUN mkdir -p /var/lib/bugshot/media && chown -R "$APP_UID:$APP_UID" /var/lib/bugshot
 

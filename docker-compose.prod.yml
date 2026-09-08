@@ -44,7 +44,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     # W Dockerfile musi być: USER app (non-root, uid >= 10000). Jeśli nie ma — dodać przed budową.
-    user: "10001:10001"
+    user: "${APP_UID:-1654}:${APP_UID:-1654}"
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     environment:
@@ -60,7 +60,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -148,7 +148,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
-      - "traefik.http.routers.bugshot-static.rule=Host(`fs.bushot.on-labs.dev`)"
+      - "traefik.http.routers.bugshot-static.rule=Host(`fs.bugshot.on-labs.dev`)"
       - "traefik.http.routers.bugshot-static.entrypoints=websecure"
       - "traefik.http.routers.bugshot-static.tls=true"
       - "traefik.http.routers.bugshot-static.tls.certresolver=le"
