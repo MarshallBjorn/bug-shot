@@ -19,8 +19,13 @@ var attachmentsPath = builder.Configuration["Storage:AttachmentsPath"]
     ?? throw new InvalidOperationException("Storage:AttachmentsPath is not configured.");
 
 // bez klucza nie da sie podpisac tokena wiec API ma nie wstac zamiast wstac bez ochrony
-var signingKey = builder.Configuration["JWT_SIGNING_KEY"]
-    ?? throw new InvalidOperationException("JWT_SIGNING_KEY is not configured.");
+// pusty lapiemy osobno bo compose podaje zmienna bez wartosci domyslnej
+var signingKey = builder.Configuration["JWT_SIGNING_KEY"];
+
+if (string.IsNullOrWhiteSpace(signingKey))
+{
+    throw new InvalidOperationException("JWT_SIGNING_KEY is not configured.");
+}
 
 var widgetOrigins = builder.Configuration.GetSection("Cors:WidgetOrigins").Get<string[]>() ?? [];
 var dashboardOrigins = builder.Configuration.GetSection("Cors:DashboardOrigins").Get<string[]>() ?? [];
