@@ -149,6 +149,8 @@ Kasowanie ticketu to tombstone. Zostają `id`, `project_id`, `status` ustawiony 
 
 Kasowanie projektu, który ma zgłoszenia, jest zablokowane na poziomie klucza obcego.
 
+Tombstone zostaje widoczny. `GET /tickets/{id}` zwraca go z pustymi polami i statusem `Deleted`, a lista pokazuje go po jawnym `status=Deleted`. Skoro odczyt działa, to zapis na tombstone nie jest brakiem zasobu, tylko konfliktem z jego stanem, i dostaje `409` z `currentStatus` w `ProblemDetails`. Dotyczy to dziś `PATCH /tickets/{id}/status` oraz `POST /tickets/{id}/comments`.
+
 ## Endpointy
 
 Prefiks wersji `/api/v1`. Kolumna stanu mówi, czy endpoint istnieje w kodzie. Zaplanowane zwracają dziś 404.
@@ -159,9 +161,9 @@ Prefiks wersji `/api/v1`. Kolumna stanu mówi, czy endpoint istnieje w kodzie. Z
 | `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtr po statusie, szukanie, paginacja |
 | `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
 | `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken` |
-| `PATCH /tickets/{id}/status` | planowane | wymaga `If-Match` z `rowVersion`, konflikt daje 409 |
+| `PATCH /tickets/{id}/status` | działa | wymaga `If-Match` z `rowVersion`, konflikt daje 409 |
 | `DELETE /tickets/{id}` | działa | tombstone ticketu i usunięcie danych/załączników |
-| `POST /tickets/{id}/comments` | działa | dodanie komentarza do aktywnego ticketu |
+| `POST /tickets/{id}/comments` | działa | dodanie komentarza, tombstone daje 409 |
 | `GET /tickets/{id}/comments` | działa | lista komentarzy z paginacją |
 | `DELETE /projects/{id}` | planowane | zablokowane, dopóki projekt ma zgłoszenia |
 
@@ -245,6 +247,45 @@ Całość idzie w jednej transakcji, a token jest stemplowany jednym atomowym za
 - odpowiedź 400 i 413 nie zużywa tokena, bo transakcja się cofa i pliki znikają z dysku. Ponowienie po poprawieniu pliku zadziała. Zużywa go dopiero 201
 
 Nazwa pliku na dysku to `{uuid}.{rozszerzenie}`, a `uri` w odpowiedzi i w bazie jest ścieżką względną pod `/attachments/`, którą wystawia nginx.
+
+### PATCH /tickets/{id}/status
+
+Zmiana statusu z dashboardu. Ciało ma nowy status i autora zmiany, wersję ticketu niesie nagłówek.
+
+```json
+{
+  "status": "InProgress",
+  "changedBy": "bartek"
+}
+```
+
+Nagłówek `If-Match` jest wymagany i niesie `rowVersion` z ostatniego `GET /tickets/{id}`. Wartość idzie w niezmienionej postaci, ale opakowanie jej w cudzysłowy etaga też przejdzie. Odpowiedź `200 OK` oddaje nowy `rowVersion`, więc kolejna zmiana nie potrzebuje ponownego `GET`.
+
+```json
+{
+  "id": "6f1c2a54-0f9d-4f2e-9a8b-2f7d1c3b5e10",
+  "status": "InProgress",
+  "rowVersion": "<base64>",
+  "updatedAt": "2026-09-08T11:04:22+00:00"
+}
+```
+
+Każda zmiana dopisuje wpis w `ticket_status_changes` z `from_status`, `to_status`, `changed_by` i `changed_at`. Wysłanie statusu, który ticket już ma, nie jest zmianą: kończy się `200` z niezmienionym `rowVersion` i nie zostawia śladu w historii.
+
+Kody błędów:
+
+| Kod | Kiedy |
+|---|---|
+| 400 | brak `status` albo `changedBy`, nieznana wartość statusu, `status` równy `Deleted` |
+| 404 | nie ma takiego zgłoszenia |
+| 409 | `If-Match` nie zgadza się z aktualnym `rowVersion`, albo ticket jest tombstone |
+| 428 | brak nagłówka `If-Match` |
+
+Ciało `409` to `ProblemDetails` z dwoma dodatkowymi polami, `currentStatus` i `rowVersion`. Dzięki temu dashboard po konflikcie pokazuje aktualny stan bez dodatkowego `GET`. Wartość `*` w `If-Match` nie jest obsługiwana i wpada w `409`, bo zgoda na nadpisanie cudzej zmiany przeczy całemu mechanizmowi.
+
+Kasowanie idzie wyłącznie przez `DELETE /tickets/{id}`, więc `Deleted` w ciele dostaje 400. W drugą stronę tombstone nie wraca do żywego statusu, bo opis, adres strony i załączniki są już skasowane i nie ma czego przywrócić.
+
+Sprawdzenie wersji leci dwa razy. Najpierw porównanie `If-Match` z odczytanym `rowVersion`, potem `row_version` w warunku `UPDATE`, bo jest tokenem współbieżności EF. Drugie łapie zapis, który wszedł między odczytem a zapisem, i też kończy się `409`.
 
 ### Zachowania listy
 

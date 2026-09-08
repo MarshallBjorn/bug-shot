@@ -33,6 +33,12 @@ public record TicketStatusChangeResponse(
     string ChangedBy,
     DateTimeOffset ChangedAt);
 
+public record TicketStatusResponse(
+    Guid Id,
+    TicketStatus Status,
+    string RowVersion,
+    DateTimeOffset UpdatedAt);
+
 public record TicketDetails(
     Guid Id,
     Guid ProjectId,

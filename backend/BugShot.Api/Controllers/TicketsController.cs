@@ -188,19 +188,25 @@ public class TicketsController(
     [ProducesResponseType<TicketCommentResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<TicketCommentResponse>> AddComment(
         Guid id,
         CreateTicketCommentRequest request,
         CancellationToken cancellationToken)
     {
         var ticket = await db.Tickets
-            .Where(t => t.Id == id)
-            .Select(t => new { t.Status })
-            .SingleOrDefaultAsync(cancellationToken);
+            .AsNoTracking()
+            .SingleOrDefaultAsync(t => t.Id == id, cancellationToken);
 
-        if (ticket is null || ticket.Status == TicketStatus.Deleted)
+        if (ticket is null)
         {
             return NotFound();
+        }
+
+        // GET na tym samym id zwraca 200 wiec tombstone nie jest brakiem zasobu tylko jego stanem
+        if (ticket.Status == TicketStatus.Deleted)
+        {
+            return TombstoneConflict(ticket);
         }
 
         if (string.IsNullOrWhiteSpace(request.Author))
@@ -353,6 +359,94 @@ public class TicketsController(
         return NoContent();
     }
 
+    [HttpPatch("{id:guid}/status")]
+    [EnableCors(CorsPolicies.Dashboard)]
+    [ProducesResponseType<TicketStatusResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    public async Task<ActionResult<TicketStatusResponse>> UpdateStatus(
+        Guid id,
+        UpdateTicketStatusRequest request,
+        [FromHeader(Name = "If-Match")] string? ifMatch,
+        CancellationToken cancellationToken)
+    {
+        var newStatus = request.Status!.Value;
+
+        if (newStatus == TicketStatus.Deleted)
+        {
+            ModelState.AddModelError(nameof(request.Status), "Use DELETE /tickets/{id} to delete a ticket.");
+            return ValidationProblem(ModelState);
+        }
+
+        var ticket = await db.Tickets.SingleOrDefaultAsync(t => t.Id == id, cancellationToken);
+
+        if (ticket is null)
+        {
+            return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(ifMatch))
+        {
+            return Problem(
+                title: "If-Match with the rowVersion from the last GET is required.",
+                statusCode: StatusCodes.Status428PreconditionRequired);
+        }
+
+        // rowVersion wychodzi jako goly base64 ale klient moze opakowac go w cudzyslowy etaga
+        var expected = ifMatch.Trim().Trim('"');
+
+        if (!string.Equals(expected, Convert.ToBase64String(ticket.RowVersion), StringComparison.Ordinal))
+        {
+            return VersionConflict(ticket);
+        }
+
+        // tombstone stracil juz swoje dane wiec powrot do zywego statusu niczego nie odtworzy
+        if (ticket.Status == TicketStatus.Deleted)
+        {
+            return TombstoneConflict(ticket);
+        }
+
+        // ten sam status nie jest zmiana wiec nie ma czego zapisac w historii
+        if (ticket.Status == newStatus)
+        {
+            return Ok(StatusResponse(ticket));
+        }
+
+        var fromStatus = ticket.Status;
+        ticket.Status = newStatus;
+
+        var statusChange = new TicketStatusChange
+        {
+            TicketId = ticket.Id,
+            FromStatus = fromStatus,
+            ToStatus = newStatus,
+            ChangedBy = request.ChangedBy,
+            ChangedAt = DateTimeOffset.UtcNow
+        };
+
+        db.TicketStatusChanges.Add(statusChange);
+
+        try
+        {
+            // row_version jest tokenem wspolbieznosci wiec update trafia tylko w wersje ktora czytalismy
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // zapis nie przeszedl wiec wpis historii nie ma juz czego opisywac
+            db.Entry(statusChange).State = EntityState.Detached;
+
+            var entry = db.Entry(ticket);
+            await entry.ReloadAsync(cancellationToken);
+
+            return entry.State == EntityState.Detached ? NotFound() : VersionConflict(ticket);
+        }
+
+        return Ok(StatusResponse(ticket));
+    }
+
     private static string CacheKey(Guid projectId, string idempotencyKey) =>
         $"idempotency:tickets:{projectId}:{idempotencyKey}";
 
@@ -361,5 +455,30 @@ public class TicketsController(
     {
         var json = JsonSerializer.Serialize(request);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+    }
+
+    private static TicketStatusResponse StatusResponse(Ticket ticket) => new(
+        ticket.Id,
+        ticket.Status,
+        Convert.ToBase64String(ticket.RowVersion),
+        ticket.UpdatedAt);
+
+    // konflikt oddaje aktualny stan zeby dashboard odswiezyl sie bez dodatkowego GET
+    private ObjectResult VersionConflict(Ticket ticket) =>
+        ConflictWithState(ticket, "Ticket was changed by another request.");
+
+    // tombstone jest do odczytu wiec kazdy zapis na nim jest konfliktem ze stanem zasobu
+    private ObjectResult TombstoneConflict(Ticket ticket) =>
+        ConflictWithState(ticket, "Deleted ticket cannot be modified.");
+
+    private ObjectResult ConflictWithState(Ticket ticket, string title)
+    {
+        var conflict = Problem(title: title, statusCode: StatusCodes.Status409Conflict);
+
+        var details = (ProblemDetails)conflict.Value!;
+        details.Extensions["currentStatus"] = ticket.Status;
+        details.Extensions["rowVersion"] = Convert.ToBase64String(ticket.RowVersion);
+
+        return conflict;
     }
 }
