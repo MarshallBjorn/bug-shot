@@ -1,8 +1,11 @@
-import { mediaBaseUrl } from './config'
+import { apiRequest } from './api/client'
 
-// backend trzyma w bazie ścieżkę względną a plik wystawia nginx spod osobnego adresu
-export function attachmentUrl(uri: string) {
-  return `${mediaBaseUrl}${uri}`
+// plik chroniony tokenem nie wejdzie do <img src> bo przeglądarka nie doklei tam nagłówka
+// więc pobieramy go żądaniem z tokenem i pokazujemy jako blob
+export async function fetchAttachment(attachmentId: string, signal?: AbortSignal) {
+  const response = await apiRequest(`/api/v1/attachments/${attachmentId}/download`, signal)
+
+  return URL.createObjectURL(await response.blob())
 }
 
 export function isImage(contentType: string) {
