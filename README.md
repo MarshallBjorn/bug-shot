@@ -43,6 +43,28 @@ Konteneryzacja: Docker + docker-compose
 CI/CD: GitHub Actions
 ```
 
+## Uruchomienie lokalne
+
+```powershell
+cp .env.example .env
+make dev
+```
+
+Panel wstaje na `http://localhost:5173`, API na `http://localhost:8080`, Swagger na `http://localhost:8080/swagger`.
+
+`.env.example` ma komplet zmiennych potrzebnych do startu. Bez `JWT_SIGNING_KEY` API nie wstanie, bo klucz podpisu tokenów nie jest ustawieniem opcjonalnym. Konto do panelu powstaje przy pierwszym starcie z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, wyłącznie wtedy gdy tabela `users` jest pusta. Do środowisk innych niż lokalne klucz generuje się osobno, na przykład `openssl rand -base64 48`.
+
+Testy:
+
+```powershell
+make test
+make e2e
+```
+
+`make test` uruchamia backend i frontend i potrzebuje bazy z `make dev`. `make e2e` stawia własne API i własny panel na osobnych portach, więc nie koliduje z działającym środowiskiem, ale bazy z compose też potrzebuje. Zależności obu zestawów instalują się same przy pierwszym uruchomieniu.
+
+Testy backendu czyszczą tabele `tickets` i `users` w bazie deweloperskiej. Po ich uruchomieniu konto z `.env` wraca dopiero po wyczyszczeniu tabeli `users` i restarcie API.
+
 ## Migracje bazy danych
 
 W środowisku `Development` migracje Entity Framework Core są uruchamiane automatycznie przy starcie API.

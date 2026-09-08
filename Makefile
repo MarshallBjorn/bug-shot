@@ -33,12 +33,24 @@ test: test-backend test-frontend
 test-backend:
 	cd backend && ConnectionStrings__DefaultConnection="$(TEST_CONNECTION)" dotnet test BugShot.slnx
 
-test-frontend:
+test-frontend: frontend/node_modules
 	cd frontend && npm test
 
 # stawia wlasne API i panel na osobnych portach i wlasnej bazie wiec nie koliduje z make dev
-e2e:
+# potrzebuje za to bazy z compose wiec make dev musi chodzic
+e2e: e2e/node_modules
+	dotnet tool restore
 	cd e2e && npm test
+
+# katalog jest celem a nie akcja wiec instalacja rusza tylko na czystym klonie
+# albo gdy ktos zmienil zaleznosci
+frontend/node_modules: frontend/package-lock.json
+	cd frontend && npm ci
+	@touch $@
+
+e2e/node_modules: e2e/package-lock.json
+	cd e2e && npm ci && npx playwright install chromium
+	@touch $@
 
 # --- image pipeline (CI + local repro) ---
 # Uzycie: make image-scan SERVICE=backend
