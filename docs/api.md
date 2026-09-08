@@ -149,6 +149,8 @@ Kasowanie ticketu to tombstone. Zostają `id`, `project_id`, `status` ustawiony 
 
 Kasowanie projektu, który ma zgłoszenia, jest zablokowane na poziomie klucza obcego.
 
+Tombstone zostaje widoczny. `GET /tickets/{id}` zwraca go z pustymi polami i statusem `Deleted`, a lista pokazuje go po jawnym `status=Deleted`. Skoro odczyt działa, to zapis na tombstone nie jest brakiem zasobu, tylko konfliktem z jego stanem, i dostaje `409` z `currentStatus` w `ProblemDetails`. Dotyczy to dziś `PATCH /tickets/{id}/status` oraz `POST /tickets/{id}/comments`.
+
 ## Endpointy
 
 Prefiks wersji `/api/v1`. Kolumna stanu mówi, czy endpoint istnieje w kodzie. Zaplanowane zwracają dziś 404.
@@ -161,7 +163,7 @@ Prefiks wersji `/api/v1`. Kolumna stanu mówi, czy endpoint istnieje w kodzie. Z
 | `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken` |
 | `PATCH /tickets/{id}/status` | działa | wymaga `If-Match` z `rowVersion`, konflikt daje 409 |
 | `DELETE /tickets/{id}` | działa | tombstone ticketu i usunięcie danych/załączników |
-| `POST /tickets/{id}/comments` | działa | dodanie komentarza do aktywnego ticketu |
+| `POST /tickets/{id}/comments` | działa | dodanie komentarza, tombstone daje 409 |
 | `GET /tickets/{id}/comments` | działa | lista komentarzy z paginacją |
 | `DELETE /projects/{id}` | planowane | zablokowane, dopóki projekt ma zgłoszenia |
 
@@ -276,7 +278,7 @@ Kody błędów:
 |---|---|
 | 400 | brak `status` albo `changedBy`, nieznana wartość statusu, `status` równy `Deleted` |
 | 404 | nie ma takiego zgłoszenia |
-| 409 | `If-Match` nie zgadza się z aktualnym `rowVersion`, albo ticket jest już tombstone |
+| 409 | `If-Match` nie zgadza się z aktualnym `rowVersion`, albo ticket jest tombstone |
 | 428 | brak nagłówka `If-Match` |
 
 Ciało `409` to `ProblemDetails` z dwoma dodatkowymi polami, `currentStatus` i `rowVersion`. Dzięki temu dashboard po konflikcie pokazuje aktualny stan bez dodatkowego `GET`. Wartość `*` w `If-Match` nie jest obsługiwana i wpada w `409`, bo zgoda na nadpisanie cudzej zmiany przeczy całemu mechanizmowi.

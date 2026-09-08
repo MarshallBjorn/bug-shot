@@ -188,19 +188,25 @@ public class TicketsController(
     [ProducesResponseType<TicketCommentResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<TicketCommentResponse>> AddComment(
         Guid id,
         CreateTicketCommentRequest request,
         CancellationToken cancellationToken)
     {
         var ticket = await db.Tickets
-            .Where(t => t.Id == id)
-            .Select(t => new { t.Status })
-            .SingleOrDefaultAsync(cancellationToken);
+            .AsNoTracking()
+            .SingleOrDefaultAsync(t => t.Id == id, cancellationToken);
 
-        if (ticket is null || ticket.Status == TicketStatus.Deleted)
+        if (ticket is null)
         {
             return NotFound();
+        }
+
+        // GET na tym samym id zwraca 200 wiec tombstone nie jest brakiem zasobu tylko jego stanem
+        if (ticket.Status == TicketStatus.Deleted)
+        {
+            return TombstoneConflict(ticket);
         }
 
         if (string.IsNullOrWhiteSpace(request.Author))

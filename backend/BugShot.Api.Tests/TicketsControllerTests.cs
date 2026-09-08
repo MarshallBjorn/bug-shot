@@ -232,7 +232,7 @@ public class TicketsControllerTests
     }
 
     [Fact]
-    public async Task KomentarzNieJestDodawanyDoUsunietegoTicketu()
+    public async Task KomentarzNaSkasowanymTickecieDaje409()
     {
         using var db = NewContext();
         var storage = NewStorage();
@@ -253,7 +253,11 @@ public class TicketsControllerTests
             new CreateTicketCommentRequest("tester", "Komentarz po usunięciu"),
             CancellationToken.None);
 
-        Assert.IsType<NotFoundResult>(result.Result);
+        var problem = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status409Conflict, problem.StatusCode);
+
+        var details = Assert.IsType<ProblemDetails>(problem.Value);
+        Assert.Equal(TicketStatus.Deleted, details.Extensions["currentStatus"]);
         Assert.False(await db.TicketComments.AnyAsync(c => c.TicketId == payload.Id));
     }
 
