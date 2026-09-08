@@ -132,6 +132,121 @@ public class TicketsControllerTests
     }
 
     [Fact]
+    public async Task WhitespaceWAutorzeJestOdrzucany()
+    {
+        using var db = NewContext();
+        var storage = NewStorage();
+        var controller = new TicketsController(db, storage);
+
+        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
+        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
+        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
+
+        var request = new CreateTicketCommentRequest("   ", "Komentarz");
+
+        var result = await controller.AddComment(
+            payload.Id,
+            request,
+            CancellationToken.None);
+
+        Assert.IsType<ObjectResult>(result.Result);
+        Assert.False(controller.ModelState.IsValid);
+        Assert.False(await db.TicketComments.AnyAsync());
+    }
+
+    [Fact]
+    public async Task KomentarzNieJestDodawanyDoUsunietegoTicketu()
+    {
+        using var db = NewContext();
+        var storage = NewStorage();
+        var controller = new TicketsController(db, storage);
+
+        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
+        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
+        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
+
+        var deleteResult = await controller.Delete(
+            payload.Id,
+            CancellationToken.None);
+
+        Assert.IsType<NoContentResult>(deleteResult);
+
+        var result = await controller.AddComment(
+            payload.Id,
+            new CreateTicketCommentRequest("tester", "Komentarz po usunięciu"),
+            CancellationToken.None);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+        Assert.False(await db.TicketComments.AnyAsync(c => c.TicketId == payload.Id));
+    }
+
+    [Fact]
+    public async Task UtworzonyKomentarzMaLocationDoListyKomentarzy()
+    {
+        using var db = NewContext();
+        var storage = NewStorage();
+        var controller = new TicketsController(db, storage);
+
+        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
+        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
+        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
+
+        var result = await controller.AddComment(
+            payload.Id,
+            new CreateTicketCommentRequest("tester", "Pierwszy komentarz"),
+            CancellationToken.None);
+
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+
+        Assert.Equal(nameof(TicketsController.GetComments), created.ActionName);
+
+        var routeValues = created.RouteValues
+            ?? throw new Xunit.Sdk.XunitException("CreatedAtAction nie zawiera RouteValues.");
+
+        Assert.Equal(payload.Id, routeValues["id"]);
+    }
+
+    [Fact]
+    public async Task UsuniecieTicketuNieZwracaBleduGdyKatalogZalacznikaNieIstnieje()
+    {
+        using var db = NewContext();
+        var storage = NewStorage();
+        var controller = new TicketsController(db, storage);
+
+        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
+        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
+        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
+
+        const string fileName = "missing-directory-attachment.png";
+
+        db.TicketAttachments.Add(new TicketAttachment
+        {
+            TicketId = payload.Id,
+            Kind = AttachmentKind.Screenshot,
+            Uri = $"{AttachmentStorageOptions.UriPrefix}/{fileName}",
+            FileName = fileName,
+            ContentType = "image/png",
+            SizeBytes = 3
+        });
+
+        await db.SaveChangesAsync();
+
+        Directory.Delete(storage.RootPath, recursive: true);
+
+        var result = await controller.Delete(
+            payload.Id,
+            CancellationToken.None);
+
+        Assert.IsType<NoContentResult>(result);
+
+        var deletedTicket = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync(t => t.Id == payload.Id);
+
+        Assert.Equal(TicketStatus.Deleted, deletedTicket.Status);
+        Assert.False(await db.TicketAttachments.AnyAsync(a => a.TicketId == payload.Id));
+    }
+    [Fact]
     public async Task KomentarzJestZapisywany()
     {
         using var db = NewContext();
@@ -148,7 +263,7 @@ public class TicketsControllerTests
             request,
             CancellationToken.None);
 
-        var created = Assert.IsType<CreatedResult>(result.Result);
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var response = Assert.IsType<TicketCommentResponse>(created.Value);
 
         var comment = await db.TicketComments.SingleAsync();

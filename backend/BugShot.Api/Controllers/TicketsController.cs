@@ -128,12 +128,20 @@ public class TicketsController(
         CreateTicketCommentRequest request,
         CancellationToken cancellationToken)
     {
-        var ticketExists = await db.Tickets
-            .AnyAsync(t => t.Id == id, cancellationToken);
+        var ticket = await db.Tickets
+            .Where(t => t.Id == id)
+            .Select(t => new { t.Status })
+            .SingleOrDefaultAsync(cancellationToken);
 
-        if (!ticketExists)
+        if (ticket is null || ticket.Status == TicketStatus.Deleted)
         {
             return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Author))
+        {
+            ModelState.AddModelError(nameof(request.Author), "Comment author cannot be empty.");
+            return ValidationProblem(ModelState);
         }
 
         if (string.IsNullOrWhiteSpace(request.Body))
@@ -153,8 +161,9 @@ public class TicketsController(
 
         await db.SaveChangesAsync(cancellationToken);
 
-        return Created(
-            $"/api/v1/tickets/{id}/comments/{comment.Id}",
+        return CreatedAtAction(
+            nameof(GetComments),
+            new { id },
             new TicketCommentResponse(
                 comment.Id,
                 comment.Author,
@@ -254,16 +263,27 @@ public class TicketsController(
         await using var transaction =
             await db.Database.BeginTransactionAsync(cancellationToken);
 
-        foreach (var attachmentPath in attachmentPaths)
-        {
-            System.IO.File.Delete(attachmentPath);
-        }
-
         db.TicketComments.RemoveRange(ticket.Comments);
         db.TicketAttachments.RemoveRange(ticket.Attachments);
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        foreach (var attachmentPath in attachmentPaths)
+        {
+            try
+            {
+                System.IO.File.Delete(attachmentPath);
+            }
+            catch (DirectoryNotFoundException)
+            {
+                // DB tombstone has already been committed.
+            }
+            catch (IOException)
+            {
+                // DB tombstone has already been committed.
+            }
+        }
 
         return NoContent();
     }

@@ -160,9 +160,9 @@ Prefiks wersji `/api/v1`. Kolumna stanu mówi, czy endpoint istnieje w kodzie. Z
 | `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
 | `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken` |
 | `PATCH /tickets/{id}/status` | planowane | wymaga `If-Match` z `rowVersion`, konflikt daje 409 |
-| `DELETE /tickets/{id}` | planowane | tombstone opisany wyżej |
-| `POST /tickets/{id}/comments` | planowane | dodanie komentarza |
-| `GET /tickets/{id}/comments` | planowane | lista komentarzy z paginacją |
+| `DELETE /tickets/{id}` | działa | tombstone ticketu i usunięcie danych/załączników |
+| `POST /tickets/{id}/comments` | działa | dodanie komentarza do aktywnego ticketu |
+| `GET /tickets/{id}/comments` | działa | lista komentarzy z paginacją |
 | `DELETE /projects/{id}` | planowane | zablokowane, dopóki projekt ma zgłoszenia |
 
 ### POST /tickets

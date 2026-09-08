@@ -3,5 +3,5 @@ using System.ComponentModel.DataAnnotations;
 namespace BugShot.Api.Contracts;
 
 public record CreateTicketCommentRequest(
-    [Required] string Author,
+    [Required, RegularExpression(@".*\S.*", ErrorMessage = "Author cannot be empty or whitespace.")] string Author,
     [Required] string Body);
