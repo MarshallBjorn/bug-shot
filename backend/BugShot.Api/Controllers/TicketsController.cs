@@ -298,8 +298,6 @@ public class TicketsController(
         CancellationToken cancellationToken)
     {
         var ticket = await db.Tickets
-            .Include(t => t.Attachments)
-            .Include(t => t.Comments)
             .SingleOrDefaultAsync(t => t.Id == id, cancellationToken);
 
         if (ticket is null)
@@ -313,6 +311,21 @@ public class TicketsController(
             return NoContent();
         }
 
+        await using var transaction =
+            await db.Database.BeginTransactionAsync(cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+
+        // token przestaje byc wazny bo inaczej wysylka moze dokleic plik do tombstone
+        // aktualizacja blokuje te wiersze wiec wysylka w locie zatrzymuje sie tutaj
+        await db.TicketUploadTokens
+            .Where(t => t.TicketId == id && t.UsedAt == null && t.ExpiresAt > now)
+            .ExecuteUpdateAsync(update => update.SetProperty(t => t.ExpiresAt, now), cancellationToken);
+
+        // zalaczniki czytamy dopiero po blokadzie zeby zobaczyc te z wysylki ktora wlasnie sie domknela
+        await db.Entry(ticket).Collection(t => t.Attachments).LoadAsync(cancellationToken);
+        await db.Entry(ticket).Collection(t => t.Comments).LoadAsync(cancellationToken);
+
         var attachmentPaths = ticket.Attachments
             .Select(a => Path.GetFileName(a.Uri))
             .Where(name => !string.IsNullOrWhiteSpace(name))
@@ -325,7 +338,7 @@ public class TicketsController(
         ticket.PageUrl = string.Empty;
         ticket.UserAgent = string.Empty;
         ticket.Status = TicketStatus.Deleted;
-        ticket.DeletedAt = DateTimeOffset.UtcNow;
+        ticket.DeletedAt = now;
         ticket.DeletedBy = "system";
 
         db.TicketStatusChanges.Add(new TicketStatusChange
@@ -334,11 +347,8 @@ public class TicketsController(
             FromStatus = fromStatus,
             ToStatus = TicketStatus.Deleted,
             ChangedBy = "system",
-            ChangedAt = DateTimeOffset.UtcNow
+            ChangedAt = now
         });
-
-        await using var transaction =
-            await db.Database.BeginTransactionAsync(cancellationToken);
 
         db.TicketComments.RemoveRange(ticket.Comments);
         db.TicketAttachments.RemoveRange(ticket.Attachments);

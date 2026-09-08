@@ -1000,4 +1000,32 @@ public class TicketsControllerTests
         Assert.Equal(TicketStatus.New, history[0].FromStatus);
         Assert.Equal(TicketStatus.Deleted, history[0].ToStatus);
     }
+
+
+    [Fact]
+    public async Task KasowanieUniewaznaWystawioneTokenyUploadu()
+    {
+        using var db = NewContext();
+        var storage = NewStorage();
+        var controller = NewController(db, storage: storage);
+
+        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
+        var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
+        var payload = Assert.IsType<CreatedTicketResponse>(created.Value);
+
+        var przedKasowaniem = await db.TicketUploadTokens
+            .AsNoTracking()
+            .SingleAsync(t => t.TicketId == payload.Id);
+
+        Assert.True(przedKasowaniem.ExpiresAt > DateTimeOffset.UtcNow);
+
+        Assert.IsType<NoContentResult>(await controller.Delete(payload.Id, CancellationToken.None));
+
+        var poKasowaniu = await db.TicketUploadTokens
+            .AsNoTracking()
+            .SingleAsync(t => t.TicketId == payload.Id);
+
+        Assert.True(poKasowaniu.ExpiresAt <= DateTimeOffset.UtcNow);
+    }
+
 }
