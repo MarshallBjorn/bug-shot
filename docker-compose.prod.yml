@@ -174,7 +174,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=256m
     # W prod backup nie zależy od minio-init — idzie na zewnętrzny S3.
     # `depends_on` z base (postgres, minio-init) trzeba nadpisać, bo minio-init ma profile.
-    depends_on:
+    depends_on: !reset
       postgres:
         condition: service_healthy
     environment:
