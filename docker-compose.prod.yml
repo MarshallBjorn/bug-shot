@@ -1,0 +1,195 @@
+# Override: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Wymagane env: patrz .env.prod.example. Wszystkie ${VAR:?...} muszą być ustawione, inaczej start fail.
+# Traefik jest ZEWNĘTRZNY (osobny compose), spina się przez network `proxy`.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-security-hardening: &hardened
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  postgres:
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    # postgres pisze do /var/run/postgresql, /tmp; read_only wymaga tmpfs — dla stabilności zostawiamy rw,
+    # ale odbieramy capabilities i zamykamy w internal network.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_READ_SEARCH
+      - FOWNER
+    networks:
+      db_internal: {}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  backend:
+    <<: *hardened
+    restart: unless-stopped
+    logging: *default-logging
+    # W Dockerfile musi być: USER app (non-root, uid >= 10000). Jeśli nie ma — dodać przed budową.
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # CORS whitelist — tylko origin frontu; backend czyta i wpisuje do polityki CORS.
+      Cors__AllowedOrigins__0: https://app.bugshot.app
+    networks:
+      db_internal: {}
+      storage_internal: {}
+      proxy: {}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # Router API — tylko HTTPS, tylko host api.bugshot.app
+      - "traefik.http.routers.bugshot-api.rule=Host(`api.bugshot.on-labs.dev`)"
+      - "traefik.http.routers.bugshot-api.entrypoints=websecure"
+      - "traefik.http.routers.bugshot-api.tls=true"
+      - "traefik.http.routers.bugshot-api.tls.certresolver=le"
+      - "traefik.http.routers.bugshot-api.service=bugshot-api"
+      - "traefik.http.services.bugshot-api.loadbalancer.server.port=8080"
+      # Middleware chain: CF-only (IP) → rate-limit → secure-headers → compress
+      # cloudflare-only i secure-headers są zdefiniowane globalnie w traefik/dynamic/middlewares.yml
+      - "traefik.http.routers.bugshot-api.middlewares=cloudflare-only@file,rate-limit-api@file,secure-headers@file,compress@file"
+
+  frontend:
+    <<: *hardened
+    restart: unless-stopped
+    logging: *default-logging
+    # nginx alpine — non-root działa na oficjalnym obrazie od 1.25+, ale wymaga tmpfs na cache/run
+    tmpfs:
+      - /var/cache/nginx:rw,noexec,nosuid,size=32m
+      - /var/run:rw,noexec,nosuid,size=8m
+      - /tmp:rw,noexec,nosuid,size=16m
+    networks:
+      proxy: {}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.bugshot-app.rule=Host(`bugshot.on-labs.dev`)"
+      - "traefik.http.routers.bugshot-app.entrypoints=websecure"
+      - "traefik.http.routers.bugshot-app.tls=true"
+      - "traefik.http.routers.bugshot-app.tls.certresolver=le"
+      - "traefik.http.routers.bugshot-app.service=bugshot-app"
+      - "traefik.http.services.bugshot-app.loadbalancer.server.port=80"
+      - "traefik.http.routers.bugshot-app.middlewares=cloudflare-only@file,secure-headers@file,csp-frontend@file,compress@file"
+
+  # nginx serwuje statykę attachments + widgets (readonly bind mount z backendu).
+  # Osobny host `static.bugshot.app` żeby nie mieszać CORS/CSP z SPA i API.
+  nginx:
+    <<: *hardened
+    restart: unless-stopped
+    logging: *default-logging
+    tmpfs:
+      - /var/cache/nginx:rw,noexec,nosuid,size=64m
+      - /var/run:rw,noexec,nosuid,size=8m
+      - /tmp:rw,noexec,nosuid,size=16m
+    networks:
+      proxy: {}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.bugshot-static.rule=Host(`fs.bushot.on-labs.dev`)"
+      - "traefik.http.routers.bugshot-static.entrypoints=websecure"
+      - "traefik.http.routers.bugshot-static.tls=true"
+      - "traefik.http.routers.bugshot-static.tls.certresolver=le"
+      - "traefik.http.routers.bugshot-static.service=bugshot-static"
+      - "traefik.http.services.bugshot-static.loadbalancer.server.port=80"
+      - "traefik.http.routers.bugshot-static.middlewares=cloudflare-only@file,rate-limit-default@file,secure-headers@file,compress@file"
+
+  # MinIO — DEV ONLY. W prod używamy zewnętrznego S3 (Backblaze B2 / Wasabi / R2 / AWS).
+  # Profile trzyma serwis wyłączony przy zwykłym `docker compose up`; włącza się tylko
+  # z --profile local-s3, czego w prod NIE robimy.
+  minio:
+    profiles: ["local-s3"]
+
+  minio-init:
+    profiles: ["local-s3"]
+
+  backup:
+    <<: *hardened
+    restart: "no"
+    logging: *default-logging
+    user: "10002:10002"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    # W prod backup nie zależy od minio-init — idzie na zewnętrzny S3.
+    # `depends_on` z base (postgres, minio-init) trzeba nadpisać, bo minio-init ma profile.
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Nadpisujemy endpoint z base (który wskazywał na http://minio:9000).
+      # ${S3_ENDPOINT_URL:?...} musi być w .env.prod, np. https://s3.eu-central-003.backblazeb2.com
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:?S3_ENDPOINT_URL is required in prod}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required in prod}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:?AWS_DEFAULT_REGION is required in prod}
+    networks:
+      # Wywalamy storage_internal (nie ma tam już minio). Zostaje db_internal do pg_dump
+      # i zewnętrzna sieć default do wyjścia na S3 przez internet.
+      db_internal: {}
+      egress: {}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+networks:
+  db_internal:
+    internal: true
+  storage_internal:
+    internal: true       # zostaje bo w base jest referenced; nikt jej w prod nie używa
+  edge:
+    internal: true       # z base — cały ruch zewnętrzny idzie przez proxy
+  proxy:
+    external: true
+  egress:
+    internal: false      # backup potrzebuje wyjścia na zewnętrzny S3 przez internet

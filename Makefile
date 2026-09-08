@@ -6,13 +6,13 @@
 .PHONY: dev dev-d down logs config migrate backup-pg backup-media cleanup restore-test
 
 ENV_FILE ?= .env
-COMPOSE = docker compose --env-file $(ENV_FILE) -f docker-compose.dev.yml
+COMPOSE = docker compose --env-file $(ENV_FILE) -f docker-compose.yml
 
 dev:
 	$(COMPOSE) up --build
 
 dev-d:
-	$(COMPOSE) up -d
+	$(COMPOSE) up --build -d
 
 down:
 	$(COMPOSE) down
