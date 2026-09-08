@@ -163,14 +163,18 @@ public class TicketsController(
                     .Select(a => new TicketAttachmentResponse(
                         a.Id,
                         a.Kind,
-                        a.Uri,
                         a.FileName,
                         a.ContentType,
                         a.SizeBytes))
                     .ToList(),
                 t.Attachments
                     .Where(a => a.Kind == AttachmentKind.ConsoleLog)
-                    .Select(a => a.Uri)
+                    .Select(a => new TicketAttachmentResponse(
+                        a.Id,
+                        a.Kind,
+                        a.FileName,
+                        a.ContentType,
+                        a.SizeBytes))
                     .FirstOrDefault(),
                 t.Comments.Count,
                 t.StatusHistory

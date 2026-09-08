@@ -254,6 +254,63 @@ public class AuthEndpointsTests : IDisposable
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
+    [Fact]
+    public async Task ZalacznikBezTokenaNieWychodziAZTokenemTak()
+    {
+        Guid attachmentId;
+
+        using (var db = OpenContext())
+        {
+            db.Tickets.ExecuteDelete();
+
+            var ticket = new Ticket
+            {
+                ProjectId = new Guid("11111111-1111-1111-1111-111111111111"),
+                Description = "Zgloszenie z zalacznikiem",
+                PageUrl = "https://acme.example/cart",
+                UserAgent = "Mozilla/5.0",
+                Status = TicketStatus.New
+            };
+
+            var attachment = new TicketAttachment
+            {
+                Ticket = ticket,
+                Kind = AttachmentKind.Screenshot,
+                Uri = "/attachments/zrzut.png",
+                FileName = "zrzut.png",
+                ContentType = "image/png",
+                SizeBytes = 3
+            };
+
+            db.Tickets.Add(ticket);
+            db.TicketAttachments.Add(attachment);
+
+            await db.SaveChangesAsync();
+
+            attachmentId = attachment.Id;
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(attachmentsPath, "zrzut.png"), "png");
+
+        var path = $"/api/v1/attachments/{attachmentId}/download";
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(path)).StatusCode);
+
+        var session = await Read(await Login(client, AdminEmail, AdminPassword));
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+
+        var response = await client.GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("png", await response.Content.ReadAsStringAsync());
+        Assert.Equal("attachment", response.Content.Headers.ContentDisposition!.DispositionType);
+
+        // bez tego kopia zostaje w cache przegladarki i wychodzi z niego przy zadaniu bez tokena
+        Assert.True(response.Headers.CacheControl!.NoStore);
+        Assert.True(response.Headers.CacheControl.Private);
+    }
+
     // traceId jest inne w kazdej odpowiedzi wiec porownujemy sam opis bledu
     private static async Task<string?> Title(HttpResponseMessage response) =>
         (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Title;
@@ -402,6 +459,19 @@ public class AuthEndpointsTests : IDisposable
         Assert.Equal(
             HttpStatusCode.Unauthorized,
             (await Send(HttpMethod.Get, "/api/v1/auth/me", developer.AccessToken)).StatusCode);
+    }
+
+    [Fact]
+    public async Task NieznanyZalacznikZTokenemDaje404()
+    {
+        var session = await Read(await Login(client, AdminEmail, AdminPassword));
+
+        var response = await Send(
+            HttpMethod.Get,
+            $"/api/v1/attachments/{Guid.NewGuid()}/download",
+            session.AccessToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     private async Task<Session> CreateDeveloper()

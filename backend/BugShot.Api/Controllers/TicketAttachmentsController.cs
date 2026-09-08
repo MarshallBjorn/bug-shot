@@ -135,7 +135,7 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
             await transaction.CommitAsync(cancellationToken);
 
             return StatusCode(StatusCodes.Status201Created, saved
-                .Select(a => new TicketAttachmentResponse(a.Id, a.Kind, a.Uri, a.FileName, a.ContentType, a.SizeBytes))
+                .Select(a => new TicketAttachmentResponse(a.Id, a.Kind, a.FileName, a.ContentType, a.SizeBytes))
                 .ToList());
         }
         catch
