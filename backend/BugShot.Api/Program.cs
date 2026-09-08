@@ -75,6 +75,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors();
 
+app.MapHealthChecks("/healthz");
+
 app.MapControllers();
 
 app.Run();

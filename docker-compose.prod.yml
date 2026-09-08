@@ -47,6 +47,8 @@ services:
     user: "${APP_UID:-1654}:${APP_UID:-1654}"
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - attachments_data:/var/lib/bugshot/attachments
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       APP_DLL: ${BACKEND_APP_DLL:?BACKEND_APP_DLL required}
