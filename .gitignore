@@ -808,6 +808,9 @@ widget/config.js
 
 bug-shot-*/
 
+.env.dev
+.env.prod
+
 test-keys/
 backup-out/
 bug-shot-attachments/
