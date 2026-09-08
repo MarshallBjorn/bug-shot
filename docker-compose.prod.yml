@@ -196,6 +196,9 @@ services:
           cpus: "1.0"
           memory: 512M
 
+volumes:
+  attachments_data:
+
 networks:
   db_internal:
     internal: true
