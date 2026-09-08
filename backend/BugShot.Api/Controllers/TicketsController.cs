@@ -1,11 +1,16 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using BugShot.Api.Attachments;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
+using BugShot.Api.Idempotency;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 
 namespace BugShot.Api.Controllers;
 
@@ -13,30 +18,79 @@ namespace BugShot.Api.Controllers;
 [Route("api/v1/tickets")]
 public class TicketsController(
     BugShotDbContext db,
-    AttachmentStorageOptions storage) : ControllerBase
+    AttachmentStorageOptions storage,
+    IDistributedCache idempotencyCache,
+    ILogger<TicketsController> logger) : ControllerBase
 {
+    private const string IdempotencyKeyHeader = "Idempotency-Key";
+    private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromHours(24);
+
     [HttpPost]
     [EnableCors(CorsPolicies.Widget)]
     [ProducesResponseType<CreatedTicketResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CreatedTicketResponse>> Create(
         CreateTicketRequest request,
         CancellationToken cancellationToken)
     {
-        var projectId = await db.Projects
+        var project = await db.Projects
             .Where(p => p.Key == request.ProjectKey)
-            .Select(p => p.Id)
+            .Select(p => new { p.Id, Origins = p.Origins.Select(o => o.Origin).ToList() })
             .SingleOrDefaultAsync(cancellationToken);
 
-        if (projectId == Guid.Empty)
+        if (project is null)
         {
             ModelState.AddModelError(nameof(request.ProjectKey), "Unknown project key.");
             return ValidationProblem(ModelState);
         }
 
+        var origin = Request.Headers.Origin.ToString();
+
+        // pusta lista originow blokuje wszystko a brak naglowka traktujemy tak samo
+        // bo poza przegladarka CORS niczego nie sprawdza
+        // przegladarka wysyla origin lowercase ale w project_origins moze wpisac go czlowiek
+        if (string.IsNullOrEmpty(origin) || !project.Origins.Contains(origin, StringComparer.OrdinalIgnoreCase))
+        {
+            return Problem(title: "Origin is not allowed for this project.", statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        var idempotencyKey = Request.Headers[IdempotencyKeyHeader].ToString();
+        var bodyHash = HashRequestBody(request);
+
+        if (string.IsNullOrEmpty(idempotencyKey))
+        {
+            logger.LogWarning(
+                "POST /tickets bez naglowka {Header}, projectKey={ProjectKey}",
+                IdempotencyKeyHeader,
+                request.ProjectKey);
+        }
+        else
+        {
+            var cached = await idempotencyCache.GetStringAsync(CacheKey(project.Id, idempotencyKey), cancellationToken);
+
+            if (cached is not null)
+            {
+                var record = JsonSerializer.Deserialize<IdempotencyRecord>(cached)!;
+
+                if (record.BodyHash != bodyHash)
+                {
+                    return Problem(
+                        title: "Idempotency-Key was already used with a different request body.",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+
+                return CreatedAtAction(
+                    nameof(GetById),
+                    new { id = record.TicketId },
+                    new CreatedTicketResponse(record.TicketId, record.UploadToken, record.UploadTokenExpiresAt));
+            }
+        }
+
         var ticket = new Ticket
         {
-            ProjectId = projectId,
+            ProjectId = project.Id,
             Description = request.Description,
             PageUrl = request.PageUrl,
             UserAgent = request.UserAgent,
@@ -58,6 +112,17 @@ public class TicketsController(
         });
 
         await db.SaveChangesAsync(cancellationToken);
+
+        if (!string.IsNullOrEmpty(idempotencyKey))
+        {
+            var record = new IdempotencyRecord(bodyHash, ticket.Id, uploadToken, expiresAt);
+
+            await idempotencyCache.SetStringAsync(
+                CacheKey(project.Id, idempotencyKey),
+                JsonSerializer.Serialize(record),
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = IdempotencyTtl },
+                cancellationToken);
+        }
 
         // token wraca w odpowiedzi jeden raz bo w bazie zostaje sam skrot
         return CreatedAtAction(
@@ -286,5 +351,15 @@ public class TicketsController(
         }
 
         return NoContent();
+    }
+
+    private static string CacheKey(Guid projectId, string idempotencyKey) =>
+        $"idempotency:tickets:{projectId}:{idempotencyKey}";
+
+    // skrot liczony z modelu po zbindowaniu bo strumien ciala jest juz wtedy przeczytany
+    private static string HashRequestBody(CreateTicketRequest request)
+    {
+        var json = JsonSerializer.Serialize(request);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
     }
 }

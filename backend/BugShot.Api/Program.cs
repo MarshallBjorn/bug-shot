@@ -27,6 +27,9 @@ attachmentStorage.EnsureWritable();
 
 builder.Services.AddSingleton(attachmentStorage);
 builder.Services.AddOpenApi();
+
+// zaplecze Idempotency-Key na POST /tickets. Podmiana na Redis to jedna linia
+builder.Services.AddDistributedMemoryCache();
 builder.Services.AddDbContext<BugShotDbContext>(options => options
     .UseNpgsql(connectionString, npgsql =>
     {
