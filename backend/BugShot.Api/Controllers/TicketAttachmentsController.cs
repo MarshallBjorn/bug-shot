@@ -238,10 +238,32 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
             Kind = kind,
             Uri = $"{AttachmentStorageOptions.UriPrefix}/{name}",
             // nazwa od klienta nigdy nie trafia do sciezki
-            FileName = Path.GetFileName(clientFileName),
+            FileName = MetadataFileName(clientFileName),
             ContentType = detected.ContentType,
             SizeBytes = size
         };
+    }
+
+    // nazwa jest sama metadana wiec za dluga przycinamy zamiast odrzucac poprawna wysylke
+    private static string MetadataFileName(string clientFileName)
+    {
+        var name = Path.GetFileName(clientFileName);
+
+        if (name.Length <= AttachmentLimits.MaxFileNameLength)
+        {
+            return name;
+        }
+
+        var extension = Path.GetExtension(name);
+
+        if (extension.Length >= AttachmentLimits.MaxFileNameLength)
+        {
+            return name[..AttachmentLimits.MaxFileNameLength];
+        }
+
+        return string.Concat(
+            name.AsSpan(0, AttachmentLimits.MaxFileNameLength - extension.Length),
+            extension);
     }
 
     private static AttachmentKind? KindOf(string field) => field switch

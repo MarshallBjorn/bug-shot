@@ -329,4 +329,22 @@ public class TicketAttachmentsControllerTests : IDisposable
 
         Assert.Null(token.UsedAt);
     }
+
+
+    [Fact]
+    public async Task ZaDlugaNazwaPlikuJestPrzycinanaZamiastWywalacZapis()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+
+        var nazwa = new string('a', 300) + ".png";
+
+        var result = await Upload(db, ticket.Id, ticket.UploadToken, ("screenshot", nazwa, Png));
+
+        Assert.Equal(StatusCodes.Status201Created, StatusOf(result));
+
+        var attachment = await db.TicketAttachments.SingleAsync();
+        Assert.Equal(AttachmentLimits.MaxFileNameLength, attachment.FileName.Length);
+        Assert.EndsWith(".png", attachment.FileName);
+    }
 }
