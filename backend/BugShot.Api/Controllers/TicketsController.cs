@@ -307,6 +307,12 @@ public class TicketsController(
             return NotFound();
         }
 
+        // kasowanie jest idempotentne wiec powtorka nie dopisuje historii ani nie nadpisuje deleted_at
+        if (ticket.Status == TicketStatus.Deleted)
+        {
+            return NoContent();
+        }
+
         var attachmentPaths = ticket.Attachments
             .Select(a => Path.GetFileName(a.Uri))
             .Where(name => !string.IsNullOrWhiteSpace(name))
