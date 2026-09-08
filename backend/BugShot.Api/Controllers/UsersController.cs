@@ -114,10 +114,14 @@ public class UsersController(BugShotDbContext db) : ControllerBase
 
         user.PasswordHash = PasswordHasher.Hash(request.Password);
 
-        await db.SaveChangesAsync(cancellationToken);
+        // jedna transakcja bo token odswiezajacy nie zna hasla
+        // wiec sam zapis bez uniewaznienia zostawilby stare sesje zywe na tydzien
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-        // zmiana hasla wypycha z panelu wszystkie sesje tego konta lacznie z ta ktora je zmienila
+        await db.SaveChangesAsync(cancellationToken);
         await RevokeSessions(id, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
 
         return NoContent();
     }
