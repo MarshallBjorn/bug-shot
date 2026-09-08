@@ -52,11 +52,19 @@ export async function signOut() {
 // StrictMode i równoległe 401 potrafią zawołać to kilka razy naraz
 // a token odświeżający rotuje przy każdym użyciu więc drugie wywołanie musi poczekać na pierwsze
 export function renewSession() {
-  renewal ??= renew().finally(() => {
+  renewal ??= withLock(renew).finally(() => {
     renewal = null
   })
 
   return renewal
+}
+
+// karty panelu dziela jedno cookie wiec odswiezaja sesje po kolei
+// bez tego druga karta trafia w token zuzyty przez pierwsza i laduje na ekranie logowania
+function withLock(run: () => Promise<Session | null>) {
+  return navigator.locks
+    ? navigator.locks.request('bugshot-refresh', run)
+    : run()
 }
 
 async function renew(): Promise<Session | null> {
