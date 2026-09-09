@@ -52,6 +52,8 @@ make dev
 
 Panel wstaje na `http://localhost:5173`, API na `http://localhost:8080`, Swagger na `http://localhost:8080/swagger`.
 
+Swagger stoi otworem tylko w środowisku `Development`. Poza nim trzeba go włączyć zmienną `SWAGGER_ENABLED` i podać `SWAGGER_USER` z `SWAGGER_PASSWORD`, bo dokument opisuje całe API razem z trasami za tokenem. Bez tej pary API nie wstanie, żeby włączony dokument nigdy nie wyszedł bez hasła.
+
 `.env.example` ma komplet zmiennych potrzebnych do startu. Bez `JWT_SIGNING_KEY` API nie wstanie, bo klucz podpisu tokenów nie jest ustawieniem opcjonalnym. Konto do panelu powstaje przy pierwszym starcie z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, wyłącznie wtedy gdy tabela `users` jest pusta. Do środowisk innych niż lokalne klucz generuje się osobno, na przykład `openssl rand -base64 48`.
 
 Testy:
