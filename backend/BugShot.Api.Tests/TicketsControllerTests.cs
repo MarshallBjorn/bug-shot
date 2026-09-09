@@ -29,28 +29,9 @@ public class TicketsControllerTests
     // origin zaseedowany dla projektu demo w InitialCreate
     private const string AllowedOrigin = "http://127.0.0.1:5500";
 
-    private static BugShotDbContext OpenContext()
-    {
-        var connectionString =
-            Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "ConnectionStrings__DefaultConnection is not configured.");
-
-        var options = new DbContextOptionsBuilder<BugShotDbContext>()
-            .UseNpgsql(connectionString, npgsql =>
-            {
-                npgsql.MapEnum<TicketStatus>("ticket_status");
-                npgsql.MapEnum<AttachmentKind>("attachment_kind");
-            })
-            .UseSnakeCaseNamingConvention()
-            .Options;
-
-        return new BugShotDbContext(options);
-    }
-
     private static BugShotDbContext NewContext()
     {
-        var db = OpenContext();
+        var db = TestDatabase.OpenContext();
         db.Tickets.ExecuteDelete();
 
         return db;
@@ -69,7 +50,8 @@ public class TicketsControllerTests
         string? origin = AllowedOrigin,
         string? idempotencyKey = null,
         AttachmentStorageOptions? storage = null,
-        IDistributedCache? cache = null)
+        IDistributedCache? cache = null,
+        RecordingTicketNotifier? notifier = null)
     {
         var context = new DefaultHttpContext();
 
@@ -83,7 +65,12 @@ public class TicketsControllerTests
             context.Request.Headers["Idempotency-Key"] = idempotencyKey;
         }
 
-        return new TicketsController(db, storage ?? NewStorage(), cache ?? NewCache(), NullLogger<TicketsController>.Instance)
+        return new TicketsController(
+            db,
+            storage ?? NewStorage(),
+            cache ?? NewCache(),
+            notifier ?? new RecordingTicketNotifier(),
+            NullLogger<TicketsController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = context }
         };
@@ -894,7 +881,7 @@ public class TicketsControllerTests
         var controller = NewController(db);
 
         // druga sesja przestawia status zanim pierwsza zdazy zapisac
-        using (var other = OpenContext())
+        using (var other = TestDatabase.OpenContext())
         {
             var sameTicket = await other.Tickets.SingleAsync(t => t.Id == ticket.Id);
             sameTicket.Status = TicketStatus.Rejected;
@@ -978,4 +965,115 @@ public class TicketsControllerTests
         Assert.True(poKasowaniu.ExpiresAt <= DateTimeOffset.UtcNow);
     }
 
+    [Fact]
+    public async Task NoweZgloszenieIdzieDoKanaluLive()
+    {
+        using var db = NewContext();
+        var notifier = new RecordingTicketNotifier();
+        var controller = NewController(db, notifier: notifier);
+
+        var result = await controller.Create(Request("demo"), CancellationToken.None);
+        var payload = Assert.IsType<CreatedTicketResponse>(Assert.IsType<CreatedAtActionResult>(result.Result).Value);
+
+        var sent = Assert.Single(notifier.Events);
+        var projectId = await db.Projects.Where(p => p.Key == "demo").Select(p => p.Id).SingleAsync();
+
+        Assert.Equal("created", sent.Event);
+        Assert.Equal(projectId, sent.ProjectId);
+        Assert.Equal(payload.Id, sent.TicketId);
+        Assert.Equal("Koszyk gubi produkty", sent.Ticket!.Description);
+        Assert.Equal(TicketStatus.New, sent.Ticket.Status);
+    }
+
+    // powtorka nie zaklada ticketu wiec nie ma o czym powiadamiac
+    [Fact]
+    public async Task PowtorkaIdempotencjiNieWysylaDrugiegoZdarzenia()
+    {
+        using var db = NewContext();
+        var cache = NewCache();
+        var notifier = new RecordingTicketNotifier();
+
+        await NewController(db, idempotencyKey: "klucz-live", cache: cache, notifier: notifier)
+            .Create(Request("demo"), CancellationToken.None);
+        await NewController(db, idempotencyKey: "klucz-live", cache: cache, notifier: notifier)
+            .Create(Request("demo"), CancellationToken.None);
+
+        Assert.Single(notifier.Events);
+    }
+
+    [Fact]
+    public async Task ZmianaStatusuIdzieDoKanaluLive()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var notifier = new RecordingTicketNotifier();
+        var controller = NewController(db, notifier: notifier);
+
+        await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.InProgress),
+            RowVersion(ticket),
+            CancellationToken.None);
+
+        var sent = Assert.Single(notifier.Events);
+
+        Assert.Equal("changed", sent.Event);
+        Assert.Equal(ticket.ProjectId, sent.ProjectId);
+        Assert.Equal(ticket.Id, sent.TicketId);
+        Assert.Equal(TicketStatus.InProgress, sent.Ticket!.Status);
+    }
+
+    [Fact]
+    public async Task PowtorzenieTegoSamegoStatusuNieWysylaZdarzenia()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var notifier = new RecordingTicketNotifier();
+        var controller = NewController(db, notifier: notifier);
+
+        await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.New),
+            RowVersion(ticket),
+            CancellationToken.None);
+
+        Assert.Empty(notifier.Events);
+    }
+
+    [Fact]
+    public async Task KonfliktWersjiNieWysylaZdarzenia()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var notifier = new RecordingTicketNotifier();
+        var controller = NewController(db, notifier: notifier);
+
+        var result = await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.InProgress),
+            Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+            CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status409Conflict, Assert.IsType<ObjectResult>(result.Result).StatusCode);
+        Assert.Empty(notifier.Events);
+    }
+
+    // drugie kasowanie niczego nie zapisuje wiec nie ma o czym powiadamiac
+    [Fact]
+    public async Task KasowanieIdzieDoKanaluLiveTylkoRaz()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var notifier = new RecordingTicketNotifier();
+        var controller = NewController(db, notifier: notifier);
+
+        Assert.IsType<NoContentResult>(await controller.Delete(ticket.Id, CancellationToken.None));
+        Assert.IsType<NoContentResult>(await controller.Delete(ticket.Id, CancellationToken.None));
+
+        var sent = Assert.Single(notifier.Events);
+
+        Assert.Equal("deleted", sent.Event);
+        Assert.Equal(ticket.ProjectId, sent.ProjectId);
+        Assert.Equal(ticket.Id, sent.TicketId);
+    }
 }
