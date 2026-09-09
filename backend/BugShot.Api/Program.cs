@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using BugShot.Api;
 using BugShot.Api.Attachments;
+using BugShot.Api.Sanitization;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
@@ -88,6 +89,7 @@ builder.Services.AddDbContext<BugShotDbContext>(options => options
     })
     .UseSnakeCaseNamingConvention());
 
+builder.Services.AddScoped<ISanitizationService, SanitizationService>();
 builder.Services.AddCors(options =>
 {
     // widget siedzi na cudzych domenach i moze tylko zglaszac

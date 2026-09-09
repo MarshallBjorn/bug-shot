@@ -1,5 +1,6 @@
 using System.Text;
 using BugShot.Api.Attachments;
+using BugShot.Api.Sanitization;
 using BugShot.Api.Contracts;
 using BugShot.Api.Controllers;
 using BugShot.Api.Data;
@@ -57,7 +58,8 @@ public class UploadTokenTests
             db,
             new AttachmentStorageOptions(Path.GetTempPath()),
             cache,
-            NullLogger<TicketsController>.Instance)
+            NullLogger<TicketsController>.Instance,
+            new SanitizationService(db))
         {
             ControllerContext = new ControllerContext { HttpContext = context }
         };
