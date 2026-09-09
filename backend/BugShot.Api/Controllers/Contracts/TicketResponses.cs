@@ -58,3 +58,7 @@ public record TicketDetails(
     IReadOnlyList<TicketStatusChangeResponse> StatusHistory);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
+
+// nextCursor puste oznacza koniec listy
+// total wypelnia sie tylko na zadanie i tylko na pierwszej stronie
+public record CursorPage<T>(IReadOnlyList<T> Items, string? NextCursor, int? Total = null);
