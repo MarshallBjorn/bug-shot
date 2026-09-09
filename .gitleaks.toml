@@ -2,7 +2,7 @@
 useDefault = true
 
 [allowlist]
-description = ".env.example zawiera tylko dev-placeholdery, nie prawdziwe sekrety"
+description = ".env.example та його середовищні варіації містять лише dev-placeholdery"
 paths = [
-    '''(^|/)\.env\.example$''',
+    '''(^|/)\.env(\.[^/]+)?\.example$''',
 ]
