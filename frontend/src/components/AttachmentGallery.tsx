@@ -1,9 +1,43 @@
 import { formatAttachmentKind, formatFileSize } from '../format'
-import { attachmentUrl, isImage } from '../media'
+import { useAttachment } from '../hooks/useAttachment'
+import { isImage } from '../media'
 import type { TicketAttachment } from '../types'
+import AttachmentDownload from './AttachmentDownload'
 
 interface AttachmentGalleryProps {
   attachments: TicketAttachment[]
+}
+
+// podgląd wchodzi na stronę od razu bo bez bajtów nie ma czego pokazać
+function AttachmentPreview({ attachment }: { attachment: TicketAttachment }) {
+  const { url, failed } = useAttachment(attachment.id)
+
+  if (failed) {
+    return <span className="attachment-file">Nie udało się pobrać</span>
+  }
+
+  if (!url) {
+    return <span className="attachment-file">Pobieranie...</span>
+  }
+
+  return <img alt={attachment.fileName} src={url} />
+}
+
+function AttachmentItem({ attachment }: { attachment: TicketAttachment }) {
+  return (
+    <li>
+      {isImage(attachment.contentType) ? (
+        <AttachmentPreview attachment={attachment} />
+      ) : (
+        <span className="attachment-file">{attachment.contentType}</span>
+      )}
+      <p className="attachment-meta">
+        <AttachmentDownload attachment={attachment} label={attachment.fileName} />
+        <br />
+        {formatAttachmentKind(attachment.kind)}, {formatFileSize(attachment.sizeBytes)}
+      </p>
+    </li>
+  )
 }
 
 function AttachmentGallery({ attachments }: AttachmentGalleryProps) {
@@ -13,26 +47,9 @@ function AttachmentGallery({ attachments }: AttachmentGalleryProps) {
 
   return (
     <ul className="attachments">
-      {attachments.map((attachment) => {
-        const url = attachmentUrl(attachment.uri)
-
-        return (
-          <li key={attachment.id}>
-            <a href={url}>
-              {isImage(attachment.contentType) ? (
-                <img src={url} alt={attachment.fileName} loading="lazy" />
-              ) : (
-                <span className="attachment-file">{attachment.contentType}</span>
-              )}
-            </a>
-            <p className="attachment-meta">
-              <a href={url}>{attachment.fileName}</a>
-              <br />
-              {formatAttachmentKind(attachment.kind)}, {formatFileSize(attachment.sizeBytes)}
-            </p>
-          </li>
-        )
-      })}
+      {attachments.map((attachment) => (
+        <AttachmentItem attachment={attachment} key={attachment.id} />
+      ))}
     </ul>
   )
 }

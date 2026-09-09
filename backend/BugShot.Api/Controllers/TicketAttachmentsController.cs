@@ -3,6 +3,7 @@ using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
@@ -16,12 +17,15 @@ namespace BugShot.Api.Controllers;
 public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageOptions storage) : ControllerBase
 {
     [HttpPost]
+    // wysylka z widgetu autoryzuje sie jednorazowym uploadToken a nie tokenem sesji
+    [AllowAnonymous]
     [EnableCors(CorsPolicies.WidgetUpload)]
     [RequestSizeLimit(AttachmentLimits.MaxRequestBytes)]
     [DisableFormValueModelBinding]
     [ProducesResponseType<IReadOnlyList<TicketAttachmentResponse>>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     public async Task<IActionResult> Upload(Guid ticketId, CancellationToken cancellationToken)
     {
@@ -50,6 +54,25 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
         if (!await ConsumeToken(ticketId, provided!, cancellationToken))
         {
             return Unauthorized();
+        }
+
+        // status sprawdzamy dopiero po tokenie zeby nie zdradzac stanu zgloszenia bez uprawnien
+        var status = await db.Tickets
+            .AsNoTracking()
+            .Where(t => t.Id == ticketId)
+            .Select(t => t.Status)
+            .SingleAsync(cancellationToken);
+
+        // tombstone stracil juz swoje dane wiec doklejenie pliku cofneloby skutek kasowania
+        if (status == TicketStatus.Deleted)
+        {
+            var conflict = Problem(
+                title: "Deleted ticket cannot be modified.",
+                statusCode: StatusCodes.Status409Conflict);
+
+            ((ProblemDetails)conflict.Value!).Extensions["currentStatus"] = status;
+
+            return conflict;
         }
 
         var written = new List<string>();
@@ -132,7 +155,7 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
             await transaction.CommitAsync(cancellationToken);
 
             return StatusCode(StatusCodes.Status201Created, saved
-                .Select(a => new TicketAttachmentResponse(a.Id, a.Kind, a.Uri, a.FileName, a.ContentType, a.SizeBytes))
+                .Select(a => new TicketAttachmentResponse(a.Id, a.Kind, a.FileName, a.ContentType, a.SizeBytes))
                 .ToList());
         }
         catch
@@ -218,10 +241,32 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
             Kind = kind,
             Uri = $"{AttachmentStorageOptions.UriPrefix}/{name}",
             // nazwa od klienta nigdy nie trafia do sciezki
-            FileName = Path.GetFileName(clientFileName),
+            FileName = MetadataFileName(clientFileName),
             ContentType = detected.ContentType,
             SizeBytes = size
         };
+    }
+
+    // nazwa jest sama metadana wiec za dluga przycinamy zamiast odrzucac poprawna wysylke
+    private static string MetadataFileName(string clientFileName)
+    {
+        var name = Path.GetFileName(clientFileName);
+
+        if (name.Length <= AttachmentLimits.MaxFileNameLength)
+        {
+            return name;
+        }
+
+        var extension = Path.GetExtension(name);
+
+        if (extension.Length >= AttachmentLimits.MaxFileNameLength)
+        {
+            return name[..AttachmentLimits.MaxFileNameLength];
+        }
+
+        return string.Concat(
+            name.AsSpan(0, AttachmentLimits.MaxFileNameLength - extension.Length),
+            extension);
     }
 
     private static AttachmentKind? KindOf(string field) => field switch
