@@ -231,9 +231,11 @@
     ".bugshot-success-ticket code"
   );
 
+  // limit API liczy sie lacznie ze zrzutem wiec jeden slot jest zarezerwowany
   const MAX_FILES = 5;
+  const MAX_USER_FILES = MAX_FILES - 1;
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
-  const MAX_TOTAL_FILE_SIZE = MAX_FILES * MAX_FILE_SIZE;
+  const MAX_TOTAL_FILE_SIZE = MAX_USER_FILES * MAX_FILE_SIZE;
   const MAX_DESCRIPTION_LENGTH = 1200;
   const ACCEPTED_IMAGE_TYPES = new Set([
     "image/png",
@@ -463,7 +465,7 @@
       newCandidates.push(file);
     }
 
-    const availableSlots = Math.max(0, MAX_FILES - selectedFiles.length);
+    const availableSlots = Math.max(0, MAX_USER_FILES - selectedFiles.length);
     const accepted = newCandidates.slice(0, availableSlots);
     const limitedCount = Math.max(0, newCandidates.length - accepted.length);
     const projectedTotalSize =
@@ -525,7 +527,7 @@
             ? "plików"
             : "plików";
       messages.push(
-        `Można dodać maksymalnie ${MAX_FILES} załączników. Nie dodano ${limitedCount} ${fileLabel}.`
+        `Można dodać maksymalnie ${MAX_USER_FILES} załączniki. Nie dodano ${limitedCount} ${fileLabel}.`
       );
     }
 
