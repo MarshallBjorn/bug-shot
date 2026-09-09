@@ -31,9 +31,11 @@ flowchart LR
 
 Uruchomienie lokalne: `make test` dla dwóch pierwszych warstw, `make e2e` dla trzeciej.
 
+Każda warstwa ma własną bazę na tym samym Postgresie: backend `bugshot_test`, end to end `bugshot_e2e`, a `bugshot_dev` zostaje dla `make dev`. Testy czyszczą tabele między przypadkami, więc nie mogą sięgać po dane deweloperskie ani po konto z `.env`. Lokalnie i w CI backend celuje w tę samą nazwę bazy.
+
 ### Backend
 
-Workflow odpala PostgreSQL jako service container i wykonuje `dotnet restore`, `dotnet build`, migracje EF Core, `dotnet test`. Po zielonych testach wchodzi wspólny workflow budowania obrazu.
+Workflow odpala PostgreSQL jako service container i wykonuje `dotnet restore`, `dotnet build`, migracje EF Core, `dotnet test`. Krok z migracjami jest wygodą, a nie warunkiem: suita zakłada sobie schemat sama przy pierwszym teście, więc świeży klon i pusta baza wystarczą. Po zielonych testach wchodzi wspólny workflow budowania obrazu.
 
 ### Frontend
 
