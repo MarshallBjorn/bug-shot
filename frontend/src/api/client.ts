@@ -7,7 +7,6 @@ export { ApiError }
 export async function apiRequest(path: string, signal?: AbortSignal) {
   let response = await send(path, signal)
 
-  // access token żyje kwadrans więc pierwsze żądanie po jego wygaśnięciu odnawia sesję i idzie raz jeszcze
   if (response.status === 401 && (await renewSession())) {
     response = await send(path, signal)
   }
@@ -30,14 +29,70 @@ function send(path: string, signal?: AbortSignal) {
 
   return fetch(`${apiBaseUrl}${path}`, {
     headers: token
-      ? { Accept: 'application/json', Authorization: `Bearer ${token}` }
-      : { Accept: 'application/json' },
+      ? {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        }
+      : {
+          Accept: 'application/json',
+        },
     signal,
   })
 }
 
-export async function apiPost<T>(path: string, body: unknown) {
-  const response = await sendMutation<T>(path, 'POST', body)
+async function sendMutation<T>(
+  path: string,
+  method: 'POST' | 'PATCH' | 'DELETE',
+  body?: unknown,
+  headers?: HeadersInit,
+  retried = false,
+) {
+  const token = accessToken()
 
-  return response
+  const requestHeaders: HeadersInit = {
+    Accept: 'application/json',
+    ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...headers,
+  }
+
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method,
+    headers: requestHeaders,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  })
+
+  if (response.status === 401 && !retried) {
+    const renewed = await renewSession()
+
+    if (renewed) {
+      return sendMutation<T>(path, method, body, headers, true)
+    }
+  }
+
+  if (!response.ok) {
+    throw new ApiError(response.status, `Żądanie ${path} zakończyło się kodem ${response.status}`)
+  }
+
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  return (await response.json()) as T
+}
+
+export async function apiPost<T>(path: string, body: unknown) {
+  return sendMutation<T>(path, 'POST', body)
+}
+
+export async function apiPatch<T>(
+  path: string,
+  body: unknown,
+  headers?: HeadersInit,
+) {
+  return sendMutation<T>(path, 'PATCH', body, headers)
+}
+
+export async function apiDelete(path: string) {
+  return sendMutation<void>(path, 'DELETE')
 }

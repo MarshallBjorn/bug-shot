@@ -8,6 +8,7 @@ interface TicketState {
   missing: boolean
   error: string | null
   loading: boolean
+  reload: () => void
 }
 
 interface Answer {
@@ -22,6 +23,7 @@ const noAnswer: Answer = { ticketId: '', ticket: null, missing: false, error: nu
 
 export function useTicket(ticketId: string): TicketState {
   const [answer, setAnswer] = useState<Answer>(noAnswer)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -43,7 +45,7 @@ export function useTicket(ticketId: string): TicketState {
       })
 
     return () => controller.abort()
-  }, [ticketId])
+  }, [ticketId, reloadKey])
 
   const loading = answer.ticketId !== ticketId
 
@@ -52,5 +54,6 @@ export function useTicket(ticketId: string): TicketState {
     missing: loading ? false : answer.missing,
     error: loading ? null : answer.error,
     loading,
+    reload: () => setReloadKey((value) => value + 1),
   }
 }

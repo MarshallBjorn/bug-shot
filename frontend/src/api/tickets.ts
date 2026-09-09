@@ -1,6 +1,12 @@
 import { ticketQueryToParams, type TicketQuery } from '../ticketQuery'
-import type { PagedResult, TicketComment, TicketDetails, TicketListItem } from '../types'
-import { apiDelete, apiGet, apiPost } from './client'
+import type {
+  PagedResult,
+  TicketComment,
+  TicketDetails,
+  TicketListItem,
+  TicketStatus,
+} from '../types'
+import { apiDelete, apiGet, apiPatch, apiPost } from './client'
 
 export function getTickets(projectId: string, query: TicketQuery, signal?: AbortSignal) {
   const params = ticketQueryToParams(query).toString()
@@ -38,4 +44,29 @@ export function addTicketComment(ticketId: string, author: string, body: string)
 
 export function deleteTicket(ticketId: string) {
   return apiDelete(`/api/v1/tickets/${ticketId}`)
+}
+
+interface TicketStatusResponse {
+  id: string
+  status: TicketStatus
+  rowVersion: string
+  updatedAt: string
+}
+
+export function updateTicketStatus(
+  ticketId: string,
+  status: TicketStatus,
+  rowVersion: string,
+  changedBy: string,
+) {
+  return apiPatch<TicketStatusResponse>(
+    `/api/v1/tickets/${ticketId}/status`,
+    {
+      status,
+      changedBy,
+    },
+    {
+      'If-Match': rowVersion,
+    },
+  )
 }
