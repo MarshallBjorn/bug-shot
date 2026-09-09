@@ -13,11 +13,6 @@ using Microsoft.Extensions.Options;
 
 namespace BugShot.Api.Tests;
 
-[CollectionDefinition("PostgreSQL tests", DisableParallelization = true)]
-public class PostgreSqlTestCollection
-{
-}
-
 [Collection("PostgreSQL tests")]
 public class TicketsControllerTests
 {
