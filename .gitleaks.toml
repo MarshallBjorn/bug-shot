@@ -6,6 +6,4 @@ description = "Ignore .env.example dev-placeholders and specific secrets from hi
 paths = [
     '''(^|/)\.env(\.[^/]+)?\.example$''',
 ]
-fingerprints = [
-    "214ba8fd6e150abbd3163ee14471308dab95894c:.env.dev:generic-api-key:42"
-]
+commits = ["214ba8fd6e150abbd3163ee14471308dab95894c"]
