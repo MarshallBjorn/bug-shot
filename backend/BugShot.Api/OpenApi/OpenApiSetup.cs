@@ -1,4 +1,8 @@
+using System.Net.Mime;
+using BugShot.Api.Attachments;
+using BugShot.Api.Security;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
@@ -53,6 +57,63 @@ public static class OpenApiSetup
             return Task.CompletedTask;
         });
 
+        options.AddOperationTransformer((operation, context, cancellationToken) =>
+        {
+            // wysylka zalacznikow czyta strumien sama wiec nie ma modelu z ktorego
+            // dokument wyprowadzilby cialo i naglowek. Bez tego nie da sie jej wyklikac
+            var multipart = context.Description.ActionDescriptor.EndpointMetadata
+                .OfType<ConsumesAttribute>()
+                .Any(consumes => consumes.ContentTypes.Contains(MediaTypeNames.Multipart.FormData));
+
+            if (multipart)
+            {
+                DescribeUploadForm(operation);
+            }
+
+            return Task.CompletedTask;
+        });
+
         return options;
+    }
+
+    private static void DescribeUploadForm(OpenApiOperation operation)
+    {
+        var file = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" };
+
+        operation.RequestBody = new OpenApiRequestBody
+        {
+            Content = new Dictionary<string, OpenApiMediaType>
+            {
+                [MediaTypeNames.Multipart.FormData] = new()
+                {
+                    Schema = new OpenApiSchema
+                    {
+                        Type = JsonSchemaType.Object,
+                        Properties = new Dictionary<string, IOpenApiSchema>
+                        {
+                            [AttachmentLimits.ScreenshotField] = file,
+                            [AttachmentLimits.FilesField] = new OpenApiSchema
+                            {
+                                Type = JsonSchemaType.Array,
+                                Items = file,
+                                MaxItems = AttachmentLimits.MaxFiles
+                            },
+                            [AttachmentLimits.ConsoleLogField] = file
+                        }
+                    }
+                }
+            }
+        };
+
+        operation.Parameters ??= [];
+
+        operation.Parameters.Add(new OpenApiParameter
+        {
+            Name = UploadToken.HeaderName,
+            In = ParameterLocation.Header,
+            Required = true,
+            Description = "Jednorazowy token z odpowiedzi POST /tickets.",
+            Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+        });
     }
 }
