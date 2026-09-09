@@ -6,3 +6,9 @@ description = ".env.example та його середовищні варіаці�
 paths = [
     '''(^|/)\.env(\.[^/]+)?\.example$''',
 ]
+
+[allowlist]
+description = "Ignore secret from history"
+fingerprints = [
+    "214ba8fd6e150abbd3163ee14471308dab95894c:.env.dev:generic-api-key:42"
+]
