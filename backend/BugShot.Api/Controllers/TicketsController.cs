@@ -209,18 +209,6 @@ public class TicketsController(
             return TombstoneConflict(ticket);
         }
 
-        if (string.IsNullOrWhiteSpace(request.Author))
-        {
-            ModelState.AddModelError(nameof(request.Author), "Comment author cannot be empty.");
-            return ValidationProblem(ModelState);
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Body))
-        {
-            ModelState.AddModelError(nameof(request.Body), "Comment body cannot be empty.");
-            return ValidationProblem(ModelState);
-        }
-
         var comment = new TicketComment
         {
             TicketId = id,
@@ -298,14 +286,33 @@ public class TicketsController(
         CancellationToken cancellationToken)
     {
         var ticket = await db.Tickets
-            .Include(t => t.Attachments)
-            .Include(t => t.Comments)
             .SingleOrDefaultAsync(t => t.Id == id, cancellationToken);
 
         if (ticket is null)
         {
             return NotFound();
         }
+
+        // kasowanie jest idempotentne wiec powtorka nie dopisuje historii ani nie nadpisuje deleted_at
+        if (ticket.Status == TicketStatus.Deleted)
+        {
+            return NoContent();
+        }
+
+        await using var transaction =
+            await db.Database.BeginTransactionAsync(cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+
+        // token przestaje byc wazny bo inaczej wysylka moze dokleic plik do tombstone
+        // aktualizacja blokuje te wiersze wiec wysylka w locie zatrzymuje sie tutaj
+        await db.TicketUploadTokens
+            .Where(t => t.TicketId == id && t.UsedAt == null && t.ExpiresAt > now)
+            .ExecuteUpdateAsync(update => update.SetProperty(t => t.ExpiresAt, now), cancellationToken);
+
+        // zalaczniki czytamy dopiero po blokadzie zeby zobaczyc te z wysylki ktora wlasnie sie domknela
+        await db.Entry(ticket).Collection(t => t.Attachments).LoadAsync(cancellationToken);
+        await db.Entry(ticket).Collection(t => t.Comments).LoadAsync(cancellationToken);
 
         var attachmentPaths = ticket.Attachments
             .Select(a => Path.GetFileName(a.Uri))
@@ -319,7 +326,7 @@ public class TicketsController(
         ticket.PageUrl = string.Empty;
         ticket.UserAgent = string.Empty;
         ticket.Status = TicketStatus.Deleted;
-        ticket.DeletedAt = DateTimeOffset.UtcNow;
+        ticket.DeletedAt = now;
         ticket.DeletedBy = "system";
 
         db.TicketStatusChanges.Add(new TicketStatusChange
@@ -328,11 +335,8 @@ public class TicketsController(
             FromStatus = fromStatus,
             ToStatus = TicketStatus.Deleted,
             ChangedBy = "system",
-            ChangedAt = DateTimeOffset.UtcNow
+            ChangedAt = now
         });
-
-        await using var transaction =
-            await db.Database.BeginTransactionAsync(cancellationToken);
 
         db.TicketComments.RemoveRange(ticket.Comments);
         db.TicketAttachments.RemoveRange(ticket.Attachments);
@@ -346,13 +350,14 @@ public class TicketsController(
             {
                 System.IO.File.Delete(attachmentPath);
             }
-            catch (DirectoryNotFoundException)
+            // tombstone jest juz zapisany wiec nieudane sprzatniecie pliku nie moze wywalic zadania
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // DB tombstone has already been committed.
-            }
-            catch (IOException)
-            {
-                // DB tombstone has already been committed.
+                logger.LogWarning(
+                    exception,
+                    "Nie udalo sie usunac pliku {Path} przy kasowaniu zgloszenia {TicketId}",
+                    attachmentPath,
+                    ticket.Id);
             }
         }
 

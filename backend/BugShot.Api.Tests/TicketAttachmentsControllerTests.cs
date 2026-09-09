@@ -292,4 +292,59 @@ public class TicketAttachmentsControllerTests : IDisposable
 
         Assert.Equal(StatusCodes.Status400BadRequest, StatusOf(result));
     }
+
+    [Fact]
+    public async Task UploadNaSkasowanyTicketDaje409()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+
+        var deleted = await db.Tickets.SingleAsync(t => t.Id == ticket.Id);
+        deleted.Status = TicketStatus.Deleted;
+        deleted.DeletedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+
+        var result = await Upload(db, ticket.Id, ticket.UploadToken, ("screenshot", "zrzut.png", Png));
+
+        Assert.Equal(StatusCodes.Status409Conflict, StatusOf(result));
+        Assert.Empty(db.TicketAttachments);
+        Assert.False(Directory.Exists(root) && Directory.EnumerateFiles(root).Any());
+    }
+
+    [Fact]
+    public async Task OdrzuconyUploadNaTombstoneNieZuzywaTokena()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+
+        var deleted = await db.Tickets.SingleAsync(t => t.Id == ticket.Id);
+        deleted.Status = TicketStatus.Deleted;
+        await db.SaveChangesAsync();
+
+        await Upload(db, ticket.Id, ticket.UploadToken, ("screenshot", "zrzut.png", Png));
+
+        var token = await db.TicketUploadTokens
+            .AsNoTracking()
+            .SingleAsync(t => t.TicketId == ticket.Id);
+
+        Assert.Null(token.UsedAt);
+    }
+
+
+    [Fact]
+    public async Task ZaDlugaNazwaPlikuJestPrzycinanaZamiastWywalacZapis()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+
+        var nazwa = new string('a', 300) + ".png";
+
+        var result = await Upload(db, ticket.Id, ticket.UploadToken, ("screenshot", nazwa, Png));
+
+        Assert.Equal(StatusCodes.Status201Created, StatusOf(result));
+
+        var attachment = await db.TicketAttachments.SingleAsync();
+        Assert.Equal(AttachmentLimits.MaxFileNameLength, attachment.FileName.Length);
+        Assert.EndsWith(".png", attachment.FileName);
+    }
 }

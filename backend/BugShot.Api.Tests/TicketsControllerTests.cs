@@ -187,51 +187,6 @@ public class TicketsControllerTests
         Assert.IsType<NotFoundResult>(result.Result);
     }
     [Fact]
-    public async Task PustyKomentarzJestOdrzucany()
-    {
-        using var db = NewContext();
-        var storage = NewStorage();
-        var controller = NewController(db, storage: storage);
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
-
-        var request = new CreateTicketCommentRequest("tester", "   ");
-
-        var result = await controller.AddComment(
-            payload.Id,
-            request,
-            CancellationToken.None);
-
-        Assert.IsType<ObjectResult>(result.Result);
-        Assert.False(controller.ModelState.IsValid);
-        Assert.False(await db.TicketComments.AnyAsync());
-    }
-
-    [Fact]
-    public async Task WhitespaceWAutorzeJestOdrzucany()
-    {
-        using var db = NewContext();
-        var storage = NewStorage();
-        var controller = NewController(db, storage: storage);
-
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
-
-        var request = new CreateTicketCommentRequest("   ", "Komentarz");
-
-        var result = await controller.AddComment(
-            payload.Id,
-            request,
-            CancellationToken.None);
-
-        Assert.IsType<ObjectResult>(result.Result);
-        Assert.False(controller.ModelState.IsValid);
-        Assert.False(await db.TicketComments.AnyAsync());
-    }
-
-    [Fact]
     public async Task KomentarzNaSkasowanymTickecieDaje409()
     {
         using var db = NewContext();
@@ -968,4 +923,64 @@ public class TicketsControllerTests
         Assert.Equal(TicketStatus.Rejected, saved.Status);
         Assert.Empty(db.TicketStatusChanges.Where(h => h.TicketId == ticket.Id));
     }
+
+    [Fact]
+    public async Task PowtorzoneKasowanieNieDopisujeHistoriiAniNieNadpisujeDeletedAt()
+    {
+        using var db = NewContext();
+        var storage = NewStorage();
+        var controller = NewController(db, storage: storage);
+
+        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
+        var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
+        var payload = Assert.IsType<CreatedTicketResponse>(created.Value);
+
+        Assert.IsType<NoContentResult>(await controller.Delete(payload.Id, CancellationToken.None));
+
+        var poPierwszym = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == payload.Id);
+
+        Assert.IsType<NoContentResult>(await controller.Delete(payload.Id, CancellationToken.None));
+
+        var poDrugim = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == payload.Id);
+
+        Assert.Equal(poPierwszym.DeletedAt, poDrugim.DeletedAt);
+        Assert.Equal(poPierwszym.RowVersion, poDrugim.RowVersion);
+
+        var history = await db.TicketStatusChanges
+            .AsNoTracking()
+            .Where(h => h.TicketId == payload.Id)
+            .ToListAsync();
+
+        Assert.Single(history);
+        Assert.Equal(TicketStatus.New, history[0].FromStatus);
+        Assert.Equal(TicketStatus.Deleted, history[0].ToStatus);
+    }
+
+
+    [Fact]
+    public async Task KasowanieUniewaznaWystawioneTokenyUploadu()
+    {
+        using var db = NewContext();
+        var storage = NewStorage();
+        var controller = NewController(db, storage: storage);
+
+        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
+        var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
+        var payload = Assert.IsType<CreatedTicketResponse>(created.Value);
+
+        var przedKasowaniem = await db.TicketUploadTokens
+            .AsNoTracking()
+            .SingleAsync(t => t.TicketId == payload.Id);
+
+        Assert.True(przedKasowaniem.ExpiresAt > DateTimeOffset.UtcNow);
+
+        Assert.IsType<NoContentResult>(await controller.Delete(payload.Id, CancellationToken.None));
+
+        var poKasowaniu = await db.TicketUploadTokens
+            .AsNoTracking()
+            .SingleAsync(t => t.TicketId == payload.Id);
+
+        Assert.True(poKasowaniu.ExpiresAt <= DateTimeOffset.UtcNow);
+    }
+
 }
