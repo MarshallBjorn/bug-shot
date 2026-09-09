@@ -2,13 +2,10 @@
 useDefault = true
 
 [allowlist]
-description = ".env.example та його середовищні варіації містять лише dev-placeholdery"
+description = "Ignore .env.example dev-placeholders and specific secrets from history"
 paths = [
     '''(^|/)\.env(\.[^/]+)?\.example$''',
 ]
-
-[allowlist]
-description = "Ignore secret from history"
 fingerprints = [
     "214ba8fd6e150abbd3163ee14471308dab95894c:.env.dev:generic-api-key:42"
 ]
