@@ -22,6 +22,8 @@ var dashboardOrigins = builder.Configuration.GetSection("Cors:DashboardOrigins")
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
+builder.Services.AddHealthChecks();
+
 var attachmentStorage = new AttachmentStorageOptions(attachmentsPath);
 attachmentStorage.EnsureWritable();
 
@@ -74,6 +76,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+
+app.MapHealthChecks("/healthz");
 
 app.MapControllers();
 

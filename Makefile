@@ -56,7 +56,7 @@ _check-service:
 	    echo "SERVICE required <backend|frontend|wiget>"; exit 1; fi
 
 image-lint: _check-service
-	docker run --rm -i $(HADOLINT_IMAGE) < $(SERVICE)/Dockerfile
+	docker run --rm -v $(CURDIR)/.hadolintignore:/.hadolintignore -i $(HADOLINT_IMAGE) < $(SERVICE)/Dockerfile
 
 image-build: _check-service
 	docker build -t $(IMAGE) $(SERVICE)
