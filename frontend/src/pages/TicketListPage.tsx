@@ -1,10 +1,12 @@
 import { useCallback, useMemo } from 'react'
 import { useParams, useSearchParams } from 'react-router'
-import Pagination from '../components/Pagination'
+import LiveStatus from '../components/LiveStatus'
+import LoadMore from '../components/LoadMore'
 import TicketFilters from '../components/TicketFilters'
 import TicketTable from '../components/TicketTable'
 import TicketsEmptyState from '../components/TicketsEmptyState'
 import { useTickets } from '../hooks/useTickets'
+import { useTicketStream } from '../hooks/useTicketStream'
 import { parseTicketQuery, ticketQueryToParams, type TicketQuery } from '../ticketQuery'
 
 function TicketListPage() {
@@ -14,53 +16,54 @@ function TicketListPage() {
   const query = useMemo(() => parseTicketQuery(searchParams), [searchParams])
   const tickets = useTickets(projectId, query)
 
+  const live = useTicketStream(projectId, {
+    onEvent: tickets.apply,
+    onReconnected: tickets.reload,
+  })
+
   const updateQuery = useCallback(
     (patch: Partial<TicketQuery>, replace = false) => {
-      setSearchParams((previous) => {
-        const next = { ...parseTicketQuery(previous), ...patch }
-
-        // zmiana filtra cofa na pierwszą stronę bo inaczej trafiamy w pustkę poza zakresem
-        if (patch.page === undefined) next.page = 1
-
-        return ticketQueryToParams(next)
-      }, { replace })
+      setSearchParams(
+        (previous) => ticketQueryToParams({ ...parseTicketQuery(previous), ...patch }),
+        { replace },
+      )
     },
     [setSearchParams],
   )
 
+  const empty = tickets.items.length === 0
+
   return (
     <>
-      <h2>Zgłoszenia</h2>
+      <div className="list-heading">
+        <h2>Zgłoszenia</h2>
+        <LiveStatus status={live} />
+      </div>
 
       <TicketFilters query={query} onChange={updateQuery} />
 
       {tickets.error && <p role="alert">Nie udało się pobrać zgłoszeń. {tickets.error}</p>}
 
-      {!tickets.result && tickets.loading && <p>Ładowanie...</p>}
+      {empty && tickets.loading && <p>Ładowanie...</p>}
 
-      {tickets.result && (
+      {empty && !tickets.loading && !tickets.error && (
+        <TicketsEmptyState query={query} onChange={updateQuery} />
+      )}
+
+      {!empty && (
         <div className={tickets.loading ? 'is-stale' : undefined}>
-          {tickets.result.items.length === 0 ? (
-            <TicketsEmptyState
-              query={query}
-              total={tickets.result.total}
-              onChange={updateQuery}
-            />
-          ) : (
-            <>
-              <TicketTable
-                projectId={projectId}
-                items={tickets.result.items}
-                listSearch={searchParams.toString()}
-              />
-              <Pagination
-                page={tickets.result.page}
-                pageSize={tickets.result.pageSize}
-                total={tickets.result.total}
-                onPageChange={(page) => updateQuery({ page })}
-              />
-            </>
-          )}
+          <TicketTable
+            projectId={projectId}
+            items={tickets.items}
+            listSearch={searchParams.toString()}
+          />
+          <LoadMore
+            loaded={tickets.items.length}
+            total={tickets.total}
+            hasMore={tickets.hasMore}
+            busy={tickets.loading || tickets.loadingMore}
+            onLoadMore={tickets.loadMore}
+          />
         </div>
       )}
     </>

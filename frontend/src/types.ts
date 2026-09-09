@@ -46,11 +46,12 @@ export interface TicketDetails {
   statusHistory: TicketStatusChange[]
 }
 
-export interface PagedResult<T> {
+// puste nextCursor oznacza koniec listy
+// total przychodzi tylko przy pierwszej stronie i tylko gdy panel o niego poprosi
+export interface CursorPage<T> {
   items: T[]
-  total: number
-  page: number
-  pageSize: number
+  nextCursor: string | null
+  total: number | null
 }
 
 export interface AuthenticatedUser {
