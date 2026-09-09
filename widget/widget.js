@@ -625,7 +625,7 @@
 
   }
 
-  async function uploadAttachments(ticketId, uploadToken, attachments) {
+  async function uploadAttachments(ticketId, uploadToken, screenshot, attachments) {
     const response = await fetchWithRetry(
       `${API_BASE_URL}/api/v1/tickets/${ticketId}/attachments`,
       {
@@ -636,6 +636,10 @@
       },
       () => {
         const formData = new FormData();
+
+        if (screenshot) {
+          formData.append("screenshot", screenshot, screenshot.name);
+        }
 
         for (const file of attachments) {
           formData.append("files", file, file.name);
@@ -661,7 +665,7 @@
     return response.json();
   }
 
-  async function submitReport({ description, attachments }) {
+  async function submitReport({ description, screenshot, attachments }) {
     const payload = {
       projectKey: "demo",
       description,
@@ -697,10 +701,11 @@
     const reportAttachments = attachments || [];
     const logs = getDiagnosticLogsText();
 
-    if (reportAttachments.length > 0 || logs) {
+    if (screenshot || reportAttachments.length > 0 || logs) {
       await uploadAttachments(
         data.id,
         data.uploadToken,
+        screenshot,
         reportAttachments
       );
     }
@@ -731,11 +736,11 @@
 
     try {
       const screenshot = await window.BUGSHOT_CAPTURE.screenshotFile();
-      const attachments = screenshot ? [screenshot, ...selectedFiles] : [...selectedFiles];
 
       const result = await submitReport({
         description,
-        attachments,
+        screenshot,
+        attachments: [...selectedFiles],
       });
 
       if (!result || result.accepted !== true) {
