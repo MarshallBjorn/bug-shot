@@ -3,6 +3,7 @@ using BugShot.Api;
 using BugShot.Api.Attachments;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
+using BugShot.Api.OpenApi;
 using BugShot.Api.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -37,7 +38,14 @@ var attachmentStorage = new AttachmentStorageOptions(attachmentsPath);
 attachmentStorage.EnsureWritable();
 
 builder.Services.AddSingleton(attachmentStorage);
-builder.Services.AddOpenApi();
+
+// poza deweloperka dokument stoi tylko gdy ktos go wlaczy i poda haslo
+var openApiAccess = OpenApiAccess.Read(builder.Configuration, builder.Environment);
+
+if (openApiAccess is not null)
+{
+    builder.Services.AddOpenApi(options => options.Describe());
+}
 
 var accessTokens = new AccessTokenIssuer(signingKey);
 
@@ -127,9 +135,18 @@ using (var scope = app.Services.CreateScope())
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(AdminSeeder)));
 }
 
-if (app.Environment.IsDevelopment())
+if (openApiAccess is not null)
 {
-    // dokument opisuje takze trasy za tokenem wiec sam zostaje otwarty do czasu karty o Swaggerze
+    if (openApiAccess.RequiresPassword)
+    {
+        // brama stoi przed routingiem bo ma zamykac tak samo dokument jak i strone interfejsu
+        app.UseWhen(
+            context => context.Request.Path.StartsWithSegments("/swagger")
+                || context.Request.Path.StartsWithSegments("/openapi"),
+            branch => branch.UseMiddleware<OpenApiBasicAuthMiddleware>(openApiAccess));
+    }
+
+    // dokument nie zna tokena panelu wiec zostaje anonimowy niezaleznie od FallbackPolicy
     app.MapOpenApi().AllowAnonymous();
 
     app.UseSwaggerUI(options =>
