@@ -8,6 +8,10 @@ using BugShot.Api.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace BugShot.Api.Tests;
 
@@ -60,7 +64,20 @@ public class TicketAttachmentsControllerTests : IDisposable
             UserAgent = "Mozilla/5.0"
         };
 
-        var result = await new TicketsController(db).Create(request, CancellationToken.None);
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Origin = "http://127.0.0.1:5500";
+
+        var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        var ticketsController = new TicketsController(
+            db,
+            new AttachmentStorageOptions(Path.GetTempPath()),
+            cache,
+            NullLogger<TicketsController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = context }
+        };
+
+        var result = await ticketsController.Create(request, CancellationToken.None);
         return (CreatedTicketResponse)((CreatedAtActionResult)result.Result!).Value!;
     }
 
@@ -274,5 +291,60 @@ public class TicketAttachmentsControllerTests : IDisposable
         var result = await Upload(db, ticket.Id, ticket.UploadToken, parts);
 
         Assert.Equal(StatusCodes.Status400BadRequest, StatusOf(result));
+    }
+
+    [Fact]
+    public async Task UploadNaSkasowanyTicketDaje409()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+
+        var deleted = await db.Tickets.SingleAsync(t => t.Id == ticket.Id);
+        deleted.Status = TicketStatus.Deleted;
+        deleted.DeletedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+
+        var result = await Upload(db, ticket.Id, ticket.UploadToken, ("screenshot", "zrzut.png", Png));
+
+        Assert.Equal(StatusCodes.Status409Conflict, StatusOf(result));
+        Assert.Empty(db.TicketAttachments);
+        Assert.False(Directory.Exists(root) && Directory.EnumerateFiles(root).Any());
+    }
+
+    [Fact]
+    public async Task OdrzuconyUploadNaTombstoneNieZuzywaTokena()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+
+        var deleted = await db.Tickets.SingleAsync(t => t.Id == ticket.Id);
+        deleted.Status = TicketStatus.Deleted;
+        await db.SaveChangesAsync();
+
+        await Upload(db, ticket.Id, ticket.UploadToken, ("screenshot", "zrzut.png", Png));
+
+        var token = await db.TicketUploadTokens
+            .AsNoTracking()
+            .SingleAsync(t => t.TicketId == ticket.Id);
+
+        Assert.Null(token.UsedAt);
+    }
+
+
+    [Fact]
+    public async Task ZaDlugaNazwaPlikuJestPrzycinanaZamiastWywalacZapis()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+
+        var nazwa = new string('a', 300) + ".png";
+
+        var result = await Upload(db, ticket.Id, ticket.UploadToken, ("screenshot", nazwa, Png));
+
+        Assert.Equal(StatusCodes.Status201Created, StatusOf(result));
+
+        var attachment = await db.TicketAttachments.SingleAsync();
+        Assert.Equal(AttachmentLimits.MaxFileNameLength, attachment.FileName.Length);
+        Assert.EndsWith(".png", attachment.FileName);
     }
 }

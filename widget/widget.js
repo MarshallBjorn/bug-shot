@@ -730,9 +730,12 @@
     setStatus("Wysyłanie zgłoszenia…", "");
 
     try {
+      const screenshot = await window.BUGSHOT_CAPTURE.screenshotFile();
+      const attachments = screenshot ? [screenshot, ...selectedFiles] : [...selectedFiles];
+
       const result = await submitReport({
         description,
-        attachments: [...selectedFiles],
+        attachments,
       });
 
       if (!result || result.accepted !== true) {
