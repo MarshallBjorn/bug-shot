@@ -23,6 +23,10 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
 
     public DbSet<SanitizationLog> SanitizationLogs => Set<SanitizationLog>();
 
+    public DbSet<User> Users => Set<User>();
+
+    public DbSet<UserRefreshToken> UserRefreshTokens => Set<UserRefreshToken>();
+
     public override int SaveChanges()
     {
         ApplyAuditFields();
@@ -188,6 +192,31 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             entity.HasOne(r => r.Project)
                 .WithMany(p => p.SanitizationRules)
                 .HasForeignKey(r => r.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.Property(u => u.Email).HasMaxLength(256);
+
+            // hash bcrypt ma 60 znakow a zapas zostaje na inny algorytm
+            entity.Property(u => u.PasswordHash).HasMaxLength(100);
+
+            // adres trafia do bazy zawsze malymi literami wiec zwykly unikalny indeks wystarczy
+            entity.HasIndex(u => u.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<UserRefreshToken>(entity =>
+        {
+            // rotacja szuka tokena po skrocie
+            entity.HasIndex(t => t.TokenHash).IsUnique();
+
+            // uniewaznienie wszystkich tokenow uzytkownika idzie po tym indeksie
+            entity.HasIndex(t => t.UserId);
+
+            entity.HasOne(t => t.User)
+                .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(t => t.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

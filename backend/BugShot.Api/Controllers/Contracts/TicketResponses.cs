@@ -13,10 +13,10 @@ public record TicketListItem(
     DateTimeOffset ReceivedAt,
     DateTimeOffset UpdatedAt);
 
+// bez uri bo plik wychodzi wylacznie przez GET /attachments/{id}/download
 public record TicketAttachmentResponse(
     Guid Id,
     AttachmentKind Kind,
-    string Uri,
     string FileName,
     string ContentType,
     long SizeBytes);
@@ -53,7 +53,7 @@ public record TicketDetails(
     DateTimeOffset UpdatedAt,
     string RowVersion,
     IReadOnlyList<TicketAttachmentResponse> Attachments,
-    string? ConsoleLogUri,
+    TicketAttachmentResponse? ConsoleLog,
     int CommentCount,
     IReadOnlyList<TicketStatusChangeResponse> StatusHistory);
 

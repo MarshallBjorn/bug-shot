@@ -3,6 +3,7 @@ using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
@@ -16,6 +17,8 @@ namespace BugShot.Api.Controllers;
 public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageOptions storage) : ControllerBase
 {
     [HttpPost]
+    // wysylka z widgetu autoryzuje sie jednorazowym uploadToken a nie tokenem sesji
+    [AllowAnonymous]
     [EnableCors(CorsPolicies.WidgetUpload)]
     [RequestSizeLimit(AttachmentLimits.MaxRequestBytes)]
     [DisableFormValueModelBinding]
@@ -152,7 +155,7 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
             await transaction.CommitAsync(cancellationToken);
 
             return StatusCode(StatusCodes.Status201Created, saved
-                .Select(a => new TicketAttachmentResponse(a.Id, a.Kind, a.Uri, a.FileName, a.ContentType, a.SizeBytes))
+                .Select(a => new TicketAttachmentResponse(a.Id, a.Kind, a.FileName, a.ContentType, a.SizeBytes))
                 .ToList());
         }
         catch

@@ -1,8 +1,8 @@
 import { Link, useLocation, useParams } from 'react-router'
+import AttachmentDownload from '../components/AttachmentDownload'
 import AttachmentGallery from '../components/AttachmentGallery'
 import { formatDateTime, formatStatus } from '../format'
 import { useTicket } from '../hooks/useTicket'
-import { attachmentUrl } from '../media'
 import { readListSearch } from '../navigation'
 
 function TicketDetailsPage() {
@@ -75,9 +75,9 @@ function TicketDetailsPage() {
       <AttachmentGallery attachments={ticket.attachments} />
 
       <h3>Log konsoli</h3>
-      {ticket.consoleLogUri ? (
+      {ticket.consoleLog ? (
         <p>
-          <a href={attachmentUrl(ticket.consoleLogUri)}>Pobierz log konsoli</a>
+          <AttachmentDownload attachment={ticket.consoleLog} label="Pobierz log konsoli" />
         </p>
       ) : (
         <p>Zgłoszenie nie ma logu konsoli.</p>

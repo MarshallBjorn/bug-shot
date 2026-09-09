@@ -1,0 +1,16 @@
+{
+  "name": "bug-shot-e2e",
+  "version": "1.0.0",
+  "description": "Testy end to end panelu bug-shot",
+  "scripts": {
+    "pretest": "node scripts/prepare-db.ts",
+    "test": "playwright test",
+    "report": "playwright show-report"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "pg": "^8.23.0"
+  },
+  "private": true
+}

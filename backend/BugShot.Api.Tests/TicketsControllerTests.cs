@@ -456,7 +456,7 @@ public class TicketsControllerTests
         Assert.Equal(string.Empty, details.UserAgent);
         Assert.Equal(0, details.CommentCount);
         Assert.Empty(details.Attachments);
-        Assert.Null(details.ConsoleLogUri);
+        Assert.Null(details.ConsoleLog);
     }
 
     [Fact]

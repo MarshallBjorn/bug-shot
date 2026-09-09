@@ -16,6 +16,7 @@ erDiagram
     TICKET ||--o{ TICKET_COMMENT : "ma"
     TICKET ||--o{ TICKET_STATUS_CHANGE : "ma"
     TICKET ||--o{ SANITIZATION_LOG : "ma"
+    USER ||--o{ USER_REFRESH_TOKEN : "ma"
 
     PROJECT {
         uuid id PK
@@ -100,6 +101,25 @@ erDiagram
         varchar changed_by
         timestamptz changed_at
     }
+
+    USER {
+        uuid id PK
+        varchar email UK
+        varchar password_hash
+        boolean is_admin
+        boolean is_active
+        timestamptz created_at
+    }
+
+    USER_REFRESH_TOKEN {
+        uuid id PK
+        uuid user_id FK
+        bytea token_hash
+        timestamptz expires_at
+        timestamptz used_at "null dopoki nie zuzyty"
+        timestamptz revoked_at "null dopoki wazny"
+        timestamptz created_at
+    }
 ```
 
 ### Konwencje nazewnicze
@@ -130,6 +150,9 @@ Dodanie nowej wartości wymaga migracji z `ALTER TYPE ... ADD VALUE`. Zmiana naz
 - unikalny `ticket_upload_tokens(token_hash)`
 - unikalny `projects(key)`
 - unikalny `project_origins(project_id, origin)`
+- unikalny `users(email)`
+- unikalny `user_refresh_tokens(token_hash)`
+- `user_refresh_tokens(user_id)`
 
 ### Czas
 
@@ -163,6 +186,8 @@ Kasowanie projektu, który ma zgłoszenia, jest zablokowane na poziomie klucza o
 
 Prefiks wersji `/api/v1`. Kolumna stanu mówi, czy endpoint istnieje w kodzie. Zaplanowane zwracają dziś 404.
 
+Domyślnie każdy endpoint wymaga tokena, wyjątki wylicza sekcja `Uwierzytelnianie`.
+
 | Endpoint | Stan | Opis |
 |---|---|---|
 | `POST /tickets` | działa | zgłoszenie z widgetu, zwraca `uploadToken`, patrz niżej |
@@ -173,6 +198,15 @@ Prefiks wersji `/api/v1`. Kolumna stanu mówi, czy endpoint istnieje w kodzie. Z
 | `DELETE /tickets/{id}` | działa | tombstone ticketu i usunięcie danych/załączników |
 | `POST /tickets/{id}/comments` | działa | dodanie komentarza, autor do 128 znaków, treść do 5000, puste i same białe znaki odrzucane, tombstone daje 409 |
 | `GET /tickets/{id}/comments` | działa | lista komentarzy z paginacją |
+| `GET /attachments/{id}/download` | działa | plik załącznika, wyłącznie dla zalogowanych |
+| `POST /auth/login` | działa | e-mail i hasło w zamian za access token i cookie z refreshem |
+| `POST /auth/refresh` | działa | rotacja tokena odświeżającego z cookie |
+| `POST /auth/logout` | działa | unieważnia token z cookie i czyści cookie |
+| `GET /auth/me` | działa | konto właściciela tokena |
+| `GET /users` | działa | lista kont, tylko dla administratora |
+| `POST /users` | działa | nowe konto, tylko dla administratora |
+| `PATCH /users/{id}/deactivate` | działa | wyłączenie konta, tylko dla administratora |
+| `POST /users/{id}/reset-password` | działa | ustawienie nowego hasła, tylko dla administratora |
 | `DELETE /projects/{id}` | planowane | zablokowane, dopóki projekt ma zgłoszenia |
 
 ### POST /tickets
@@ -237,7 +271,7 @@ Ciało to `multipart/form-data` z trzema rozpoznawanymi polami. Każde jest opcj
 | `files` | do 5 łącznie ze zrzutem | 10 MiB każdy | `user_upload` |
 | `consoleLog` | 1 | 256 KiB | `console_log` |
 
-Odpowiedź `201 Created` z listą zapisanych załączników, każdy z `id`, `kind`, `uri`, `fileName`, `contentType` i `sizeBytes`.
+Odpowiedź `201 Created` z listą zapisanych załączników, każdy z `id`, `kind`, `fileName`, `contentType` i `sizeBytes`.
 
 Kody błędów:
 
@@ -255,7 +289,7 @@ Całość idzie w jednej transakcji, a token jest stemplowany jednym atomowym za
 - dwa równoległe żądania z tym samym tokenem nie przejdą oba, drugie dostanie 401
 - odpowiedź 400, 409 i 413 nie zużywa tokena, bo transakcja się cofa i pliki znikają z dysku. Ponowienie po poprawieniu pliku zadziała. Zużywa go dopiero 201
 
-Nazwa pliku na dysku to `{uuid}.{rozszerzenie}`, a `uri` w odpowiedzi i w bazie jest ścieżką względną pod `/attachments/`, którą wystawia nginx.
+Nazwa pliku na dysku to `{uuid}.{rozszerzenie}`, a `uri` w bazie jest ścieżką względną pod `/attachments/`. Na zewnątrz nie wychodzi, patrz sekcja `Pliki`.
 
 Nazwa podana przez klienta jest tylko metadaną, więc dłuższa niż 260 znaków zostaje przycięta z zachowaniem rozszerzenia, zamiast odrzucać poprawną wysyłkę.
 
@@ -309,11 +343,61 @@ Rzeczy, których nie widać z sygnatury endpointu:
 - sortowanie po `reportedAt` schodzi na `receivedAt` tam gdzie `reportedAt` jest puste. Bez tego zgłoszenia bez czasu z przeglądarki lądowały na końcu listy przy `asc` i na początku przy `desc`, niezależnie od daty pokazanej w tabeli
 - każde sortowanie domyka się identyfikatorem ticketu. Bez tego zgłoszenia o równych znacznikach czasu mają dowolną kolejność i potrafią powtórzyć się na dwóch stronach albo nie trafić na żadną
 
+## Uwierzytelnianie
+
+Panel chroni JWT. Zasada jest odwrócona względem listy wyjątków: autoryzacja jest wymagana domyślnie i to endpoint musi powiedzieć, że jej nie chce. Nowa trasa dodana bez namysłu jest wtedy zamknięta, a nie otwarta.
+
+Bez tokena działa dokładnie pięć tras:
+
+- `POST /tickets` i `POST /tickets/{id}/attachments`, bo woła je widget z cudzej domeny i nie ma skąd wziąć konta. Chroni je `projectKey`, `Origin` i jednorazowy `uploadToken`
+- `/auth/login`, `/auth/refresh` i `/auth/logout`, bo to jest właśnie zakładanie i zamykanie sesji. Wylogowanie jest anonimowe celowo, żeby działało też z wygasłym access tokenem
+
+Poza tą listą otwarty jest jeszcze dokument OpenAPI pod `/openapi/v1.json`, ale wyłącznie w środowisku `Development`.
+
+### Tokeny
+
+| Token | Życie | Gdzie |
+|---|---|---|
+| access | 15 minut | nagłówek `Authorization: Bearer` |
+| refresh | 7 dni | cookie `bugshot_refresh`, `HttpOnly` |
+
+Access token nosi `sub` z identyfikatorem konta, `email` oraz `role` równe `admin` dla administratorów. Podpis to HS256 kluczem z `JWT_SIGNING_KEY`. Bez tej zmiennej API nie wstaje, bo klucz podpisu nie jest ustawieniem opcjonalnym. Tolerancja na rozjazd zegarów jest wyłączona, więc kwadrans to naprawdę kwadrans.
+
+Cookie z refreshem ma `HttpOnly`, `Secure`, `SameSite=Lax` i `Path=/api/v1/auth`. `Lax` wystarcza, bo panel i API są same-site zarówno lokalnie jak i za wspólnym proxy, a przy okazji zamyka CSRF. Ścieżka ogranicza wysyłanie cookie do tych endpointów, które je czytają.
+
+Wynika z tego wymaganie na konfigurację: panel i API muszą stać pod tym samym hostem. `http://localhost:5173` z API pod `http://127.0.0.1:8080` to dla przeglądarki dwie różne witryny, więc cookie nie pojedzie i sesja nie przeżyje odświeżenia strony, mimo że samo logowanie zadziała. Port nie ma znaczenia, host ma.
+
+Access token żyje w pamięci karty, nie w `localStorage`. Po odświeżeniu strony panel odtwarza sesję jednym `POST /auth/refresh`, bo cookie przeżywa przeładowanie.
+
+### Rotacja
+
+Każde `POST /auth/refresh` zużywa token i wystawia nowy. W bazie leży sam SHA-256, zużycie to jeden atomowy `UPDATE`, więc dwa równoległe żądania z tym samym tokenem nie przejdą oba.
+
+Token zużyty albo unieważniony, podany po raz drugi, kończy się `401` i unieważnieniem wszystkich sesji tego konta. Wyjątkiem jest powtórka w ciągu 30 sekund od zużycia: dostaje `401`, ale bez zamykania sesji, bo to zwykle ta sama karta wysłała żądanie dwa razy, a nie ktoś obcy z ukradzionym tokenem.
+
+Dezaktywacja konta i reset hasła też unieważniają wszystkie jego tokeny. Bez tego wyłączone konto zostawałoby w panelu do końca ważności refresha.
+
+Sam access token to za mało, żeby przejść dalej: przy każdym żądaniu sprawdzane jest, czy konto nadal jest aktywne. Bez tego wyłączone konto pracowałoby jeszcze kwadrans, do wygaśnięcia tokena, który dostało przed wyłączeniem.
+
+### Konta
+
+`users` trzyma `email`, `password_hash`, `is_admin` i `is_active`. Każdy zalogowany widzi wszystkie projekty tej instancji, podziału uprawnień na projekty nie ma.
+
+Hasła idą przez bcrypt z kosztem 12. bcrypt liczy tylko pierwsze 72 bajty, więc dłuższe hasło jest odrzucane przy walidacji zamiast po cichu skracane. Minimum to 12 znaków.
+
+Nieznany adres, złe hasło i konto wyłączone dają identyczne `401` z tym samym opisem. Przy nieznanym adresie i tak liczony jest hash na stałej wartości, żeby czas odpowiedzi nie zdradzał, które konta istnieją.
+
+Pierwsze konto powstaje przy starcie API z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, wyłącznie gdy tabela `users` jest pusta. Skasowany administrator nie wraca więc przy każdym restarcie. Brak którejś ze zmiennych zostawia ostrzeżenie w logu i nie tworzy konta, czyli do panelu nie da się wejść, ale API wstaje.
+
+`POST /users`, `PATCH /users/{id}/deactivate` i `POST /users/{id}/reset-password` są tylko dla `is_admin`. Administrator nie może wyłączyć własnego konta, bo ostatni administrator zamknąłby się na zewnątrz. Ekranu do tego w panelu jeszcze nie ma, konta zakłada się żądaniem.
+
 ## Pliki
 
-Pliki nie trafiają do bazy. Baza trzyma `uri`, plik leży na wolumenie i serwuje go nginx spod `/attachments/` z nagłówkami `Content-Disposition: attachment` oraz `X-Content-Type-Options: nosniff`.
+Pliki nie trafiają do bazy. Baza trzyma `uri`, plik leży na wolumenie, a wydaje go API przez `GET /attachments/{id}/download` po sprawdzeniu tokena. nginx zostaje przy `/widgets/`, bo bundle widgetu musi być publiczny, a załączniki są danymi użytkownika.
 
-nginx nie wystawia na tej ścieżce nagłówków CORS, bo załączniki są danymi użytkownika. Dashboard może je pokazać w `<img>` i podlinkować do pobrania, ale nie odczyta ich treści przez `fetch`, dopóki działa spod innego origin niż nginx.
+`uri` jest lokalizacją pliku po stronie serwera i nie wychodzi już w odpowiedziach API. Klient dostaje `id` załącznika i tylko ono prowadzi do treści.
+
+Ponieważ `Authorization` nie da się dokleić do `<img src>`, dashboard pobiera zrzut zwykłym żądaniem i pokazuje go jako `blob:`. Pozostałe załączniki i log konsoli schodzą z serwera dopiero po kliknięciu, bo inaczej wejście w zgłoszenie ściągałoby do pamięci karty wszystko naraz. Przy przeniesieniu plików do S3 albo Garage ten sam endpoint przestanie streamować i zacznie przekierowywać na podpisany adres, bez zmian po stronie klienta.
 
 Nazwa pliku na dysku to `{uuid}.{rozszerzenie}`. Nazwa podana przez klienta jest trzymana wyłącznie jako metadana i nigdy nie trafia do ścieżki.
 
@@ -337,7 +421,7 @@ Maskowanie ma się odbywać po stronie backendu przed zapisem, dla opisu, adresu
 
 ## CORS
 
-Widget działa na cudzych domenach, więc `POST /tickets` ma osobną politykę dopuszczającą wyłącznie metodę `POST` i nagłówek `Content-Type`. Dashboard ma drugą, szerszą.
+Widget działa na cudzych domenach, więc `POST /tickets` ma osobną politykę dopuszczającą wyłącznie metodę `POST` i nagłówek `Content-Type`. Dashboard ma drugą, szerszą, i jako jedyna dopuszcza ona ciasteczka, bo panel dosyła cookie z tokenem odświeżającym. Polityki widgetu ciasteczek nie przyjmują.
 
 Wysyłka załączników ma trzecią, `widget-upload`, identyczną z polityką widgetu poza dodatkowym nagłówkiem `X-Upload-Token`. Rozdzielenie jest celowe: gdyby obie trasy dzieliły jedną politykę, poszerzenie nagłówków pod załączniki rozluźniłoby przy okazji `POST /tickets`.
 
@@ -356,11 +440,14 @@ Migracja tworzy jeden projekt, żeby dało się cokolwiek wywołać lokalnie.
 
 Origin odpowiada adresowi, pod którym uruchamia się lokalnie widget.
 
+Konto administratora nie jest częścią migracji, bo hash hasła nie jest wartością znaną w czasie kompilacji. Powstaje przy starcie API z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, opis w sekcji `Uwierzytelnianie`.
+
 W środowisku `Development` migracje wykonują się przy starcie API. Poza nim schemat zakłada się przez `make migrate`.
 
 ## Poza zakresem
 
-- uwierzytelnianie w dashboardzie. Pola `author` i `changedBy` przychodzą dziś z ciała żądania, więc można podać się za kogokolwiek. Docelowo mają pochodzić z sesji
+- `author`, `changedBy` i `deletedBy` przychodzą dalej z ciała żądania albo są wpisane na sztywno, więc można podać się za kogokolwiek. Uwierzytelnianie już jest, więc docelowo mają pochodzić z tokena. To osobna zmiana kontraktu `POST /comments`, `PATCH /status` i `DELETE`
+- rate limit na `/auth/login`. Idzie razem z rate limitem na `POST /tickets`, bo to jeden mechanizm
 - systemowe logowanie i audyt poza `sanitization_logs`. Miejsca wpięcia zostawiamy w kodzie, żeby dało się to dopiąć bez przepisywania warstwy
 - odesłanie do sanityzacji i walidacji plików w głównym `README`
 - twarda maszyna stanów przejść między statusami

@@ -4,6 +4,8 @@ using BugShot.Api.Attachments;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,6 +18,15 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 var attachmentsPath = builder.Configuration["Storage:AttachmentsPath"]
     ?? throw new InvalidOperationException("Storage:AttachmentsPath is not configured.");
 
+// bez klucza nie da sie podpisac tokena wiec API ma nie wstac zamiast wstac bez ochrony
+// pusty lapiemy osobno bo compose podaje zmienna bez wartosci domyslnej
+var signingKey = builder.Configuration["JWT_SIGNING_KEY"];
+
+if (string.IsNullOrWhiteSpace(signingKey))
+{
+    throw new InvalidOperationException("JWT_SIGNING_KEY is not configured.");
+}
+
 var widgetOrigins = builder.Configuration.GetSection("Cors:WidgetOrigins").Get<string[]>() ?? [];
 var dashboardOrigins = builder.Configuration.GetSection("Cors:DashboardOrigins").Get<string[]>() ?? [];
 
@@ -27,6 +38,45 @@ attachmentStorage.EnsureWritable();
 
 builder.Services.AddSingleton(attachmentStorage);
 builder.Services.AddOpenApi();
+
+var accessTokens = new AccessTokenIssuer(signingKey);
+
+builder.Services.AddSingleton(accessTokens);
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = accessTokens.ValidationParameters;
+
+        // nazwy claimow zostaja takie jak w tokenie bo mapowanie na typy WS-Federation tylko myli
+        options.MapInboundClaims = false;
+
+        options.Events = new JwtBearerEvents
+        {
+            // token niesie stan konta z chwili logowania wiec bez zajrzenia do bazy
+            // wylaczone konto pracowaloby dalej az do wygasniecia swojego access tokena
+            OnTokenValidated = async context =>
+            {
+                var db = context.HttpContext.RequestServices.GetRequiredService<BugShotDbContext>();
+                var userId = context.Principal!.UserId();
+
+                var active = await db.Users
+                    .AsNoTracking()
+                    .AnyAsync(u => u.Id == userId && u.IsActive, context.HttpContext.RequestAborted);
+
+                if (!active)
+                {
+                    context.Fail("Account is no longer active.");
+                }
+            }
+        };
+    });
+
+// nowy endpoint jest chroniony dopoki sam nie powie inaczej
+builder.Services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder()
+    .RequireAuthenticatedUser()
+    .Build());
 
 // zaplecze Idempotency-Key na POST /tickets. Podmiana na Redis to jedna linia
 builder.Services.AddDistributedMemoryCache();
@@ -52,21 +102,35 @@ builder.Services.AddCors(options =>
         .WithMethods("POST")
         .WithHeaders("Content-Type", UploadToken.HeaderName));
 
+    // panel dosyla cookie z tokenem odswiezajacym wiec sama lista originow tu nie wystarczy
     options.AddPolicy(CorsPolicies.Dashboard, policy => policy
         .WithOrigins(dashboardOrigins)
         .AllowAnyMethod()
-        .AllowAnyHeader());
+        .AllowAnyHeader()
+        .AllowCredentials());
 });
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<BugShotDbContext>();
+
+    if (app.Environment.IsDevelopment())
+    {
+        await db.Database.MigrateAsync();
+    }
+
+    await AdminSeeder.EnsureAdmin(
+        db,
+        app.Configuration,
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(AdminSeeder)));
+}
+
 if (app.Environment.IsDevelopment())
 {
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<BugShotDbContext>();
-    await db.Database.MigrateAsync();
-
-    app.MapOpenApi();
+    // dokument opisuje takze trasy za tokenem wiec sam zostaje otwarty do czasu karty o Swaggerze
+    app.MapOpenApi().AllowAnonymous();
 
     app.UseSwaggerUI(options =>
     {
@@ -78,6 +142,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapControllers();
 
 app.Run();
+
+// testy integracyjne stawiaja te sama aplikacje wiec potrzebuja uchwytu na jej klase startowa
+public partial class Program;

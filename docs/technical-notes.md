@@ -4,13 +4,14 @@ Notatka opisuje trzy elementy dotykające infrastruktury Bug-shot: obecny pipeli
 
 ## CI/CD
 
-Repozytorium ma osobne workflowy dla backendu, frontendu, widgetu i samego repo. Budowanie obrazów Docker dla backendu i frontendu jest wspólne, w postaci reusable workflow `_image.yaml`.
+Repozytorium ma osobne workflowy dla backendu, frontendu, widgetu, testów end to end i samego repo. Budowanie obrazów Docker dla backendu i frontendu jest wspólne, w postaci reusable workflow `_image.yaml`.
 
 ```mermaid
 flowchart LR
     backend["Backend CI"] --> image["_image.yaml"]
     frontend["Frontend CI"] --> image
     widget["Widget CI"]
+    e2e["E2E CI"]
     repo["Repo CI"]
 
     image --> hadolint["Hadolint"]
@@ -19,6 +20,16 @@ flowchart LR
     trivy --> dockle["Dockle"]
     dockle --> ghcr["GHCR"]
 ```
+
+### Warstwy testów
+
+| Warstwa | Gdzie | Czego pilnuje |
+|---|---|---|
+| jednostkowe i kontraktowe | `backend/BugShot.Api.Tests`, `frontend/src/**/*.test.ts` | reguły walidacji, wystawianie tokenów, odnawianie sesji, ponawianie żądania po 401 |
+| integracyjne | `backend/BugShot.Api.Tests` przez `WebApplicationFactory` | cały pipeline razem z autoryzacją, na prawdziwej bazie |
+| end to end | `e2e` | panel w przeglądarce razem z API, załącznikami i cookie |
+
+Uruchomienie lokalne: `make test` dla dwóch pierwszych warstw, `make e2e` dla trzeciej.
 
 ### Backend
 
@@ -31,6 +42,12 @@ Node.js 24. Pipeline uruchamia `npm ci`, potem lint, build i test, a wynik trafi
 ### Widget
 
 Widget jest osobnym artefaktem JS/HTML, bez własnego obrazu Docker. Walidacja to `node --check`, walidacja HTML oraz testy/build zależne od konfiguracji pakietu. Dystrybucja przez NPM i własny CDN jest osobnym etapem, nie częścią głównego pipeline'u aplikacji.
+
+### E2E
+
+Osobny workflow stawia PostgreSQL jako service container, buduje API, instaluje zależności panelu i Chromium, po czym uruchamia Playwrighta. Testy jadą przez prawdziwą przeglądarkę po prawdziwym API, więc łapią rzeczy, których warstwy niżej nie widzą: politykę cookie, guard na trasach i to, czy załącznik faktycznie pojawia się na ekranie.
+
+Testy mają własną bazę i własne porty, więc nie kolidują z `make dev`. Schemat zakłada skrypt `pretest`, bo Playwright startuje serwery zanim wykona `globalSetup`.
 
 ### Repo
 
@@ -48,7 +65,7 @@ To, co jest dzisiaj, to CI plus publikacja obrazu do GHCR. Automatyczne wdrożen
 
 Garage to self-hosted object storage zgodny z API S3. Dla Bug-shot interesujące jest przede wszystkim to, że mówi tym samym protokołem co MinIO (obecny backend developerski) i Cloudflare R2 (potencjalny backend produkcyjny), więc może zostać podłączony do istniejącej warstwy backupu przez konfigurację zmiennych środowiskowych, bez zmiany samej logiki skryptów.
 
-Warto rozróżnić dwie rzeczy, które łatwo pomylić: storage załączników ticketów i storage backupów. Załączniki (screenshoty, logi konsoli, pliki użytkownika) leżą dziś na wolumenie Docker i są serwowane przez nginx spod `/attachments/`, PostgreSQL trzyma tylko `uri`. Garage w to miejsce nie wchodzi, przeniesienie załączników z wolumenu do object storage byłoby osobną integracją (przechowywanie obiektów, pobieranie, uprawnienia, migracja istniejących danych). Garage pasuje do drugiej rzeczy, czyli warstwy backupowej opisanej w `docs/backup.md`.
+Warto rozróżnić dwie rzeczy, które łatwo pomylić: storage załączników ticketów i storage backupów. Załączniki (screenshoty, logi konsoli, pliki użytkownika) leżą dziś na wolumenie Docker, wydaje je API po sprawdzeniu tokena, a PostgreSQL trzyma tylko `uri`. Garage w to miejsce nie wchodzi, przeniesienie załączników z wolumenu do object storage byłoby osobną integracją (przechowywanie obiektów, pobieranie, uprawnienia, migracja istniejących danych). Garage pasuje do drugiej rzeczy, czyli warstwy backupowej opisanej w `docs/backup.md`.
 
 ```mermaid
 flowchart LR
