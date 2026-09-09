@@ -1,3 +1,4 @@
+using System.Net.Mime;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
@@ -13,11 +14,15 @@ namespace BugShot.Api.Controllers;
 [Route("api/v1/users")]
 [EnableCors(CorsPolicies.Dashboard)]
 [Authorize(Roles = AccessTokenIssuer.AdminRole)]
+[Produces(MediaTypeNames.Application.Json)]
 public class UsersController(BugShotDbContext db) : ControllerBase
 {
+    /// <summary>Zwraca wszystkie konta panelu.</summary>
+    /// <remarks>Tylko dla administratora.</remarks>
     // lista bez paginacji bo konta zaklada admin recznie i jest ich tyle co osob w zespole
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<UserResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IReadOnlyList<UserResponse>>> GetList(CancellationToken cancellationToken)
     {
@@ -30,9 +35,12 @@ public class UsersController(BugShotDbContext db) : ControllerBase
         return Ok(users);
     }
 
+    /// <summary>Zaklada konto panelu.</summary>
+    /// <remarks>Tylko dla administratora. Zajety adres konczy sie na 409.</remarks>
     [HttpPost]
     [ProducesResponseType<UserResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<UserResponse>> Create(
@@ -63,8 +71,14 @@ public class UsersController(BugShotDbContext db) : ControllerBase
         return Created((string?)null, AuthController.Describe(user));
     }
 
+    /// <summary>Wylacza konto i zamyka jego sesje.</summary>
+    /// <remarks>
+    /// Tylko dla administratora. Wlasnego konta wylaczyc nie mozna wiec taka proba konczy sie na 409.
+    /// Konto traci dostep od razu a nie po wygasnieciu swojego access tokena.
+    /// </remarks>
     [HttpPatch("{id:guid}/deactivate")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -95,9 +109,12 @@ public class UsersController(BugShotDbContext db) : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Ustawia nowe haslo konta.</summary>
+    /// <remarks>Tylko dla administratora. Zmiana hasla zamyka wszystkie sesje konta.</remarks>
     [HttpPost("{id:guid}/reset-password")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ResetPassword(
