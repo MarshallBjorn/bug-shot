@@ -1,3 +1,4 @@
+using System.Net.Mime;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
@@ -10,11 +11,28 @@ namespace BugShot.Api.Controllers;
 [ApiController]
 [Route("api/v1/projects/{projectId:guid}/tickets")]
 [EnableCors(CorsPolicies.Dashboard)]
+[Produces(MediaTypeNames.Application.Json)]
 public class ProjectTicketsController(BugShotDbContext db) : ControllerBase
 {
     private const int MaxPageSize = 100;
 
+    /// <summary>Zwraca strone listy zgloszen projektu.</summary>
+    /// <remarks>
+    /// Bez podanego statusu lista pomija tickety skasowane. Jawne status=Deleted je zwroci.
+    /// Szukanie idzie po opisie i adresie strony bez rozroznienia wielkosci liter.
+    /// Sortowanie przyjmuje receivedAt:desc receivedAt:asc reportedAt:desc i reportedAt:asc.
+    /// Nierozpoznana wartosc wpada w domyslne receivedAt:desc.
+    /// </remarks>
+    /// <param name="projectId">Projekt ktorego dotyczy lista.</param>
+    /// <param name="cancellationToken">Token anulowania zadania.</param>
+    /// <param name="status">Filtr statusu. Pusty pomija tombstone.</param>
+    /// <param name="search">Fraza szukana w opisie i adresie strony.</param>
+    /// <param name="sort">Kolejnosc listy.</param>
+    /// <param name="page">Numer strony liczony od 1.</param>
+    /// <param name="pageSize">Rozmiar strony przycinany do 100.</param>
     [HttpGet]
+    [ProducesResponseType<PagedResult<TicketListItem>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<PagedResult<TicketListItem>>> GetList(
         Guid projectId,
         CancellationToken cancellationToken,

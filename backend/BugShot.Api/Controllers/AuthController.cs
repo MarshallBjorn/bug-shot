@@ -1,3 +1,4 @@
+using System.Net.Mime;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
@@ -12,6 +13,7 @@ namespace BugShot.Api.Controllers;
 [ApiController]
 [Route("api/v1/auth")]
 [EnableCors(CorsPolicies.Dashboard)]
+[Produces(MediaTypeNames.Application.Json)]
 public class AuthController(
     BugShotDbContext db,
     AccessTokenIssuer tokens,
@@ -20,6 +22,11 @@ public class AuthController(
     // powtorka tego samego zadania z panelu nie jest jeszcze kradzieza tokena
     private static readonly TimeSpan ReuseGrace = TimeSpan.FromSeconds(30);
 
+    /// <summary>Otwiera sesje panelu.</summary>
+    /// <remarks>
+    /// Zwraca access token na kwadrans i doklada cookie z tokenem odswiezajacym na tydzien.
+    /// Nieznany adres zle haslo i wylaczone konto koncza sie ta sama odpowiedzia 401.
+    /// </remarks>
     [HttpPost("login")]
     [AllowAnonymous]
     [ProducesResponseType<AccessTokenResponse>(StatusCodes.Status200OK)]
@@ -48,6 +55,10 @@ public class AuthController(
         return await IssueSession(user, cancellationToken);
     }
 
+    /// <summary>Wymienia cookie z tokenem odswiezajacym na nowy access token.</summary>
+    /// <remarks>
+    /// Token odswiezajacy rotuje przy kazdym uzyciu. Podany drugi raz zamyka wszystkie sesje konta.
+    /// </remarks>
     [HttpPost("refresh")]
     [AllowAnonymous]
     [ProducesResponseType<AccessTokenResponse>(StatusCodes.Status200OK)]
@@ -109,6 +120,7 @@ public class AuthController(
         return await IssueSession(user, cancellationToken);
     }
 
+    /// <summary>Zamyka sesje i czysci cookie.</summary>
     [HttpPost("logout")]
     // wylogowanie ma dzialac takze z wygaslym access tokenem wiec liczy sie samo cookie
     [AllowAnonymous]
@@ -132,6 +144,8 @@ public class AuthController(
         return NoContent();
     }
 
+    /// <summary>Zwraca konto z biezacego tokena.</summary>
+    /// <remarks>Konto wylaczone w trakcie zycia tokena dostaje 401 bez czekania na jego wygasniecie.</remarks>
     [HttpGet("me")]
     [ProducesResponseType<UserResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
