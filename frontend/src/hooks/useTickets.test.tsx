@@ -1,5 +1,6 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TicketEvent } from '../live/ticketEvents'
 import { defaultLimit, type TicketQuery } from '../ticketQuery'
 import type { CursorPage, TicketListItem } from '../types'
 import { useTickets } from './useTickets'
@@ -11,7 +12,7 @@ const query: TicketQuery = {
   limit: defaultLimit,
 }
 
-function ticket(id: string): TicketListItem {
+function ticket(id: string, patch: Partial<TicketListItem> = {}): TicketListItem {
   return {
     id,
     description: `Zgloszenie ${id}`,
@@ -20,6 +21,7 @@ function ticket(id: string): TicketListItem {
     reportedAt: null,
     receivedAt: '2026-09-09T10:00:00+00:00',
     updatedAt: '2026-09-09T10:00:00+00:00',
+    ...patch,
   }
 }
 
@@ -28,7 +30,7 @@ function page(
   nextCursor: string | null,
   total: number | null = null,
 ): CursorPage<TicketListItem> {
-  return { items: ids.map(ticket), nextCursor, total }
+  return { items: ids.map((id) => ticket(id)), nextCursor, total }
 }
 
 function respond(body: unknown) {
@@ -38,6 +40,9 @@ function respond(body: unknown) {
   })
 }
 
+const zdarzenie: TicketEvent = { type: 'created', ticket: ticket('nowe') }
+const zmiana: TicketEvent = { type: 'changed', ticket: ticket('a', { status: 'Resolved' }) }
+
 function Probe({ projectId = 'p1', filter = query }: { projectId?: string; filter?: TicketQuery }) {
   const tickets = useTickets(projectId, filter)
 
@@ -45,9 +50,19 @@ function Probe({ projectId = 'p1', filter = query }: { projectId?: string; filte
     <div>
       <p>{tickets.loading ? 'ladowanie' : 'gotowe'}</p>
       <p>{tickets.items.map((item) => item.id).join(',') || 'pusto'}</p>
+      <p>{tickets.items.map((item) => `${item.id}:${item.status}`).join(',') || 'brak statusow'}</p>
       <p>{tickets.hasMore ? 'jest wiecej' : 'koniec'}</p>
       <button type="button" onClick={tickets.loadMore}>
         wiecej
+      </button>
+      <button type="button" onClick={() => tickets.apply(zdarzenie)}>
+        event
+      </button>
+      <button type="button" onClick={() => tickets.apply(zmiana)}>
+        zmiana
+      </button>
+      <button type="button" onClick={tickets.reload}>
+        odswiez
       </button>
     </div>
   )
@@ -185,5 +200,52 @@ describe('lista zgloszen na kursorze', () => {
 
     await waitFor(() => expect(screen.getByText('nowe')).toBeDefined())
     expect(screen.queryByText('stare')).toBeNull()
+  })
+
+  it('event ktory przyszedl w trakcie pierwszego ladowania nie ginie pod odpowiedzia GET-a', async () => {
+    let wypusc: () => void = () => {}
+
+    fetched.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        wypusc = () => resolve(respond(page(['a'], null)))
+      }),
+    )
+
+    render(<Probe />)
+
+    await waitFor(() => expect(fetched).toHaveBeenCalledTimes(1))
+
+    // event SignalR przychodzi zanim GET zdazyl wrocic
+    screen.getByRole('button', { name: 'event' }).click()
+
+    wypusc()
+
+    await waitFor(() => expect(screen.getByText('nowe,a')).toBeDefined())
+  })
+
+  it('event ktory przyszedl w trakcie odswiezania nie ginie pod odpowiedzia GET-a', async () => {
+    let wypusc: () => void = () => {}
+
+    fetched.mockResolvedValueOnce(respond(page(['a'], null)))
+    fetched.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        wypusc = () => resolve(respond(page(['a'], null)))
+      }),
+    )
+
+    render(<Probe />)
+
+    await waitFor(() => expect(screen.getByText('a')).toBeDefined())
+
+    screen.getByRole('button', { name: 'odswiez' }).click()
+
+    await waitFor(() => expect(fetched).toHaveBeenCalledTimes(2))
+
+    // zmiana statusu przychodzi kanalem live w trakcie odswiezania listy
+    screen.getByRole('button', { name: 'zmiana' }).click()
+
+    wypusc()
+
+    await waitFor(() => expect(screen.getByText('a:Resolved')).toBeDefined())
   })
 })

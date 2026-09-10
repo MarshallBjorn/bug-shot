@@ -23,19 +23,45 @@ export function useTickets(projectId: string, query: TicketQuery): Tickets {
   const inFlight = useRef<AbortController | null>(null)
   const shown = useRef(projectId)
 
+  // strona bez kursora podmienia liste w calosci, wiec event ktory przyszedl
+  // w trakcie GET-a trzeba odtworzyc dopiero na swiezych danych
+  const pendingLiveEvents = useRef<TicketEvent[]>([])
+  const awaitingFreshLoad = useRef(false)
+
   const fetchPage = useCallback(
     (cursor: string | null) => {
       const started = attempt.current
       const controller = new AbortController()
       inFlight.current = controller
 
+      if (cursor === null) {
+        awaitingFreshLoad.current = true
+        pendingLiveEvents.current = []
+      }
+
       getTickets(projectId, query, cursor, controller.signal)
         .then((page) => {
           if (started !== attempt.current) return
-          dispatch({ type: 'loaded', page, append: cursor !== null })
+
+          if (cursor === null) {
+            const toReplay = pendingLiveEvents.current
+            pendingLiveEvents.current = []
+            awaitingFreshLoad.current = false
+
+            dispatch({ type: 'loaded', page, append: false })
+            toReplay.forEach((event) => dispatch({ type: 'live', event, query }))
+          } else {
+            dispatch({ type: 'loaded', page, append: true })
+          }
         })
         .catch((cause: Error) => {
           if (started !== attempt.current || controller.signal.aborted) return
+
+          if (cursor === null) {
+            pendingLiveEvents.current = []
+            awaitingFreshLoad.current = false
+          }
+
           dispatch({ type: 'failed', message: cause.message })
         })
     },
@@ -69,7 +95,13 @@ export function useTickets(projectId: string, query: TicketQuery): Tickets {
   }, [fetchPage, nextCursor, loading, loadingMore])
 
   const apply = useCallback(
-    (event: TicketEvent) => dispatch({ type: 'live', event, query }),
+    (event: TicketEvent) => {
+      if (awaitingFreshLoad.current) {
+        pendingLiveEvents.current.push(event)
+      }
+
+      dispatch({ type: 'live', event, query })
+    },
     [query],
   )
 
