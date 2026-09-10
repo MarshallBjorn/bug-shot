@@ -46,6 +46,13 @@ export interface TicketDetails {
   statusHistory: TicketStatusChange[]
 }
 
+export interface TicketComment {
+  id: string
+  author: string
+  body: string
+  createdAt: string
+}
+
 export interface PagedResult<T> {
   items: T[]
   total: number
