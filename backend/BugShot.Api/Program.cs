@@ -34,6 +34,8 @@ var dashboardOrigins = builder.Configuration.GetSection("Cors:DashboardOrigins")
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
+builder.Services.AddHealthChecks();
+
 var attachmentStorage = new AttachmentStorageOptions(attachmentsPath);
 attachmentStorage.EnsureWritable();
 
@@ -124,10 +126,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<BugShotDbContext>();
 
-    if (app.Environment.IsDevelopment())
-    {
-        await db.Database.MigrateAsync();
-    }
+    await db.Database.MigrateAsync();
 
     await AdminSeeder.EnsureAdmin(
         db,
@@ -159,6 +158,7 @@ if (openApiAccess is not null)
 
 app.UseCors();
 
+app.MapHealthChecks("/healthz").AllowAnonymous();;
 app.UseAuthentication();
 app.UseAuthorization();
 

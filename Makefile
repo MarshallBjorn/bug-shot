@@ -6,13 +6,13 @@
 .PHONY: dev dev-d down logs config migrate test test-backend test-frontend e2e backup-pg backup-media cleanup restore-test
 
 ENV_FILE ?= .env
-COMPOSE = docker compose --env-file $(ENV_FILE) -f docker-compose.dev.yml
+COMPOSE = docker compose --env-file $(ENV_FILE) -f docker-compose.yml
 
 dev:
 	$(COMPOSE) up --build
 
 dev-d:
-	$(COMPOSE) up -d
+	$(COMPOSE) up --build -d
 
 down:
 	$(COMPOSE) down
@@ -85,7 +85,7 @@ _check-service:
 	    echo "SERVICE required <backend|frontend|wiget>"; exit 1; fi
 
 image-lint: _check-service
-	docker run --rm -i $(HADOLINT_IMAGE) < $(SERVICE)/Dockerfile
+	docker run --rm -v $(CURDIR)/.hadolint.yaml:/.hadolint.yaml -i $(HADOLINT_IMAGE) < $(SERVICE)/Dockerfile
 
 image-build: _check-service
 	docker build -t $(IMAGE) $(SERVICE)
