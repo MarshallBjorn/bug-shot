@@ -1,4 +1,4 @@
-import type { TicketStatus } from './types'
+import type { TicketListItem, TicketStatus } from './types'
 
 export const ticketStatuses: TicketStatus[] = ['New', 'InProgress', 'Resolved', 'Rejected', 'Deleted']
 
@@ -12,16 +12,15 @@ export const ticketSorts = [
 export type TicketSort = (typeof ticketSorts)[number]
 
 export const defaultSort: TicketSort = 'receivedAt:desc'
-export const defaultPageSize = 20
+export const defaultLimit = 20
 
-const maxPageSize = 100
+const maxLimit = 100
 
 export interface TicketQuery {
   status: TicketStatus | null
   search: string
   sort: TicketSort
-  page: number
-  pageSize: number
+  limit: number
 }
 
 function parseNumber(value: string | null, fallback: number) {
@@ -37,13 +36,12 @@ export function parseTicketQuery(params: URLSearchParams): TicketQuery {
     status: ticketStatuses.find((candidate) => candidate === status) ?? null,
     search: params.get('search')?.trim() ?? '',
     sort: ticketSorts.find((candidate) => candidate === sort) ?? defaultSort,
-    page: parseNumber(params.get('page'), 1),
     // te same granice co w ProjectTicketsController żeby adres nie kłamał o tym co przyjdzie
-    pageSize: Math.min(parseNumber(params.get('pageSize'), defaultPageSize), maxPageSize),
+    limit: Math.min(parseNumber(params.get('limit'), defaultLimit), maxLimit),
   }
 }
 
-// sortowanie i numer strony nie zmieniają tego co pasuje więc nie liczą się jako filtr
+// sortowanie nie zmienia tego co pasuje więc nie liczy się jako filtr
 export function isFiltered(query: TicketQuery) {
   return query.status !== null || query.search !== ''
 }
@@ -55,8 +53,23 @@ export function ticketQueryToParams(query: TicketQuery): URLSearchParams {
   if (query.status) params.set('status', query.status)
   if (query.search) params.set('search', query.search)
   if (query.sort !== defaultSort) params.set('sort', query.sort)
-  if (query.page !== 1) params.set('page', String(query.page))
-  if (query.pageSize !== defaultPageSize) params.set('pageSize', String(query.pageSize))
+  if (query.limit !== defaultLimit) params.set('limit', String(query.limit))
 
   return params
+}
+
+// te same reguły co filtr w zapytaniu, żeby zgłoszenie z kanału live nie wpadło na listę,
+// na której nie ma prawa się znaleźć
+export function matchesQuery(item: TicketListItem, query: TicketQuery) {
+  // bez wybranego statusu lista pomija tombstone tak samo jak API
+  const statusMatches = query.status ? item.status === query.status : item.status !== 'Deleted'
+
+  if (!statusMatches) return false
+  if (query.search === '') return true
+
+  const phrase = query.search.toLowerCase()
+
+  return (
+    item.description.toLowerCase().includes(phrase) || item.pageUrl.toLowerCase().includes(phrase)
+  )
 }
