@@ -48,6 +48,13 @@ public class AuthEndpointsTests : IDisposable
     {
         client.Dispose();
         factory.Dispose();
+
+        // konta z testow zostawione w bazie blokuja seed admina przy nastepnym starcie API
+        using (var db = OpenContext())
+        {
+            db.Users.ExecuteDelete();
+        }
+
         Directory.Delete(attachmentsPath, recursive: true);
         GC.SuppressFinalize(this);
     }

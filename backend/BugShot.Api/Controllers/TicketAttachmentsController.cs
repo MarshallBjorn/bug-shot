@@ -1,3 +1,4 @@
+using System.Net.Mime;
 using System.Text;
 using BugShot.Api.Sanitization;
 using BugShot.Api.Attachments;
@@ -16,15 +17,24 @@ namespace BugShot.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/tickets/{ticketId:guid}/attachments")]
+[Produces(MediaTypeNames.Application.Json)]
 public class TicketAttachmentsController(
     BugShotDbContext db,
     AttachmentStorageOptions storage,
     ISanitizationService sanitization) : ControllerBase
 {
+    /// <summary>Przyjmuje zalaczniki do zgloszenia.</summary>
+    /// <remarks>
+    /// Multipart z polami screenshot files i consoleLog. Kazde jest opcjonalne ale puste zadanie
+    /// konczy sie na 400. Autoryzuje jednorazowy uploadToken z odpowiedzi POST /tickets podany
+    /// w naglowku X-Upload-Token. Token dziala raz i tylko dla swojego zgloszenia.
+    /// Typ pliku jest sprawdzany po zawartosci a nie po nazwie ani naglowku.
+    /// </remarks>
     [HttpPost]
     // wysylka z widgetu autoryzuje sie jednorazowym uploadToken a nie tokenem sesji
     [AllowAnonymous]
     [EnableCors(CorsPolicies.WidgetUpload)]
+    [Consumes(MediaTypeNames.Multipart.FormData)]
     [RequestSizeLimit(AttachmentLimits.MaxRequestBytes)]
     [DisableFormValueModelBinding]
     [ProducesResponseType<IReadOnlyList<TicketAttachmentResponse>>(StatusCodes.Status201Created)]

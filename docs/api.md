@@ -2,7 +2,7 @@
 
 Dokument opisuje model danych, konwencje i decyzje projektowe. Powstał na bazie wstępnej specyfikacji uzgodnionej w zespole, uzupełnionej o to, co wyszło przy implementacji szkieletu backendu.
 
-Dokładne kształty żądań i odpowiedzi generują się z kontrolerów i są dostępne pod `/openapi/v1.json`. Dokument produkuje wbudowane OpenAPI z .NET 10. Interfejsu do klikania na razie nie ma, jest sam dokument.
+Dokładne kształty żądań i odpowiedzi generują się z kontrolerów i są dostępne pod `/openapi/v1.json`, a do klikania jest Swagger UI pod `/swagger`. Dokument produkuje wbudowane OpenAPI z .NET 10, opisy tras biorą się z komentarzy XML przy akcjach. Zasady dostępu do obu adresów opisuje [Dokument OpenAPI](#dokument-openapi).
 
 ## Model danych
 
@@ -138,6 +138,8 @@ JSON w API używa `camelCase`. Warstwy są niezależne, więc kolumna `page_url`
 | `attachment_kind` | `screenshot`, `user_upload`, `console_log` | `Screenshot`, `UserUpload`, `ConsoleLog` |
 
 Dodanie nowej wartości wymaga migracji z `ALTER TYPE ... ADD VALUE`. Zmiana nazwy istniejącej jest kosztowniejsza i wymaga osobnej migracji.
+
+Postać w JSON bierze się z atrybutu `JsonConverter` przy samym typie, a nie z globalnej konfiguracji serializacji. Ustawiona globalnie zmieniała tylko serializację i zostawiała w dokumencie OpenAPI liczbę zamiast nazwy, więc dokument obiecywał coś innego niż API odsyłało.
 
 ### Indeksy
 
@@ -352,7 +354,7 @@ Bez tokena działa dokładnie pięć tras:
 - `POST /tickets` i `POST /tickets/{id}/attachments`, bo woła je widget z cudzej domeny i nie ma skąd wziąć konta. Chroni je `projectKey`, `Origin` i jednorazowy `uploadToken`
 - `/auth/login`, `/auth/refresh` i `/auth/logout`, bo to jest właśnie zakładanie i zamykanie sesji. Wylogowanie jest anonimowe celowo, żeby działało też z wygasłym access tokenem
 
-Poza tą listą otwarty jest jeszcze dokument OpenAPI pod `/openapi/v1.json`, ale wyłącznie w środowisku `Development`.
+Poza tą listą otwarte są jeszcze `/openapi/v1.json` i `/swagger`, ale wyłącznie w środowisku `Development`. Poza nim rządzi się tym, co niżej.
 
 ### Tokeny
 
@@ -390,6 +392,25 @@ Nieznany adres, złe hasło i konto wyłączone dają identyczne `401` z tym sam
 Pierwsze konto powstaje przy starcie API z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, wyłącznie gdy tabela `users` jest pusta. Skasowany administrator nie wraca więc przy każdym restarcie. Brak którejś ze zmiennych zostawia ostrzeżenie w logu i nie tworzy konta, czyli do panelu nie da się wejść, ale API wstaje.
 
 `POST /users`, `PATCH /users/{id}/deactivate` i `POST /users/{id}/reset-password` są tylko dla `is_admin`. Administrator nie może wyłączyć własnego konta, bo ostatni administrator zamknąłby się na zewnątrz. Ekranu do tego w panelu jeszcze nie ma, konta zakłada się żądaniem.
+
+## Dokument OpenAPI
+
+Dokument stoi pod `/openapi/v1.json`, Swagger UI pod `/swagger`. Oba adresy są anonimowe względem tokena panelu, bo Swagger UI jest zwykłą stroną w przeglądarce, a access token żyje w pamięci karty panelu i nie ma jak trafić do żądania o dokument.
+
+Zamiast tokena pilnuje ich basic auth po stronie API, a nie proxy, bo port backendu bywa wystawiony bezpośrednio i wtedy reguła na proxy niczego nie chroni.
+
+| Środowisko | `SWAGGER_ENABLED` | Zachowanie |
+|---|---|---|
+| `Development` | puste albo `true` | oba adresy otwarte, bez hasła |
+| `Development` | `false` | oba adresy zamknięte |
+| inne | puste albo `false` | oba adresy zamknięte |
+| inne | `true` | oba adresy za basic auth z `SWAGGER_USER` i `SWAGGER_PASSWORD` |
+
+Włączony dokument bez tej pary zatrzymuje start API. Cichy dokument bez hasła byłby gorszy niż API, które nie wstało.
+
+Zamknięte adresy odpowiadają `401`, tak samo jak każda inna nieznana trasa tego API. Bierze się to z `FallbackPolicy`, która obejmuje też żądania bez dopasowanego endpointu, więc mapa tras nie wycieka przez różnicę między `401` a `404`.
+
+Opisy tras w dokumencie biorą się z komentarzy XML przy akcjach kontrolerów, a nie z osobnego pliku. Schemat `bearerAuth` jest w dokumencie, więc przycisk `Authorize` w UI przyjmuje access token z `POST /auth/login` i chronione trasy da się wyklikać. Trasy widgetu i endpointy sesji są w dokumencie oznaczone jako otwarte, bo działają bez konta.
 
 ## Pliki
 

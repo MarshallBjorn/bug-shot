@@ -1,3 +1,4 @@
+using System.Net.Mime;
 using BugShot.Api.Attachments;
 using BugShot.Api.Data;
 using Microsoft.AspNetCore.Cors;
@@ -12,7 +13,14 @@ namespace BugShot.Api.Controllers;
 [EnableCors(CorsPolicies.Dashboard)]
 public class AttachmentsController(BugShotDbContext db, AttachmentStorageOptions storage) : ControllerBase
 {
+    /// <summary>Pobiera zalacznik zgloszenia.</summary>
+    /// <remarks>
+    /// Jedyna droga do plikow. nginx ich nie serwuje wiec bez tokena nie ma jak ich odczytac.
+    /// Odpowiedz nie trafia do cache wspoldzielonego.
+    /// </remarks>
     [HttpGet("{id:guid}/download")]
+    // typ konkretnego pliku znany jest dopiero przy odpowiedzi wiec dokument opisuje same bajty
+    [Produces(MediaTypeNames.Application.Octet)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

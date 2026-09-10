@@ -1,3 +1,4 @@
+using System.Net.Mime;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -18,6 +19,7 @@ namespace BugShot.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/tickets")]
+[Produces(MediaTypeNames.Application.Json)]
 public class TicketsController(
     BugShotDbContext db,
     AttachmentStorageOptions storage,
@@ -28,6 +30,12 @@ public class TicketsController(
     private const string IdempotencyKeyHeader = "Idempotency-Key";
     private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromHours(24);
 
+    /// <summary>Przyjmuje zgloszenie z widgetu.</summary>
+    /// <remarks>
+    /// Zwraca jednorazowy uploadToken do wysylki zalacznikow.
+    /// Naglowek Origin musi byc na liscie originow projektu.
+    /// Idempotency-Key trzyma wynik przez dobe. Ten sam klucz z innym cialem konczy sie na 409.
+    /// </remarks>
     [HttpPost]
     // widget zglasza z cudzej domeny i nie ma skad wziac tokena wiec chroni go Origin i projectKey
     [AllowAnonymous]
@@ -157,9 +165,12 @@ public class TicketsController(
             new CreatedTicketResponse(ticket.Id, uploadToken, expiresAt));
     }
 
+    /// <summary>Zwraca zgloszenie razem z zalacznikami i historia statusow.</summary>
+    /// <remarks>Skasowane zgloszenie odpowiada 200 ze statusem Deleted i pustymi polami.</remarks>
     [HttpGet("{id:guid}")]
     [EnableCors(CorsPolicies.Dashboard)]
     [ProducesResponseType<TicketDetails>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TicketDetails>> GetById(
         Guid id,
@@ -213,10 +224,13 @@ public class TicketsController(
         return ticket is null ? NotFound() : Ok(ticket);
     }
 
+    /// <summary>Dopisuje komentarz do zgloszenia.</summary>
+    /// <remarks>Skasowane zgloszenie konczy sie na 409 bo nie ma juz czego komentowac.</remarks>
     [HttpPost("{id:guid}/comments")]
     [EnableCors(CorsPolicies.Dashboard)]
     [ProducesResponseType<TicketCommentResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<TicketCommentResponse>> AddComment(
@@ -260,9 +274,15 @@ public class TicketsController(
                 comment.CreatedAt));
     }
 
+    /// <summary>Zwraca strone komentarzy zgloszenia.</summary>
+    /// <param name="id">Zgloszenie ktorego dotycza komentarze.</param>
+    /// <param name="cancellationToken">Token anulowania zadania.</param>
+    /// <param name="page">Numer strony liczony od 1.</param>
+    /// <param name="pageSize">Rozmiar strony przycinany do 100.</param>
     [HttpGet("{id:guid}/comments")]
     [EnableCors(CorsPolicies.Dashboard)]
     [ProducesResponseType<PagedResult<TicketCommentResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PagedResult<TicketCommentResponse>>> GetComments(
         Guid id,
@@ -307,9 +327,15 @@ public class TicketsController(
             pageSize));
     }
 
+    /// <summary>Kasuje zgloszenie zostawiajac tombstone.</summary>
+    /// <remarks>
+    /// Czysci opis adres strony dane przegladarki i komentarze oraz usuwa pliki z wolumenu.
+    /// Wiersz zostaje ze statusem Deleted wiec drugie kasowanie tez konczy sie na 204.
+    /// </remarks>
     [HttpDelete("{id:guid}")]
     [EnableCors(CorsPolicies.Dashboard)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(
         Guid id,
@@ -394,10 +420,17 @@ public class TicketsController(
         return NoContent();
     }
 
+    /// <summary>Zmienia status zgloszenia.</summary>
+    /// <remarks>
+    /// Wymaga naglowka If-Match z rowVersion z ostatniego odczytu. Brak naglowka konczy sie na 428.
+    /// Nieaktualna wersja konczy sie na 409 i niczego nie zapisuje.
+    /// Kazda zmiana zostawia wpis w historii statusow.
+    /// </remarks>
     [HttpPatch("{id:guid}/status")]
     [EnableCors(CorsPolicies.Dashboard)]
     [ProducesResponseType<TicketStatusResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
