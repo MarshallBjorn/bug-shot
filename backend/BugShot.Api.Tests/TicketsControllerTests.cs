@@ -100,7 +100,8 @@ public class TicketsControllerTests
         };
     }
 
-    private static UpdateTicketStatusRequest StatusRequest(TicketStatus status) => new(status, "bartek");
+    private static UpdateTicketStatusRequest StatusRequest(TicketStatus status) =>
+        new(status, "bartek");
 
     private static async Task<Ticket> NewTicket(BugShotDbContext db)
     {
@@ -124,14 +125,22 @@ public class TicketsControllerTests
         return ticket;
     }
 
-    private static string RowVersion(Ticket ticket) => Convert.ToBase64String(ticket.RowVersion);
+    private static string RowVersion(Ticket ticket) =>
+        Convert.ToBase64String(ticket.RowVersion);
 
     private static IDistributedCache NewCache() =>
-        new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        new MemoryDistributedCache(
+            Options.Create(new MemoryDistributedCacheOptions()));
 
-    private static async Task<Project> CreateProjectWithoutOrigins(BugShotDbContext db)
+    private static async Task<Project> CreateProjectWithoutOrigins(
+        BugShotDbContext db)
     {
-        var project = new Project { Name = "Bez originow", Key = $"bez-originow-{Guid.NewGuid():N}" };
+        var project = new Project
+        {
+            Name = "Bez originow",
+            Key = $"bez-originow-{Guid.NewGuid():N}"
+        };
+
         db.Projects.Add(project);
         await db.SaveChangesAsync();
 
@@ -142,15 +151,23 @@ public class TicketsControllerTests
     public async Task ZgloszenieZnanegoProjektuJestZapisywane()
     {
         using var db = NewContext();
-        var project = await db.Projects.SingleAsync(p => p.Key == "demo");
+
+        var project = await db.Projects
+            .SingleAsync(p => p.Key == "demo");
+
         var controller = NewController(db);
 
-        var result = await controller.Create(Request("demo"), CancellationToken.None);
+        var result = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
 
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(created.Value);
+
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            created.Value);
 
         var ticket = await db.Tickets.SingleAsync();
+
         Assert.Equal(payload.Id, ticket.Id);
         Assert.Equal(project.Id, ticket.ProjectId);
         Assert.Equal(TicketStatus.New, ticket.Status);
@@ -162,9 +179,12 @@ public class TicketsControllerTests
         using var db = NewContext();
         var controller = NewController(db);
 
-        await controller.Create(Request("demo"), CancellationToken.None);
+        await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
 
         var ticket = await db.Tickets.SingleAsync();
+
         Assert.NotEqual(default, ticket.CreatedAt);
         Assert.Equal(ticket.CreatedAt, ticket.UpdatedAt);
     }
@@ -175,7 +195,9 @@ public class TicketsControllerTests
         using var db = NewContext();
         var controller = NewController(db);
 
-        var result = await controller.Create(Request("nie-istnieje"), CancellationToken.None);
+        var result = await controller.Create(
+            Request("nie-istnieje"),
+            CancellationToken.None);
 
         Assert.IsType<ObjectResult>(result.Result);
         Assert.False(controller.ModelState.IsValid);
@@ -188,7 +210,9 @@ public class TicketsControllerTests
         using var db = NewContext();
         var controller = NewController(db);
 
-        var result = await controller.GetById(Guid.NewGuid(), CancellationToken.None);
+        var result = await controller.GetById(
+            Guid.NewGuid(),
+            CancellationToken.None);
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
@@ -200,9 +224,15 @@ public class TicketsControllerTests
         var storage = NewStorage();
         var controller = NewController(db, storage: storage);
 
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
+
+        var ticket = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
+
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            ticket.Value);
 
         var deleteResult = await controller.Delete(
             payload.Id,
@@ -212,15 +242,27 @@ public class TicketsControllerTests
 
         var result = await controller.AddComment(
             payload.Id,
-            new CreateTicketCommentRequest("tester", "Komentarz po usunięciu"),
+            new CreateTicketCommentRequest(
+                "tester",
+                "Komentarz po usunięciu"),
             CancellationToken.None);
 
         var problem = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status409Conflict, problem.StatusCode);
 
-        var details = Assert.IsType<ProblemDetails>(problem.Value);
-        Assert.Equal(TicketStatus.Deleted, details.Extensions["currentStatus"]);
-        Assert.False(await db.TicketComments.AnyAsync(c => c.TicketId == payload.Id));
+        Assert.Equal(
+            StatusCodes.Status409Conflict,
+            problem.StatusCode);
+
+        var details = Assert.IsType<ProblemDetails>(
+            problem.Value);
+
+        Assert.Equal(
+            TicketStatus.Deleted,
+            details.Extensions["currentStatus"]);
+
+        Assert.False(
+            await db.TicketComments
+                .AnyAsync(c => c.TicketId == payload.Id));
     }
 
     [Fact]
@@ -230,21 +272,33 @@ public class TicketsControllerTests
         var storage = NewStorage();
         var controller = NewController(db, storage: storage);
 
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
+
+        var ticket = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
+
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            ticket.Value);
 
         var result = await controller.AddComment(
             payload.Id,
-            new CreateTicketCommentRequest("tester", "Pierwszy komentarz"),
+            new CreateTicketCommentRequest(
+                "tester",
+                "Pierwszy komentarz"),
             CancellationToken.None);
 
-        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var created = Assert.IsType<CreatedAtActionResult>(
+            result.Result);
 
-        Assert.Equal(nameof(TicketsController.GetComments), created.ActionName);
+        Assert.Equal(
+            nameof(TicketsController.GetComments),
+            created.ActionName);
 
         var routeValues = created.RouteValues
-            ?? throw new Xunit.Sdk.XunitException("CreatedAtAction nie zawiera RouteValues.");
+            ?? throw new Xunit.Sdk.XunitException(
+                "CreatedAtAction nie zawiera RouteValues.");
 
         Assert.Equal(payload.Id, routeValues["id"]);
     }
@@ -256,11 +310,18 @@ public class TicketsControllerTests
         var storage = NewStorage();
         var controller = NewController(db, storage: storage);
 
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
 
-        const string fileName = "missing-directory-attachment.png";
+        var ticket = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
+
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            ticket.Value);
+
+        const string fileName =
+            "missing-directory-attachment.png";
 
         db.TicketAttachments.Add(new TicketAttachment
         {
@@ -274,7 +335,9 @@ public class TicketsControllerTests
 
         await db.SaveChangesAsync();
 
-        Directory.Delete(storage.RootPath, recursive: true);
+        Directory.Delete(
+            storage.RootPath,
+            recursive: true);
 
         var result = await controller.Delete(
             payload.Id,
@@ -286,8 +349,13 @@ public class TicketsControllerTests
             .AsNoTracking()
             .SingleAsync(t => t.Id == payload.Id);
 
-        Assert.Equal(TicketStatus.Deleted, deletedTicket.Status);
-        Assert.False(await db.TicketAttachments.AnyAsync(a => a.TicketId == payload.Id));
+        Assert.Equal(
+            TicketStatus.Deleted,
+            deletedTicket.Status);
+
+        Assert.False(
+            await db.TicketAttachments
+                .AnyAsync(a => a.TicketId == payload.Id));
     }
 
     [Fact]
@@ -296,25 +364,39 @@ public class TicketsControllerTests
         using var db = NewContext();
         var storage = NewStorage();
         var controller = NewController(db, storage: storage);
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
 
-        var request = new CreateTicketCommentRequest("tester", "Pierwszy komentarz");
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
+
+        var ticket = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
+
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            ticket.Value);
+
+        var request = new CreateTicketCommentRequest(
+            "tester",
+            "Pierwszy komentarz");
 
         var result = await controller.AddComment(
             payload.Id,
             request,
             CancellationToken.None);
 
-        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
-        var response = Assert.IsType<TicketCommentResponse>(created.Value);
+        var created = Assert.IsType<CreatedAtActionResult>(
+            result.Result);
+
+        var response = Assert.IsType<TicketCommentResponse>(
+            created.Value);
 
         var comment = await db.TicketComments.SingleAsync();
 
         Assert.Equal(response.Id, comment.Id);
         Assert.Equal("tester", comment.Author);
-        Assert.Equal("Pierwszy komentarz", comment.Body);
+        Assert.Equal(
+            "Pierwszy komentarz",
+            comment.Body);
     }
 
     [Fact]
@@ -323,20 +405,28 @@ public class TicketsControllerTests
         using var db = NewContext();
         var storage = NewStorage();
         var controller = NewController(db, storage: storage);
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var ticket = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(ticket.Value);
+
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
+
+        var ticket = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
+
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            ticket.Value);
 
         var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
 
         db.TicketComments.AddRange(
-            Enumerable.Range(0, 51).Select(i => new TicketComment
-            {
-                TicketId = payload.Id,
-                Author = "tester",
-                Body = $"Komentarz {i}",
-                CreatedAt = baseTime.AddMinutes(i)
-            }));
+            Enumerable.Range(0, 51)
+                .Select(i => new TicketComment
+                {
+                    TicketId = payload.Id,
+                    Author = "tester",
+                    Body = $"Komentarz {i}",
+                    CreatedAt = baseTime.AddMinutes(i)
+                }));
 
         await db.SaveChangesAsync();
 
@@ -344,16 +434,22 @@ public class TicketsControllerTests
             payload.Id,
             CancellationToken.None);
 
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<PagedResult<TicketCommentResponse>>(ok.Value);
+        var ok = Assert.IsType<OkObjectResult>(
+            result.Result);
+
+        var response = Assert.IsType<PagedResult<TicketCommentResponse>>(
+            ok.Value);
 
         Assert.Equal(51, response.Total);
         Assert.Equal(1, response.Page);
         Assert.Equal(50, response.PageSize);
         Assert.Equal(50, response.Items.Count);
+
         Assert.True(
-            response.Items.Zip(response.Items.Skip(1))
-                .All(pair => pair.First.CreatedAt <= pair.Second.CreatedAt));
+            response.Items
+                .Zip(response.Items.Skip(1))
+                .All(pair =>
+                    pair.First.CreatedAt <= pair.Second.CreatedAt));
     }
 
     [Fact]
@@ -363,25 +459,34 @@ public class TicketsControllerTests
         var storage = NewStorage();
         var controller = NewController(db, storage: storage);
 
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(created.Value);
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
+
+        var created = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
+
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            created.Value);
 
         var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
 
-        var comments = Enumerable.Range(1, 5).Select(i => new TicketComment
-        {
-            TicketId = payload.Id,
-            Author = "tester",
-            Body = $"Komentarz {i}"
-        }).ToList();
+        var comments = Enumerable.Range(1, 5)
+            .Select(i => new TicketComment
+            {
+                TicketId = payload.Id,
+                Author = "tester",
+                Body = $"Komentarz {i}"
+            })
+            .ToList();
 
         db.TicketComments.AddRange(comments);
         await db.SaveChangesAsync();
 
         for (var i = 0; i < comments.Count; i++)
         {
-            comments[i].CreatedAt = baseTime.AddMinutes(i);
+            comments[i].CreatedAt =
+                baseTime.AddMinutes(i);
         }
 
         await db.SaveChangesAsync();
@@ -392,15 +497,22 @@ public class TicketsControllerTests
             page: 2,
             pageSize: 2);
 
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<PagedResult<TicketCommentResponse>>(ok.Value);
+        var ok = Assert.IsType<OkObjectResult>(
+            result.Result);
+
+        var response = Assert.IsType<PagedResult<TicketCommentResponse>>(
+            ok.Value);
 
         Assert.Equal(5, response.Total);
         Assert.Equal(2, response.Page);
         Assert.Equal(2, response.PageSize);
         Assert.Equal(2, response.Items.Count);
-        Assert.Equal("Komentarz 3", response.Items[0].Body);
-        Assert.Equal("Komentarz 4", response.Items[1].Body);
+        Assert.Equal(
+            "Komentarz 3",
+            response.Items[0].Body);
+        Assert.Equal(
+            "Komentarz 4",
+            response.Items[1].Body);
     }
 
     [Fact]
@@ -408,11 +520,19 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = NewController(db, storage: storage);
+        var controller = NewController(
+            db,
+            storage: storage);
 
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(created.Value);
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
+
+        var created = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
+
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            created.Value);
 
         db.TicketComments.Add(new TicketComment
         {
@@ -433,37 +553,76 @@ public class TicketsControllerTests
             .AsNoTracking()
             .SingleAsync(t => t.Id == payload.Id);
 
-        Assert.Equal(TicketStatus.Deleted, ticket.Status);
-        Assert.Equal(string.Empty, ticket.Description);
-        Assert.Equal(string.Empty, ticket.PageUrl);
-        Assert.Equal(string.Empty, ticket.UserAgent);
+        Assert.Equal(
+            TicketStatus.Deleted,
+            ticket.Status);
+
+        Assert.Equal(
+            string.Empty,
+            ticket.Description);
+
+        Assert.Equal(
+            string.Empty,
+            ticket.PageUrl);
+
+        Assert.Equal(
+            string.Empty,
+            ticket.UserAgent);
+
         Assert.NotNull(ticket.DeletedAt);
         Assert.Equal("system", ticket.DeletedBy);
 
-        Assert.Empty(await db.TicketComments
-            .Where(c => c.TicketId == payload.Id)
-            .ToListAsync());
+        Assert.Empty(
+            await db.TicketComments
+                .Where(c => c.TicketId == payload.Id)
+                .ToListAsync());
 
         var history = await db.TicketStatusChanges
             .AsNoTracking()
             .SingleAsync(h => h.TicketId == payload.Id);
 
-        Assert.Equal(TicketStatus.New, history.FromStatus);
-        Assert.Equal(TicketStatus.Deleted, history.ToStatus);
-        Assert.Equal("system", history.ChangedBy);
+        Assert.Equal(
+            TicketStatus.New,
+            history.FromStatus);
+
+        Assert.Equal(
+            TicketStatus.Deleted,
+            history.ToStatus);
+
+        Assert.Equal(
+            "system",
+            history.ChangedBy);
 
         var getResult = await controller.GetById(
             payload.Id,
             CancellationToken.None);
 
-        var getOk = Assert.IsType<OkObjectResult>(getResult.Result);
-        var details = Assert.IsType<TicketDetails>(getOk.Value);
+        var getOk = Assert.IsType<OkObjectResult>(
+            getResult.Result);
 
-        Assert.Equal(TicketStatus.Deleted, details.Status);
-        Assert.Equal(string.Empty, details.Description);
-        Assert.Equal(string.Empty, details.PageUrl);
-        Assert.Equal(string.Empty, details.UserAgent);
-        Assert.Equal(0, details.CommentCount);
+        var details = Assert.IsType<TicketDetails>(
+            getOk.Value);
+
+        Assert.Equal(
+            TicketStatus.Deleted,
+            details.Status);
+
+        Assert.Equal(
+            string.Empty,
+            details.Description);
+
+        Assert.Equal(
+            string.Empty,
+            details.PageUrl);
+
+        Assert.Equal(
+            string.Empty,
+            details.UserAgent);
+
+        Assert.Equal(
+            0,
+            details.CommentCount);
+
         Assert.Empty(details.Attachments);
         Assert.Null(details.ConsoleLog);
     }
@@ -473,39 +632,59 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = NewController(db, storage: storage);
+        var controller = NewController(
+            db,
+            storage: storage);
 
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(created.Value);
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
 
-        const string fileName = "test-attachment.png";
-        var filePath = Path.Combine(storage.RootPath, fileName);
+        var created = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
 
-        await System.IO.File.WriteAllBytesAsync(filePath, [1, 2, 3]);
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            created.Value);
 
-        db.TicketAttachments.Add(new TicketAttachment
-        {
-            TicketId = payload.Id,
-            Kind = AttachmentKind.Screenshot,
-            Uri = $"{AttachmentStorageOptions.UriPrefix}/{fileName}",
-            FileName = fileName,
-            ContentType = "image/png",
-            SizeBytes = 3
-        });
+        const string fileName =
+            "test-attachment.png";
+
+        var filePath = Path.Combine(
+            storage.RootPath,
+            fileName);
+
+        await System.IO.File.WriteAllBytesAsync(
+            filePath,
+            [1, 2, 3]);
+
+        db.TicketAttachments.Add(
+            new TicketAttachment
+            {
+                TicketId = payload.Id,
+                Kind = AttachmentKind.Screenshot,
+                Uri = $"{AttachmentStorageOptions.UriPrefix}/{fileName}",
+                FileName = fileName,
+                ContentType = "image/png",
+                SizeBytes = 3
+            });
 
         await db.SaveChangesAsync();
 
-        Assert.True(System.IO.File.Exists(filePath));
+        Assert.True(
+            System.IO.File.Exists(filePath));
 
         var result = await controller.Delete(
             payload.Id,
             CancellationToken.None);
 
         Assert.IsType<NoContentResult>(result);
-        Assert.False(System.IO.File.Exists(filePath));
-        Assert.False(await db.TicketAttachments
-            .AnyAsync(a => a.TicketId == payload.Id));
+
+        Assert.False(
+            System.IO.File.Exists(filePath));
+
+        Assert.False(
+            await db.TicketAttachments
+                .AnyAsync(a => a.TicketId == payload.Id));
     }
 
     [Fact]
@@ -516,10 +695,13 @@ public class TicketsControllerTests
 
         var result = await controller.AddComment(
             Guid.NewGuid(),
-            new CreateTicketCommentRequest("tester", "Komentarz"),
+            new CreateTicketCommentRequest(
+                "tester",
+                "Komentarz"),
             CancellationToken.None);
 
-        Assert.IsType<NotFoundResult>(result.Result);
+        Assert.IsType<NotFoundResult>(
+            result.Result);
     }
 
     [Fact]
@@ -532,7 +714,8 @@ public class TicketsControllerTests
             Guid.NewGuid(),
             CancellationToken.None);
 
-        Assert.IsType<NotFoundResult>(result.Result);
+        Assert.IsType<NotFoundResult>(
+            result.Result);
     }
 
     [Fact]
@@ -545,7 +728,8 @@ public class TicketsControllerTests
             Guid.NewGuid(),
             CancellationToken.None);
 
-        Assert.IsType<NotFoundResult>(result);
+        Assert.IsType<NotFoundResult>(
+            result);
     }
 
     [Fact]
@@ -554,9 +738,15 @@ public class TicketsControllerTests
         using var db = NewContext();
         var controller = NewController(db);
 
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(created.Value);
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
+
+        var created = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
+
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            created.Value);
 
         db.TicketComments.AddRange(
             new TicketComment
@@ -574,11 +764,14 @@ public class TicketsControllerTests
 
         await db.SaveChangesAsync();
 
-        await controller.Delete(payload.Id, CancellationToken.None);
+        await controller.Delete(
+            payload.Id,
+            CancellationToken.None);
 
         Assert.Equal(
             0,
-            await db.TicketComments.CountAsync(c => c.TicketId == payload.Id));
+            await db.TicketComments.CountAsync(
+                c => c.TicketId == payload.Id));
     }
 
     [Fact]
@@ -586,13 +779,25 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = NewController(db, storage: storage);
+        var controller = NewController(
+            db,
+            storage: storage);
 
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(created.Value);
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
 
-        var fileNames = new[] { "first.png", "second.png" };
+        var created = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
+
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            created.Value);
+
+        var fileNames = new[]
+        {
+            "first.png",
+            "second.png"
+        };
 
         foreach (var fileName in fileNames)
         {
@@ -602,40 +807,57 @@ public class TicketsControllerTests
         }
 
         db.TicketAttachments.AddRange(
-            fileNames.Select(fileName => new TicketAttachment
-            {
-                TicketId = payload.Id,
-                Kind = AttachmentKind.Screenshot,
-                Uri = $"{AttachmentStorageOptions.UriPrefix}/{fileName}",
-                FileName = fileName,
-                ContentType = "image/png",
-                SizeBytes = 3
-            }));
+            fileNames.Select(fileName =>
+                new TicketAttachment
+                {
+                    TicketId = payload.Id,
+                    Kind = AttachmentKind.Screenshot,
+                    Uri = $"{AttachmentStorageOptions.UriPrefix}/{fileName}",
+                    FileName = fileName,
+                    ContentType = "image/png",
+                    SizeBytes = 3
+                }));
 
         await db.SaveChangesAsync();
 
-        await controller.Delete(payload.Id, CancellationToken.None);
+        await controller.Delete(
+            payload.Id,
+            CancellationToken.None);
 
         Assert.All(
             fileNames,
-            fileName => Assert.False(
-                System.IO.File.Exists(Path.Combine(storage.RootPath, fileName))));
+            fileName =>
+                Assert.False(
+                    System.IO.File.Exists(
+                        Path.Combine(
+                            storage.RootPath,
+                            fileName))));
 
         Assert.Equal(
             0,
-            await db.TicketAttachments.CountAsync(a => a.TicketId == payload.Id));
+            await db.TicketAttachments.CountAsync(
+                a => a.TicketId == payload.Id));
     }
 
     [Fact]
     public async Task BrakNaglowkaOriginJestOdrzucany()
     {
         using var db = NewContext();
-        var controller = NewController(db, origin: null);
+        var controller = NewController(
+            db,
+            origin: null);
 
-        var result = await controller.Create(Request("demo"), CancellationToken.None);
+        var result = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
 
-        var problem = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status403Forbidden, problem.StatusCode);
+        var problem = Assert.IsType<ObjectResult>(
+            result.Result);
+
+        Assert.Equal(
+            StatusCodes.Status403Forbidden,
+            problem.StatusCode);
+
         Assert.Empty(db.Tickets);
     }
 
@@ -643,12 +865,22 @@ public class TicketsControllerTests
     public async Task OriginSpozaListyProjektuJestOdrzucany()
     {
         using var db = NewContext();
-        var controller = NewController(db, origin: "https://ktos-obcy.example");
 
-        var result = await controller.Create(Request("demo"), CancellationToken.None);
+        var controller = NewController(
+            db,
+            origin: "https://ktos-obcy.example");
 
-        var problem = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status403Forbidden, problem.StatusCode);
+        var result = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
+
+        var problem = Assert.IsType<ObjectResult>(
+            result.Result);
+
+        Assert.Equal(
+            StatusCodes.Status403Forbidden,
+            problem.StatusCode);
+
         Assert.Empty(db.Tickets);
     }
 
@@ -656,11 +888,18 @@ public class TicketsControllerTests
     public async Task OriginPorownywanyJestBezWzgleduNaWielkoscLiter()
     {
         using var db = NewContext();
-        var controller = NewController(db, origin: "HTTP://127.0.0.1:5500");
 
-        var result = await controller.Create(Request("demo"), CancellationToken.None);
+        var controller = NewController(
+            db,
+            origin: "HTTP://127.0.0.1:5500");
 
-        Assert.IsType<CreatedAtActionResult>(result.Result);
+        var result = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
+
+        Assert.IsType<CreatedAtActionResult>(
+            result.Result);
+
         Assert.Single(db.Tickets);
     }
 
@@ -668,17 +907,28 @@ public class TicketsControllerTests
     public async Task PustaListaOriginowProjektuBlokujeKazdeZadanie()
     {
         using var db = NewContext();
-        var project = await CreateProjectWithoutOrigins(db);
-        var controller = NewController(db, origin: "https://cokolwiek.example");
 
-        var result = await controller.Create(Request(project.Key), CancellationToken.None);
+        var project = await CreateProjectWithoutOrigins(db);
+
+        var controller = NewController(
+            db,
+            origin: "https://cokolwiek.example");
+
+        var result = await controller.Create(
+            Request(project.Key),
+            CancellationToken.None);
 
         // projekt nie znika z NewContext bo czyszczone sa tylko tickety
         db.Projects.Remove(project);
         await db.SaveChangesAsync();
 
-        var problem = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status403Forbidden, problem.StatusCode);
+        var problem = Assert.IsType<ObjectResult>(
+            result.Result);
+
+        Assert.Equal(
+            StatusCodes.Status403Forbidden,
+            problem.StatusCode);
+
         Assert.Empty(db.Tickets);
     }
 
@@ -688,16 +938,40 @@ public class TicketsControllerTests
         using var db = NewContext();
         var cache = NewCache();
 
-        var first = await NewController(db, idempotencyKey: "klucz-1", cache: cache)
-            .Create(Request("demo"), CancellationToken.None);
-        var second = await NewController(db, idempotencyKey: "klucz-1", cache: cache)
-            .Create(Request("demo"), CancellationToken.None);
+        var first = await NewController(
+                db,
+                idempotencyKey: "klucz-1",
+                cache: cache)
+            .Create(
+                Request("demo"),
+                CancellationToken.None);
 
-        var firstPayload = Assert.IsType<CreatedTicketResponse>(Assert.IsType<CreatedAtActionResult>(first.Result).Value);
-        var secondPayload = Assert.IsType<CreatedTicketResponse>(Assert.IsType<CreatedAtActionResult>(second.Result).Value);
+        var second = await NewController(
+                db,
+                idempotencyKey: "klucz-1",
+                cache: cache)
+            .Create(
+                Request("demo"),
+                CancellationToken.None);
 
-        Assert.Equal(firstPayload.Id, secondPayload.Id);
-        Assert.Equal(firstPayload.UploadToken, secondPayload.UploadToken);
+        var firstPayload =
+            Assert.IsType<CreatedTicketResponse>(
+                Assert.IsType<CreatedAtActionResult>(
+                    first.Result).Value);
+
+        var secondPayload =
+            Assert.IsType<CreatedTicketResponse>(
+                Assert.IsType<CreatedAtActionResult>(
+                    second.Result).Value);
+
+        Assert.Equal(
+            firstPayload.Id,
+            secondPayload.Id);
+
+        Assert.Equal(
+            firstPayload.UploadToken,
+            secondPayload.UploadToken);
+
         Assert.Single(db.Tickets);
     }
 
@@ -707,17 +981,33 @@ public class TicketsControllerTests
         using var db = NewContext();
         var cache = NewCache();
 
-        await NewController(db, idempotencyKey: "klucz-2", cache: cache)
-            .Create(Request("demo"), CancellationToken.None);
+        await NewController(
+                db,
+                idempotencyKey: "klucz-2",
+                cache: cache)
+            .Create(
+                Request("demo"),
+                CancellationToken.None);
 
         var innyOpis = Request("demo");
-        innyOpis.Description = "Inny opis pod tym samym kluczem";
+        innyOpis.Description =
+            "Inny opis pod tym samym kluczem";
 
-        var result = await NewController(db, idempotencyKey: "klucz-2", cache: cache)
-            .Create(innyOpis, CancellationToken.None);
+        var result = await NewController(
+                db,
+                idempotencyKey: "klucz-2",
+                cache: cache)
+            .Create(
+                innyOpis,
+                CancellationToken.None);
 
-        var problem = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status409Conflict, problem.StatusCode);
+        var problem = Assert.IsType<ObjectResult>(
+            result.Result);
+
+        Assert.Equal(
+            StatusCodes.Status409Conflict,
+            problem.StatusCode);
+
         Assert.Single(db.Tickets);
     }
 
@@ -725,24 +1015,49 @@ public class TicketsControllerTests
     public async Task BrakKluczaIdempotencjiNieBlokujeZgloszenia()
     {
         using var db = NewContext();
-        var controller = NewController(db, idempotencyKey: null);
 
-        var first = await controller.Create(Request("demo"), CancellationToken.None);
-        var second = await controller.Create(Request("demo"), CancellationToken.None);
+        var controller = NewController(
+            db,
+            idempotencyKey: null);
 
-        var firstPayload = Assert.IsType<CreatedTicketResponse>(Assert.IsType<CreatedAtActionResult>(first.Result).Value);
-        var secondPayload = Assert.IsType<CreatedTicketResponse>(Assert.IsType<CreatedAtActionResult>(second.Result).Value);
+        var first = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
 
-        Assert.NotEqual(firstPayload.Id, secondPayload.Id);
-        Assert.Equal(2, await db.Tickets.CountAsync());
+        var second = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
+
+        var firstResult = Assert.IsType<CreatedAtActionResult>(
+            first.Result);
+
+        var secondResult = Assert.IsType<CreatedAtActionResult>(
+            second.Result);
+
+        var firstPayload = Assert.IsType<CreatedTicketResponse>(
+            firstResult.Value);
+
+        var secondPayload = Assert.IsType<CreatedTicketResponse>(
+            secondResult.Value);
+
+        Assert.NotEqual(
+            firstPayload.Id,
+            secondPayload.Id);
+
+        Assert.Equal(
+            2,
+            await db.Tickets.CountAsync());
     }
 
     [Fact]
     public async Task PoprawnyIfMatchZmieniaStatus()
     {
         using var db = NewContext();
+
         var ticket = await NewTicket(db);
-        var previousRowVersion = RowVersion(ticket);
+        var previousRowVersion =
+            RowVersion(ticket);
+
         var controller = NewController(db);
 
         var result = await controller.UpdateStatus(
@@ -751,44 +1066,86 @@ public class TicketsControllerTests
             previousRowVersion,
             CancellationToken.None);
 
-        var payload = Assert.IsType<TicketStatusResponse>(Assert.IsType<OkObjectResult>(result.Result).Value);
-        Assert.Equal(TicketStatus.InProgress, payload.Status);
-        Assert.NotEqual(previousRowVersion, payload.RowVersion);
+        var payload =
+            Assert.IsType<TicketStatusResponse>(
+                Assert.IsType<OkObjectResult>(
+                    result.Result).Value);
 
-        var saved = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == ticket.Id);
-        Assert.Equal(TicketStatus.InProgress, saved.Status);
-        Assert.Equal(payload.RowVersion, Convert.ToBase64String(saved.RowVersion));
+        Assert.Equal(
+            TicketStatus.InProgress,
+            payload.Status);
+
+        Assert.NotEqual(
+            previousRowVersion,
+            payload.RowVersion);
+
+        var saved = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync(
+                t => t.Id == ticket.Id);
+
+        Assert.Equal(
+            TicketStatus.InProgress,
+            saved.Status);
+
+        Assert.Equal(
+            payload.RowVersion,
+            Convert.ToBase64String(
+                saved.RowVersion));
     }
 
     [Fact]
     public async Task NieaktualnyIfMatchDaje409BezZmianyStatusu()
     {
         using var db = NewContext();
+
         var ticket = await NewTicket(db);
         var controller = NewController(db);
 
         var result = await controller.UpdateStatus(
             ticket.Id,
             StatusRequest(TicketStatus.Resolved),
-            Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+            Convert.ToBase64String(
+                Guid.NewGuid().ToByteArray()),
             CancellationToken.None);
 
-        var problem = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status409Conflict, problem.StatusCode);
+        var problem = Assert.IsType<ObjectResult>(
+            result.Result);
 
-        var details = Assert.IsType<ProblemDetails>(problem.Value);
-        Assert.Equal(TicketStatus.New, details.Extensions["currentStatus"]);
-        Assert.Equal(RowVersion(ticket), details.Extensions["rowVersion"]);
+        Assert.Equal(
+            StatusCodes.Status409Conflict,
+            problem.StatusCode);
 
-        var saved = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == ticket.Id);
-        Assert.Equal(TicketStatus.New, saved.Status);
-        Assert.Empty(db.TicketStatusChanges.Where(h => h.TicketId == ticket.Id));
+        var details = Assert.IsType<ProblemDetails>(
+            problem.Value);
+
+        Assert.Equal(
+            TicketStatus.New,
+            details.Extensions["currentStatus"]);
+
+        Assert.Equal(
+            RowVersion(ticket),
+            details.Extensions["rowVersion"]);
+
+        var saved = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync(
+                t => t.Id == ticket.Id);
+
+        Assert.Equal(
+            TicketStatus.New,
+            saved.Status);
+
+        Assert.Empty(
+            db.TicketStatusChanges
+                .Where(h => h.TicketId == ticket.Id));
     }
 
     [Fact]
     public async Task BrakIfMatchDaje428()
     {
         using var db = NewContext();
+
         var ticket = await NewTicket(db);
         var controller = NewController(db);
 
@@ -798,17 +1155,28 @@ public class TicketsControllerTests
             null,
             CancellationToken.None);
 
-        var problem = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status428PreconditionRequired, problem.StatusCode);
+        var problem = Assert.IsType<ObjectResult>(
+            result.Result);
 
-        var saved = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == ticket.Id);
-        Assert.Equal(TicketStatus.New, saved.Status);
+        Assert.Equal(
+            StatusCodes.Status428PreconditionRequired,
+            problem.StatusCode);
+
+        var saved = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync(
+                t => t.Id == ticket.Id);
+
+        Assert.Equal(
+            TicketStatus.New,
+            saved.Status);
     }
 
     [Fact]
     public async Task ZmianaStatusuZapisujeWpisWHistorii()
     {
         using var db = NewContext();
+
         var ticket = await NewTicket(db);
         var controller = NewController(db);
 
@@ -834,14 +1202,27 @@ public class TicketsControllerTests
             history,
             first =>
             {
-                Assert.Equal(TicketStatus.New, first.FromStatus);
-                Assert.Equal(TicketStatus.InProgress, first.ToStatus);
-                Assert.Equal("bartek", first.ChangedBy);
+                Assert.Equal(
+                    TicketStatus.New,
+                    first.FromStatus);
+
+                Assert.Equal(
+                    TicketStatus.InProgress,
+                    first.ToStatus);
+
+                Assert.Equal(
+                    "bartek",
+                    first.ChangedBy);
             },
             second =>
             {
-                Assert.Equal(TicketStatus.InProgress, second.FromStatus);
-                Assert.Equal(TicketStatus.Resolved, second.ToStatus);
+                Assert.Equal(
+                    TicketStatus.InProgress,
+                    second.FromStatus);
+
+                Assert.Equal(
+                    TicketStatus.Resolved,
+                    second.ToStatus);
             });
     }
 
@@ -849,6 +1230,7 @@ public class TicketsControllerTests
     public async Task PowtorzenieTegoSamegoStatusuNieDopisujeHistorii()
     {
         using var db = NewContext();
+
         var ticket = await NewTicket(db);
         var rowVersion = RowVersion(ticket);
         var controller = NewController(db);
@@ -859,15 +1241,25 @@ public class TicketsControllerTests
             rowVersion,
             CancellationToken.None);
 
-        var payload = Assert.IsType<TicketStatusResponse>(Assert.IsType<OkObjectResult>(result.Result).Value);
-        Assert.Equal(rowVersion, payload.RowVersion);
-        Assert.Empty(db.TicketStatusChanges.Where(h => h.TicketId == ticket.Id));
+        var payload =
+            Assert.IsType<TicketStatusResponse>(
+                Assert.IsType<OkObjectResult>(
+                    result.Result).Value);
+
+        Assert.Equal(
+            rowVersion,
+            payload.RowVersion);
+
+        Assert.Empty(
+            db.TicketStatusChanges
+                .Where(h => h.TicketId == ticket.Id));
     }
 
     [Fact]
     public async Task StatusDeletedWCieleJestOdrzucany()
     {
         using var db = NewContext();
+
         var ticket = await NewTicket(db);
         var controller = NewController(db);
 
@@ -877,11 +1269,20 @@ public class TicketsControllerTests
             RowVersion(ticket),
             CancellationToken.None);
 
-        Assert.IsType<ObjectResult>(result.Result);
-        Assert.False(controller.ModelState.IsValid);
+        Assert.IsType<ObjectResult>(
+            result.Result);
 
-        var saved = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == ticket.Id);
-        Assert.Equal(TicketStatus.New, saved.Status);
+        Assert.False(
+            controller.ModelState.IsValid);
+
+        var saved = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync(
+                t => t.Id == ticket.Id);
+
+        Assert.Equal(
+            TicketStatus.New,
+            saved.Status);
     }
 
     [Fact]
@@ -893,16 +1294,19 @@ public class TicketsControllerTests
         var result = await controller.UpdateStatus(
             Guid.NewGuid(),
             StatusRequest(TicketStatus.InProgress),
-            Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+            Convert.ToBase64String(
+                Guid.NewGuid().ToByteArray()),
             CancellationToken.None);
 
-        Assert.IsType<NotFoundResult>(result.Result);
+        Assert.IsType<NotFoundResult>(
+            result.Result);
     }
 
     [Fact]
     public async Task ZapisMiedzyOdczytemAZapisemDaje409()
     {
         using var db = NewContext();
+
         var ticket = await NewTicket(db);
         var rowVersion = RowVersion(ticket);
         var controller = NewController(db);
@@ -910,8 +1314,13 @@ public class TicketsControllerTests
         // druga sesja przestawia status zanim pierwsza zdazy zapisac
         using (var other = OpenContext())
         {
-            var sameTicket = await other.Tickets.SingleAsync(t => t.Id == ticket.Id);
-            sameTicket.Status = TicketStatus.Rejected;
+            var sameTicket = await other.Tickets
+                .SingleAsync(
+                    t => t.Id == ticket.Id);
+
+            sameTicket.Status =
+                TicketStatus.Rejected;
+
             await other.SaveChangesAsync();
         }
 
@@ -922,15 +1331,32 @@ public class TicketsControllerTests
             rowVersion,
             CancellationToken.None);
 
-        var problem = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status409Conflict, problem.StatusCode);
+        var problem = Assert.IsType<ObjectResult>(
+            result.Result);
 
-        var details = Assert.IsType<ProblemDetails>(problem.Value);
-        Assert.Equal(TicketStatus.Rejected, details.Extensions["currentStatus"]);
+        Assert.Equal(
+            StatusCodes.Status409Conflict,
+            problem.StatusCode);
 
-        var saved = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == ticket.Id);
-        Assert.Equal(TicketStatus.Rejected, saved.Status);
-        Assert.Empty(db.TicketStatusChanges.Where(h => h.TicketId == ticket.Id));
+        var details = Assert.IsType<ProblemDetails>(
+            problem.Value);
+
+        Assert.Equal(
+            TicketStatus.Rejected,
+            details.Extensions["currentStatus"]);
+
+        var saved = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync(
+                t => t.Id == ticket.Id);
+
+        Assert.Equal(
+            TicketStatus.Rejected,
+            saved.Status);
+
+        Assert.Empty(
+            db.TicketStatusChanges
+                .Where(h => h.TicketId == ticket.Id));
     }
 
     [Fact]
@@ -938,22 +1364,47 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = NewController(db, storage: storage);
+        var controller = NewController(
+            db,
+            storage: storage);
 
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(created.Value);
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
 
-        Assert.IsType<NoContentResult>(await controller.Delete(payload.Id, CancellationToken.None));
+        var created = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
 
-        var poPierwszym = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == payload.Id);
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            created.Value);
 
-        Assert.IsType<NoContentResult>(await controller.Delete(payload.Id, CancellationToken.None));
+        Assert.IsType<NoContentResult>(
+            await controller.Delete(
+                payload.Id,
+                CancellationToken.None));
 
-        var poDrugim = await db.Tickets.AsNoTracking().SingleAsync(t => t.Id == payload.Id);
+        var poPierwszym = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync(
+                t => t.Id == payload.Id);
 
-        Assert.Equal(poPierwszym.DeletedAt, poDrugim.DeletedAt);
-        Assert.Equal(poPierwszym.RowVersion, poDrugim.RowVersion);
+        Assert.IsType<NoContentResult>(
+            await controller.Delete(
+                payload.Id,
+                CancellationToken.None));
+
+        var poDrugim = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync(
+                t => t.Id == payload.Id);
+
+        Assert.Equal(
+            poPierwszym.DeletedAt,
+            poDrugim.DeletedAt);
+
+        Assert.Equal(
+            poPierwszym.RowVersion,
+            poDrugim.RowVersion);
 
         var history = await db.TicketStatusChanges
             .AsNoTracking()
@@ -961,8 +1412,14 @@ public class TicketsControllerTests
             .ToListAsync();
 
         Assert.Single(history);
-        Assert.Equal(TicketStatus.New, history[0].FromStatus);
-        Assert.Equal(TicketStatus.Deleted, history[0].ToStatus);
+
+        Assert.Equal(
+            TicketStatus.New,
+            history[0].FromStatus);
+
+        Assert.Equal(
+            TicketStatus.Deleted,
+            history[0].ToStatus);
     }
 
     [Fact]
@@ -970,25 +1427,45 @@ public class TicketsControllerTests
     {
         using var db = NewContext();
         var storage = NewStorage();
-        var controller = NewController(db, storage: storage);
 
-        var ticketResult = await controller.Create(Request("demo"), CancellationToken.None);
-        var created = Assert.IsType<CreatedAtActionResult>(ticketResult.Result);
-        var payload = Assert.IsType<CreatedTicketResponse>(created.Value);
+        var controller = NewController(
+            db,
+            storage: storage);
 
-        var przedKasowaniem = await db.TicketUploadTokens
-            .AsNoTracking()
-            .SingleAsync(t => t.TicketId == payload.Id);
+        var ticketResult = await controller.Create(
+            Request("demo"),
+            CancellationToken.None);
 
-        Assert.True(przedKasowaniem.ExpiresAt > DateTimeOffset.UtcNow);
+        var created = Assert.IsType<CreatedAtActionResult>(
+            ticketResult.Result);
 
-        Assert.IsType<NoContentResult>(await controller.Delete(payload.Id, CancellationToken.None));
+        var payload = Assert.IsType<CreatedTicketResponse>(
+            created.Value);
 
-        var poKasowaniu = await db.TicketUploadTokens
-            .AsNoTracking()
-            .SingleAsync(t => t.TicketId == payload.Id);
+        var przedKasowaniem =
+            await db.TicketUploadTokens
+                .AsNoTracking()
+                .SingleAsync(
+                    t => t.TicketId == payload.Id);
 
-        Assert.True(poKasowaniu.ExpiresAt <= DateTimeOffset.UtcNow);
+        Assert.True(
+            przedKasowaniem.ExpiresAt >
+            DateTimeOffset.UtcNow);
+
+        Assert.IsType<NoContentResult>(
+            await controller.Delete(
+                payload.Id,
+                CancellationToken.None));
+
+        var poKasowaniu =
+            await db.TicketUploadTokens
+                .AsNoTracking()
+                .SingleAsync(
+                    t => t.TicketId == payload.Id);
+
+        Assert.True(
+            poKasowaniu.ExpiresAt <=
+            DateTimeOffset.UtcNow);
     }
 
     [Fact]
@@ -998,13 +1475,22 @@ public class TicketsControllerTests
         var controller = NewController(db);
 
         var request = Request("demo");
-        request.Description = "Kontakt: foo@bar.com oraz drugi foo@bar.com";
-        request.PageUrl = "https://example.com/?email=foo@bar.com";
-        request.UserAgent = "Browser foo@bar.com";
 
-        var result = await controller.Create(request, CancellationToken.None);
+        request.Description =
+            "Kontakt: foo@bar.com oraz drugi foo@bar.com";
 
-        Assert.IsType<CreatedAtActionResult>(result.Result);
+        request.PageUrl =
+            "https://example.com/?email=foo@bar.com";
+
+        request.UserAgent =
+            "Browser foo@bar.com";
+
+        var result = await controller.Create(
+            request,
+            CancellationToken.None);
+
+        Assert.IsType<CreatedAtActionResult>(
+            result.Result);
 
         var ticket = await db.Tickets
             .AsNoTracking()
@@ -1024,7 +1510,11 @@ public class TicketsControllerTests
 
         var rule = await db.SanitizationRules
             .AsNoTracking()
-            .SingleAsync(r => r.ProjectId == null && r.IsEnabled);
+            .SingleAsync(r =>
+                r.ProjectId == null &&
+                r.IsEnabled &&
+                r.Pattern ==
+                @"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+");
 
         var logs = await db.SanitizationLogs
             .AsNoTracking()
@@ -1032,54 +1522,334 @@ public class TicketsControllerTests
             .OrderBy(l => l.FieldName)
             .ToListAsync();
 
-        Assert.Equal(3, logs.Count);
+        Assert.Equal(
+            3,
+            logs.Count);
 
         Assert.Collection(
             logs,
             description =>
             {
-                Assert.Equal(nameof(Ticket.Description), description.FieldName);
-                Assert.Equal(2, description.MatchCount);
-                Assert.Equal(rule.Id, description.RuleId);
+                Assert.Equal(
+                    nameof(Ticket.Description),
+                    description.FieldName);
+
+                Assert.Equal(
+                    2,
+                    description.MatchCount);
+
+                Assert.Equal(
+                    rule.Id,
+                    description.RuleId);
             },
             pageUrl =>
             {
-                Assert.Equal(nameof(Ticket.PageUrl), pageUrl.FieldName);
-                Assert.Equal(1, pageUrl.MatchCount);
-                Assert.Equal(rule.Id, pageUrl.RuleId);
+                Assert.Equal(
+                    nameof(Ticket.PageUrl),
+                    pageUrl.FieldName);
+
+                Assert.Equal(
+                    1,
+                    pageUrl.MatchCount);
+
+                Assert.Equal(
+                    rule.Id,
+                    pageUrl.RuleId);
             },
             userAgent =>
             {
-                Assert.Equal(nameof(Ticket.UserAgent), userAgent.FieldName);
-                Assert.Equal(1, userAgent.MatchCount);
-                Assert.Equal(rule.Id, userAgent.RuleId);
+                Assert.Equal(
+                    nameof(Ticket.UserAgent),
+                    userAgent.FieldName);
+
+                Assert.Equal(
+                    1,
+                    userAgent.MatchCount);
+
+                Assert.Equal(
+                    rule.Id,
+                    userAgent.RuleId);
             });
 
         var getResult = await controller.GetById(
             ticket.Id,
             CancellationToken.None);
 
-        var getOk = Assert.IsType<OkObjectResult>(getResult.Result);
-        var details = Assert.IsType<TicketDetails>(getOk.Value);
+        var getOk = Assert.IsType<OkObjectResult>(
+            getResult.Result);
 
-        Assert.Equal(ticket.Id, details.Id);
-        Assert.Equal("Kontakt: *** oraz drugi ***", details.Description);
-        Assert.Equal("https://example.com/?email=***", details.PageUrl);
-        Assert.Equal("Browser ***", details.UserAgent);
+        var details = Assert.IsType<TicketDetails>(
+            getOk.Value);
+
+        Assert.Equal(
+            ticket.Id,
+            details.Id);
+
+        Assert.Equal(
+            "Kontakt: *** oraz drugi ***",
+            details.Description);
+
+        Assert.Equal(
+            "https://example.com/?email=***",
+            details.PageUrl);
+
+        Assert.Equal(
+            "Browser ***",
+            details.UserAgent);
+    }
+
+    [Fact]
+    public async Task GlobalneRegulyMaskujaCredentialsyAleNieUserAgenta()
+    {
+        using var db = NewContext();
+        var controller = NewController(db);
+
+        var request = Request("demo");
+
+        request.Description =
+            """
+            email=foo@bar.com
+            password=qwerty123
+            username=radek123
+            Authorization: Bearer very-secret-bearer
+            Authorization: Basic very-secret-basic
+            access_token=access-secret
+            refresh_token=refresh-secret
+            id_token=id-secret
+            session_id=session-secret
+            api_key=api-secret
+            client_secret=client-secret
+            csrf_token=csrf-secret
+            Cookie: session=very-secret-cookie
+            """;
+
+        request.PageUrl =
+            "https://example.com/?email=foo@bar.com&access_token=url-secret";
+
+        request.UserAgent =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0";
+
+        var result = await controller.Create(
+            request,
+            CancellationToken.None);
+
+        Assert.IsType<CreatedAtActionResult>(
+            result.Result);
+
+        var ticket = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync();
+
+        Assert.DoesNotContain(
+            "foo@bar.com",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "qwerty123",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "radek123",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "very-secret-bearer",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "very-secret-basic",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "access-secret",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "refresh-secret",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "id-secret",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "session-secret",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "api-secret",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "client-secret",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "csrf-secret",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "very-secret-cookie",
+            ticket.Description);
+
+        Assert.DoesNotContain(
+            "foo@bar.com",
+            ticket.PageUrl);
+
+        Assert.DoesNotContain(
+            "url-secret",
+            ticket.PageUrl);
+
+        Assert.Equal(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0",
+            ticket.UserAgent);
+
+        Assert.Contains(
+            "***",
+            ticket.Description);
+
+        Assert.Contains(
+            "***",
+            ticket.PageUrl);
+    }
+
+    [Fact]
+    public async Task RegulyCredentialowTworzaLogiZMatchCount()
+    {
+        using var db = NewContext();
+        var controller = NewController(db);
+
+        var request = Request("demo");
+
+        request.Description =
+            """
+            password=pass123
+            username=radek123
+            Authorization: Bearer bearer123
+            Authorization: Basic basic123
+            access_token=access123
+            refresh_token=refresh123
+            id_token=id123
+            session_id=session123
+            api_key=api123
+            client_secret=client123
+            csrf_token=csrf123
+            Cookie: session=cookie123
+            """;
+
+        var result = await controller.Create(
+            request,
+            CancellationToken.None);
+
+        Assert.IsType<CreatedAtActionResult>(
+            result.Result);
+
+        var ticket = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync();
+
+        var logs = await db.SanitizationLogs
+            .AsNoTracking()
+            .Where(l => l.TicketId == ticket.Id)
+            .ToListAsync();
+
+        Assert.Equal(
+            8,
+            logs.Count);
+
+        Assert.All(
+            logs,
+            log => Assert.Equal(
+                nameof(Ticket.Description),
+                log.FieldName));
+
+        Assert.Equal(
+            1,
+            logs.Single(log =>
+                log.RuleId ==
+                Guid.Parse(
+                    "33333333-3333-3333-3333-333333333333"))
+            .MatchCount);
+
+        Assert.Equal(
+            1,
+            logs.Single(log =>
+                log.RuleId ==
+                Guid.Parse(
+                    "44444444-4444-4444-4444-444444444444"))
+            .MatchCount);
+
+        Assert.Equal(
+            1,
+            logs.Single(log =>
+                log.RuleId ==
+                Guid.Parse(
+                    "55555555-5555-5555-5555-555555555555"))
+            .MatchCount);
+
+        Assert.Equal(
+            1,
+            logs.Single(log =>
+                log.RuleId ==
+                Guid.Parse(
+                    "66666666-6666-6666-6666-666666666666"))
+            .MatchCount);
+
+        Assert.Equal(
+            4,
+            logs.Single(log =>
+                log.RuleId ==
+                Guid.Parse(
+                    "77777777-7777-7777-7777-777777777777"))
+            .MatchCount);
+
+        Assert.Equal(
+            2,
+            logs.Single(log =>
+                log.RuleId ==
+                Guid.Parse(
+                    "88888888-8888-8888-8888-888888888888"))
+            .MatchCount);
+
+        Assert.Equal(
+            1,
+            logs.Single(log =>
+                log.RuleId ==
+                Guid.Parse(
+                    "99999999-9999-9999-9999-999999999999"))
+            .MatchCount);
+
+        Assert.Equal(
+            1,
+            logs.Single(log =>
+                log.RuleId ==
+                Guid.Parse(
+                    "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+            .MatchCount);
     }
 
     [Fact]
     public async Task RegulaProjektowaNadpisujeGlobalna()
     {
         using var db = NewContext();
-        var project = await db.Projects.SingleAsync(p => p.Key == "demo");
+
+        var project = await db.Projects
+            .SingleAsync(
+                p => p.Key == "demo");
 
         var globalRule = await db.SanitizationRules
             .AsNoTracking()
-            .SingleAsync(r => r.ProjectId == null && r.IsEnabled);
+            .SingleAsync(r =>
+                r.Id ==
+                Guid.Parse(
+                    "22222222-2222-2222-2222-222222222222") &&
+                r.ProjectId == null &&
+                r.IsEnabled);
 
         await db.SanitizationRules
-            .Where(r => r.ProjectId == project.Id && r.Pattern == globalRule.Pattern)
+            .Where(r =>
+                r.ProjectId == project.Id &&
+                r.Pattern == globalRule.Pattern)
             .ExecuteDeleteAsync();
 
         var projectRule = new SanitizationRule
@@ -1100,17 +1870,24 @@ public class TicketsControllerTests
             var controller = NewController(db);
 
             var request = Request("demo");
-            request.Description = "Kontakt: foo@bar.com";
 
-            var result = await controller.Create(request, CancellationToken.None);
+            request.Description =
+                "Kontakt: foo@bar.com";
 
-            Assert.IsType<CreatedAtActionResult>(result.Result);
+            var result = await controller.Create(
+                request,
+                CancellationToken.None);
+
+            Assert.IsType<CreatedAtActionResult>(
+                result.Result);
 
             var ticket = await db.Tickets
                 .AsNoTracking()
                 .SingleAsync();
 
-            Assert.Equal("Kontakt: [PROJECT]", ticket.Description);
+            Assert.Equal(
+                "Kontakt: [PROJECT]",
+                ticket.Description);
 
             var logs = await db.SanitizationLogs
                 .AsNoTracking()
@@ -1118,10 +1895,22 @@ public class TicketsControllerTests
                 .ToListAsync();
 
             var log = Assert.Single(logs);
-            Assert.Equal(projectRule.Id, log.RuleId);
-            Assert.Equal(nameof(Ticket.Description), log.FieldName);
-            Assert.Equal(1, log.MatchCount);
-            Assert.DoesNotContain(logs, l => l.RuleId == globalRule.Id);
+
+            Assert.Equal(
+                projectRule.Id,
+                log.RuleId);
+
+            Assert.Equal(
+                nameof(Ticket.Description),
+                log.FieldName);
+
+            Assert.Equal(
+                1,
+                log.MatchCount);
+
+            Assert.DoesNotContain(
+                logs,
+                l => l.RuleId == globalRule.Id);
         }
         finally
         {
@@ -1141,11 +1930,16 @@ public class TicketsControllerTests
         using var db = NewContext();
 
         var demoProject = await db.Projects
-            .SingleAsync(p => p.Key == "demo");
+            .SingleAsync(
+                p => p.Key == "demo");
 
         var globalRule = await db.SanitizationRules
             .AsNoTracking()
-            .SingleAsync(r => r.ProjectId == null && r.IsEnabled);
+            .SingleAsync(r =>
+                r.ProjectId == null &&
+                r.IsEnabled &&
+                r.Pattern ==
+                @"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+");
 
         var otherProject = new Project
         {
@@ -1157,12 +1951,13 @@ public class TicketsControllerTests
         db.Projects.Add(otherProject);
         await db.SaveChangesAsync();
 
-        db.ProjectOrigins.Add(new ProjectOrigin
-        {
-            Id = Guid.NewGuid(),
-            ProjectId = otherProject.Id,
-            Origin = AllowedOrigin
-        });
+        db.ProjectOrigins.Add(
+            new ProjectOrigin
+            {
+                Id = Guid.NewGuid(),
+                ProjectId = otherProject.Id,
+                Origin = AllowedOrigin
+            });
 
         await db.SaveChangesAsync();
 
@@ -1189,20 +1984,26 @@ public class TicketsControllerTests
         {
             var controller = NewController(db);
 
-            var request = Request(otherProject.Key);
-            request.Description = "Kontakt: foo@bar.com";
+            var request = Request(
+                otherProject.Key);
+
+            request.Description =
+                "Kontakt: foo@bar.com";
 
             var result = await controller.Create(
                 request,
                 CancellationToken.None);
 
-            Assert.IsType<CreatedAtActionResult>(result.Result);
+            Assert.IsType<CreatedAtActionResult>(
+                result.Result);
 
             var ticket = await db.Tickets
                 .AsNoTracking()
                 .SingleAsync();
 
-            Assert.Equal("Kontakt: ***", ticket.Description);
+            Assert.Equal(
+                "Kontakt: ***",
+                ticket.Description);
 
             var logs = await db.SanitizationLogs
                 .AsNoTracking()
@@ -1210,9 +2011,18 @@ public class TicketsControllerTests
                 .ToListAsync();
 
             var log = Assert.Single(logs);
-            Assert.Equal(globalRule.Id, log.RuleId);
-            Assert.Equal(nameof(Ticket.Description), log.FieldName);
-            Assert.Equal(1, log.MatchCount);
+
+            Assert.Equal(
+                globalRule.Id,
+                log.RuleId);
+
+            Assert.Equal(
+                nameof(Ticket.Description),
+                log.FieldName);
+
+            Assert.Equal(
+                1,
+                log.MatchCount);
         }
         finally
         {
