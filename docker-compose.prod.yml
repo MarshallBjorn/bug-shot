@@ -49,8 +49,6 @@ services:
       - /tmp:rw,noexec,nosuid,size=64m
     volumes:
       - attachments_data:/var/lib/bugshot/attachments
-    env_file:
-      - .env.prod
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       APP_DLL: ${BACKEND_APP_DLL:?BACKEND_APP_DLL required}
