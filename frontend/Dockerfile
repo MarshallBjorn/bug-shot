@@ -20,6 +20,12 @@ RUN apk upgrade --no-cache && apk upgrade
 COPY package*.json ./
 RUN npm ci
 COPY . .
+ARG VITE_API_BASE_URL
+ARG VITE_MEDIA_BASE_URL
+ARG VITE_PROJECT_ID
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
+    VITE_MEDIA_BASE_URL=$VITE_MEDIA_BASE_URL \
+    VITE_PROJECT_ID=$VITE_PROJECT_ID
 RUN npm run build
 
 # --- production (domyslny stage bez --target, uzywany przez CI i prod) ---
