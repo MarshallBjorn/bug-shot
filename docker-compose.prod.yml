@@ -49,11 +49,11 @@ services:
       - /tmp:rw,noexec,nosuid,size=64m
     volumes:
       - attachments_data:/var/lib/bugshot/attachments
+    env_file:
+      - .env.prod
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       APP_DLL: ${BACKEND_APP_DLL:?BACKEND_APP_DLL required}
-      # CORS whitelist — tylko origin frontu; backend czyta i wpisuje do polityki CORS.
-      Cors__AllowedOrigins__0: https://bugshot.on-labs.dev
     networks:
       db_internal: {}
       storage_internal: {}
