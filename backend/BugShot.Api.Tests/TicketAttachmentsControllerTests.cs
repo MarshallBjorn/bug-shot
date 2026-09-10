@@ -1,5 +1,6 @@
 using System.Text;
 using BugShot.Api.Attachments;
+using BugShot.Api.Sanitization;
 using BugShot.Api.Contracts;
 using BugShot.Api.Controllers;
 using BugShot.Api.Data;
@@ -72,7 +73,8 @@ public class TicketAttachmentsControllerTests : IDisposable
             db,
             new AttachmentStorageOptions(Path.GetTempPath()),
             cache,
-            NullLogger<TicketsController>.Instance)
+            NullLogger<TicketsController>.Instance,
+            new SanitizationService(db))
         {
             ControllerContext = new ControllerContext { HttpContext = context }
         };
@@ -93,7 +95,10 @@ public class TicketAttachmentsControllerTests : IDisposable
             context.Request.Headers[UploadToken.HeaderName] = token;
         }
 
-        return new TicketAttachmentsController(db, new AttachmentStorageOptions(root))
+        return new TicketAttachmentsController(
+            db,
+            new AttachmentStorageOptions(root),
+            new SanitizationService(db))
         {
             ControllerContext = new ControllerContext { HttpContext = context }
         };
@@ -328,6 +333,55 @@ public class TicketAttachmentsControllerTests : IDisposable
             .SingleAsync(t => t.TicketId == ticket.Id);
 
         Assert.Null(token.UsedAt);
+    }
+
+    [Fact]
+    public async Task ConsoleLogJestSanityzowanyZapisywanyJakoPlikISanitizationLog()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+
+        var globalRule = await db.SanitizationRules
+            .AsNoTracking()
+            .SingleAsync(r => r.ProjectId == null && r.IsEnabled);
+
+        var original = """
+                       Start
+                       Kontakt: foo@bar.com
+                       Koniec
+                       """;
+
+        var result = await Upload(
+            db,
+            ticket.Id,
+            ticket.UploadToken,
+            ("consoleLog", "konsola.log", Encoding.UTF8.GetBytes(original)));
+
+        Assert.Equal(StatusCodes.Status201Created, StatusOf(result));
+
+        var attachment = await db.TicketAttachments
+            .AsNoTracking()
+            .SingleAsync();
+
+        Assert.Equal(AttachmentKind.ConsoleLog, attachment.Kind);
+
+        var storedPath = Path.Combine(root, Path.GetFileName(attachment.Uri));
+        Assert.True(File.Exists(storedPath));
+
+        var storedContent = await File.ReadAllTextAsync(storedPath, Encoding.UTF8);
+
+        Assert.DoesNotContain("foo@bar.com", storedContent);
+        Assert.Contains("***", storedContent);
+
+        var logs = await db.SanitizationLogs
+            .AsNoTracking()
+            .Where(l => l.TicketId == ticket.Id)
+            .ToListAsync();
+
+        var log = Assert.Single(logs);
+        Assert.Equal(globalRule.Id, log.RuleId);
+        Assert.Equal("consoleLog", log.FieldName);
+        Assert.Equal(1, log.MatchCount);
     }
 
 
