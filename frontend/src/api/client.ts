@@ -71,7 +71,7 @@ async function sendMutation<T>(
   }
 
   if (!response.ok) {
-    throw new ApiError(response.status, `Żądanie ${path} zakończyło się kodem ${response.status}`)
+    throw new ApiError(response.status, await problemMessage(path, response))
   }
 
   if (response.status === 204) {
@@ -79,6 +79,29 @@ async function sendMutation<T>(
   }
 
   return (await response.json()) as T
+}
+
+// ProblemDetails niesie prawdziwy powod bledu, np. zajety klucz projektu albo blokade kasowania
+async function problemMessage(path: string, response: Response) {
+  try {
+    const problem = (await response.json()) as { title?: string; errors?: Record<string, string[]> }
+
+    if (problem.errors) {
+      const fields = Object.values(problem.errors).flat()
+
+      if (fields.length > 0) {
+        return fields.join(' ')
+      }
+    }
+
+    if (problem.title) {
+      return problem.title
+    }
+  } catch {
+    // cialo nie jest JSON-em albo jest puste, zostaje ogolny opis
+  }
+
+  return `Żądanie ${path} zakończyło się kodem ${response.status}`
 }
 
 export async function apiPost<T>(path: string, body: unknown) {

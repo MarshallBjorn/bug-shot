@@ -14,6 +14,12 @@ function AppLayout() {
     <div className="app">
       <header className="app-header">
         <Link to="/">Bug-shot</Link>
+        {user?.isAdmin && (
+          <nav className="app-nav">
+            <Link to="/admin/projects">Projekty</Link>
+            <Link to="/admin/sanitization-rules">Sanityzacja</Link>
+          </nav>
+        )}
         <span className="app-user">
           {user?.email}
           <button onClick={leave} type="button">

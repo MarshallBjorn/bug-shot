@@ -212,6 +212,21 @@ public class AuthEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task PanelAdminaJestTylkoDlaAdmina()
+    {
+        var developer = await CreateDeveloper();
+        var admin = await Read(await Login(client, AdminEmail, AdminPassword));
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/v1/projects", developer.AccessToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/v1/projects", admin.AccessToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/projects")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/v1/sanitization-rules", developer.AccessToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/v1/sanitization-rules", admin.AccessToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/sanitization-rules")).StatusCode);
+    }
+
+    [Fact]
     public async Task DezaktywacjaZamykaSesjeIBlokujeLogowanie()
     {
         var developer = await CreateDeveloper();
