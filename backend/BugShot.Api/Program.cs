@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using BugShot.Api;
 using BugShot.Api.Attachments;
+using BugShot.Api.Sanitization;
 using BugShot.Api.Data;
 using BugShot.Api.Live;
 using BugShot.Api.Models;
@@ -34,6 +35,8 @@ var dashboardOrigins = builder.Configuration.GetSection("Cors:DashboardOrigins")
 
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+builder.Services.AddHealthChecks();
 
 var attachmentStorage = new AttachmentStorageOptions(attachmentsPath);
 attachmentStorage.EnsureWritable();
@@ -120,6 +123,7 @@ builder.Services.AddDbContext<BugShotDbContext>(options => options
     })
     .UseSnakeCaseNamingConvention());
 
+builder.Services.AddScoped<ISanitizationService, SanitizationService>();
 builder.Services.AddCors(options =>
 {
     // widget siedzi na cudzych domenach i moze tylko zglaszac
@@ -148,10 +152,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<BugShotDbContext>();
 
-    if (app.Environment.IsDevelopment())
-    {
-        await db.Database.MigrateAsync();
-    }
+    await db.Database.MigrateAsync();
 
     await AdminSeeder.EnsureAdmin(
         db,
@@ -183,6 +184,7 @@ if (openApiAccess is not null)
 
 app.UseCors();
 
+app.MapHealthChecks("/healthz").AllowAnonymous();;
 app.UseAuthentication();
 app.UseAuthorization();
 

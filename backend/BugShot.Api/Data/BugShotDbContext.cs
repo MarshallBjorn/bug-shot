@@ -193,6 +193,23 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
                 .WithMany(p => p.SanitizationRules)
                 .HasForeignKey(r => r.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasData(new SanitizationRule
+            {
+                Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                ProjectId = null,
+                Pattern = @"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+",
+                Replacement = "***",
+                IsEnabled = true,
+                CreatedAt = new DateTimeOffset(
+                    2026,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    TimeSpan.Zero)
+            });
+
         });
 
         modelBuilder.Entity<User>(entity =>

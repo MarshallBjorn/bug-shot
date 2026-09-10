@@ -1,4 +1,5 @@
 using BugShot.Api.Attachments;
+using BugShot.Api.Sanitization;
 using BugShot.Api.Contracts;
 using BugShot.Api.Controllers;
 using BugShot.Api.Data;
@@ -70,7 +71,8 @@ public class TicketsControllerTests
             storage ?? NewStorage(),
             cache ?? NewCache(),
             notifier ?? new RecordingTicketNotifier(),
-            NullLogger<TicketsController>.Instance)
+            NullLogger<TicketsController>.Instance,
+            new SanitizationService(db))
         {
             ControllerContext = new ControllerContext { HttpContext = context }
         };
@@ -168,6 +170,7 @@ public class TicketsControllerTests
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
+
     [Fact]
     public async Task KomentarzNaSkasowanymTickecieDaje409()
     {
@@ -264,6 +267,7 @@ public class TicketsControllerTests
         Assert.Equal(TicketStatus.Deleted, deletedTicket.Status);
         Assert.False(await db.TicketAttachments.AnyAsync(a => a.TicketId == payload.Id));
     }
+
     [Fact]
     public async Task KomentarzJestZapisywany()
     {
@@ -329,6 +333,7 @@ public class TicketsControllerTests
             response.Items.Zip(response.Items.Skip(1))
                 .All(pair => pair.First.CreatedAt <= pair.Second.CreatedAt));
     }
+
     [Fact]
     public async Task ListaKomentarzyObslugujePaginacje()
     {
@@ -938,7 +943,6 @@ public class TicketsControllerTests
         Assert.Equal(TicketStatus.Deleted, history[0].ToStatus);
     }
 
-
     [Fact]
     public async Task KasowanieUniewaznaWystawioneTokenyUploadu()
     {
@@ -1075,5 +1079,246 @@ public class TicketsControllerTests
         Assert.Equal("deleted", sent.Event);
         Assert.Equal(ticket.ProjectId, sent.ProjectId);
         Assert.Equal(ticket.Id, sent.TicketId);
+    }
+
+    [Fact]
+    public async Task GlobalnaRegulaEmailMaskujeWszystkiePolaITworzyLogi()
+    {
+        using var db = NewContext();
+        var controller = NewController(db);
+
+        var request = Request("demo");
+        request.Description = "Kontakt: foo@bar.com oraz drugi foo@bar.com";
+        request.PageUrl = "https://example.com/?email=foo@bar.com";
+        request.UserAgent = "Browser foo@bar.com";
+
+        var result = await controller.Create(request, CancellationToken.None);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+
+        var ticket = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync();
+
+        Assert.Equal(
+            "Kontakt: *** oraz drugi ***",
+            ticket.Description);
+
+        Assert.Equal(
+            "https://example.com/?email=***",
+            ticket.PageUrl);
+
+        Assert.Equal(
+            "Browser ***",
+            ticket.UserAgent);
+
+        var rule = await db.SanitizationRules
+            .AsNoTracking()
+            .SingleAsync(r => r.ProjectId == null && r.IsEnabled);
+
+        var logs = await db.SanitizationLogs
+            .AsNoTracking()
+            .Where(l => l.TicketId == ticket.Id)
+            .OrderBy(l => l.FieldName)
+            .ToListAsync();
+
+        Assert.Equal(3, logs.Count);
+
+        Assert.Collection(
+            logs,
+            description =>
+            {
+                Assert.Equal(nameof(Ticket.Description), description.FieldName);
+                Assert.Equal(2, description.MatchCount);
+                Assert.Equal(rule.Id, description.RuleId);
+            },
+            pageUrl =>
+            {
+                Assert.Equal(nameof(Ticket.PageUrl), pageUrl.FieldName);
+                Assert.Equal(1, pageUrl.MatchCount);
+                Assert.Equal(rule.Id, pageUrl.RuleId);
+            },
+            userAgent =>
+            {
+                Assert.Equal(nameof(Ticket.UserAgent), userAgent.FieldName);
+                Assert.Equal(1, userAgent.MatchCount);
+                Assert.Equal(rule.Id, userAgent.RuleId);
+            });
+
+        var getResult = await controller.GetById(
+            ticket.Id,
+            CancellationToken.None);
+
+        var getOk = Assert.IsType<OkObjectResult>(getResult.Result);
+        var details = Assert.IsType<TicketDetails>(getOk.Value);
+
+        Assert.Equal(ticket.Id, details.Id);
+        Assert.Equal("Kontakt: *** oraz drugi ***", details.Description);
+        Assert.Equal("https://example.com/?email=***", details.PageUrl);
+        Assert.Equal("Browser ***", details.UserAgent);
+    }
+
+    [Fact]
+    public async Task RegulaProjektowaNadpisujeGlobalna()
+    {
+        using var db = NewContext();
+        var project = await db.Projects.SingleAsync(p => p.Key == "demo");
+
+        var globalRule = await db.SanitizationRules
+            .AsNoTracking()
+            .SingleAsync(r => r.ProjectId == null && r.IsEnabled);
+
+        await db.SanitizationRules
+            .Where(r => r.ProjectId == project.Id && r.Pattern == globalRule.Pattern)
+            .ExecuteDeleteAsync();
+
+        var projectRule = new SanitizationRule
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = project.Id,
+            Pattern = globalRule.Pattern,
+            Replacement = "[PROJECT]",
+            IsEnabled = true,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        db.SanitizationRules.Add(projectRule);
+        await db.SaveChangesAsync();
+
+        try
+        {
+            var controller = NewController(db);
+
+            var request = Request("demo");
+            request.Description = "Kontakt: foo@bar.com";
+
+            var result = await controller.Create(request, CancellationToken.None);
+
+            Assert.IsType<CreatedAtActionResult>(result.Result);
+
+            var ticket = await db.Tickets
+                .AsNoTracking()
+                .SingleAsync();
+
+            Assert.Equal("Kontakt: [PROJECT]", ticket.Description);
+
+            var logs = await db.SanitizationLogs
+                .AsNoTracking()
+                .Where(l => l.TicketId == ticket.Id)
+                .ToListAsync();
+
+            var log = Assert.Single(logs);
+            Assert.Equal(projectRule.Id, log.RuleId);
+            Assert.Equal(nameof(Ticket.Description), log.FieldName);
+            Assert.Equal(1, log.MatchCount);
+            Assert.DoesNotContain(logs, l => l.RuleId == globalRule.Id);
+        }
+        finally
+        {
+            await db.SanitizationLogs
+                .Where(l => l.RuleId == projectRule.Id)
+                .ExecuteDeleteAsync();
+
+            await db.SanitizationRules
+                .Where(r => r.Id == projectRule.Id)
+                .ExecuteDeleteAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RegulaProjektowaNieWplywaNaInnyProjekt()
+    {
+        using var db = NewContext();
+
+        var demoProject = await db.Projects
+            .SingleAsync(p => p.Key == "demo");
+
+        var globalRule = await db.SanitizationRules
+            .AsNoTracking()
+            .SingleAsync(r => r.ProjectId == null && r.IsEnabled);
+
+        var otherProject = new Project
+        {
+            Id = Guid.NewGuid(),
+            Name = "Sanitization test project",
+            Key = $"sanitization-{Guid.NewGuid():N}"[..20]
+        };
+
+        db.Projects.Add(otherProject);
+        await db.SaveChangesAsync();
+
+        db.ProjectOrigins.Add(new ProjectOrigin
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = otherProject.Id,
+            Origin = AllowedOrigin
+        });
+
+        await db.SaveChangesAsync();
+
+        await db.SanitizationRules
+            .Where(r =>
+                r.ProjectId == demoProject.Id &&
+                r.Pattern == globalRule.Pattern)
+            .ExecuteDeleteAsync();
+
+        var projectRule = new SanitizationRule
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = demoProject.Id,
+            Pattern = globalRule.Pattern,
+            Replacement = "[PROJECT]",
+            IsEnabled = true,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        db.SanitizationRules.Add(projectRule);
+        await db.SaveChangesAsync();
+
+        try
+        {
+            var controller = NewController(db);
+
+            var request = Request(otherProject.Key);
+            request.Description = "Kontakt: foo@bar.com";
+
+            var result = await controller.Create(
+                request,
+                CancellationToken.None);
+
+            Assert.IsType<CreatedAtActionResult>(result.Result);
+
+            var ticket = await db.Tickets
+                .AsNoTracking()
+                .SingleAsync();
+
+            Assert.Equal("Kontakt: ***", ticket.Description);
+
+            var logs = await db.SanitizationLogs
+                .AsNoTracking()
+                .Where(l => l.TicketId == ticket.Id)
+                .ToListAsync();
+
+            var log = Assert.Single(logs);
+            Assert.Equal(globalRule.Id, log.RuleId);
+            Assert.Equal(nameof(Ticket.Description), log.FieldName);
+            Assert.Equal(1, log.MatchCount);
+        }
+        finally
+        {
+            await db.SanitizationLogs
+                .Where(l => l.RuleId == projectRule.Id)
+                .ExecuteDeleteAsync();
+
+            await db.SanitizationRules
+                .Where(r => r.Id == projectRule.Id)
+                .ExecuteDeleteAsync();
+
+            await db.Tickets.ExecuteDeleteAsync();
+
+            await db.Projects
+                .Where(p => p.Id == otherProject.Id)
+                .ExecuteDeleteAsync();
+        }
     }
 }

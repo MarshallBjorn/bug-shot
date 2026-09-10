@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using BugShot.Api.Attachments;
+using BugShot.Api.Sanitization;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Idempotency;
@@ -25,7 +26,8 @@ public class TicketsController(
     AttachmentStorageOptions storage,
     IDistributedCache idempotencyCache,
     ITicketNotifier notifier,
-    ILogger<TicketsController> logger) : ControllerBase
+    ILogger<TicketsController> logger,
+    ISanitizationService sanitization) : ControllerBase
 {
     private const string IdempotencyKeyHeader = "Idempotency-Key";
     private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromHours(24);
@@ -113,6 +115,27 @@ public class TicketsController(
         };
 
         db.Tickets.Add(ticket);
+
+        ticket.Description = await sanitization.SanitizeAsync(
+            project.Id,
+            ticket.Id,
+            nameof(Ticket.Description),
+            ticket.Description,
+            cancellationToken);
+
+        ticket.PageUrl = await sanitization.SanitizeAsync(
+            project.Id,
+            ticket.Id,
+            nameof(Ticket.PageUrl),
+            ticket.PageUrl,
+            cancellationToken);
+
+        ticket.UserAgent = await sanitization.SanitizeAsync(
+            project.Id,
+            ticket.Id,
+            nameof(Ticket.UserAgent),
+            ticket.UserAgent,
+            cancellationToken);
 
         var uploadToken = UploadToken.Create();
         var expiresAt = DateTimeOffset.UtcNow.Add(UploadToken.Lifetime);

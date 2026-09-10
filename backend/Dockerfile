@@ -16,10 +16,13 @@ ENV APP_DLL=
 
 EXPOSE 8080
 
-COPY --from=build /app/publish .
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/*
 
+COPY --from=build /app/publish .
 # wolumen zalacznikow dziedziczy wlasciciela z tego katalogu wiec musi powstac przed przelaczeniem uzytkownika
-RUN mkdir -p /var/lib/bugshot/media && chown -R "$APP_UID:$APP_UID" /var/lib/bugshot
+RUN mkdir -p /var/lib/bugshot/attachments && chown -R "$APP_UID:$APP_UID" /var/lib/bugshot
 
 USER $APP_UID
 ENTRYPOINT ["sh", "-c", "if [ -z \"$APP_DLL\" ]; then echo 'APP_DLL must be set to the published Web API DLL name.' >&2; exit 1; fi; dotnet \"$APP_DLL\""]
