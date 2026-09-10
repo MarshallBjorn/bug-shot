@@ -15,7 +15,6 @@ export type AttachmentKind = 'Screenshot' | 'UserUpload' | 'ConsoleLog'
 export interface TicketAttachment {
   id: string
   kind: AttachmentKind
-  uri: string
   fileName: string
   contentType: string
   sizeBytes: number
@@ -42,9 +41,16 @@ export interface TicketDetails {
   updatedAt: string
   rowVersion: string
   attachments: TicketAttachment[]
-  consoleLogUri: string | null
+  consoleLog: TicketAttachment | null
   commentCount: number
   statusHistory: TicketStatusChange[]
+}
+
+export interface TicketComment {
+  id: string
+  author: string
+  body: string
+  createdAt: string
 }
 
 export interface PagedResult<T> {
@@ -52,4 +58,11 @@ export interface PagedResult<T> {
   total: number
   page: number
   pageSize: number
+}
+
+export interface AuthenticatedUser {
+  id: string
+  email: string
+  isAdmin: boolean
+  isActive: boolean
 }

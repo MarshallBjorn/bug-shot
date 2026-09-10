@@ -32,6 +32,12 @@ services:
       APP_DLL: ${BACKEND_APP_DLL:-}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-bugshot_dev};Username=${POSTGRES_USER:-bugshot};Password=${POSTGRES_PASSWORD:-change-me-dev-only}
       Storage__AttachmentsPath: /var/lib/bugshot/attachments
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-}
+      SWAGGER_USER: ${SWAGGER_USER:-}
+      SWAGGER_PASSWORD: ${SWAGGER_PASSWORD:-}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     volumes:
@@ -49,7 +55,6 @@ services:
     environment:
       NODE_ENV: development
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
-      VITE_MEDIA_BASE_URL: ${VITE_MEDIA_BASE_URL:-http://localhost:8081}
       VITE_PROJECT_ID: ${VITE_PROJECT_ID:-}
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
@@ -70,7 +75,6 @@ services:
       - "127.0.0.1:${NGINX_PORT:-8081}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./bug-shot-attachments:/srv/attachments:ro
       - ./bug-shot-widgets:/srv/widgets:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]

@@ -1,11 +1,18 @@
 using System.Text;
+using BugShot.Api.Attachments;
+using BugShot.Api.Sanitization;
 using BugShot.Api.Contracts;
 using BugShot.Api.Controllers;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace BugShot.Api.Tests;
 
@@ -43,7 +50,21 @@ public class UploadTokenTests
 
     private static async Task<CreatedTicketResponse> CreateTicket(BugShotDbContext db)
     {
-        var result = await new TicketsController(db).Create(Request(), CancellationToken.None);
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Origin = "http://127.0.0.1:5500";
+
+        var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        var controller = new TicketsController(
+            db,
+            new AttachmentStorageOptions(Path.GetTempPath()),
+            cache,
+            NullLogger<TicketsController>.Instance,
+            new SanitizationService(db))
+        {
+            ControllerContext = new ControllerContext { HttpContext = context }
+        };
+
+        var result = await controller.Create(Request(), CancellationToken.None);
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         return Assert.IsType<CreatedTicketResponse>(created.Value);
     }

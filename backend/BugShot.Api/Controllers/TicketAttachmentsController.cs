@@ -1,8 +1,12 @@
+using System.Net.Mime;
+using System.Text;
+using BugShot.Api.Sanitization;
 using BugShot.Api.Attachments;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
@@ -13,15 +17,30 @@ namespace BugShot.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/tickets/{ticketId:guid}/attachments")]
-public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageOptions storage) : ControllerBase
+[Produces(MediaTypeNames.Application.Json)]
+public class TicketAttachmentsController(
+    BugShotDbContext db,
+    AttachmentStorageOptions storage,
+    ISanitizationService sanitization) : ControllerBase
 {
+    /// <summary>Przyjmuje zalaczniki do zgloszenia.</summary>
+    /// <remarks>
+    /// Multipart z polami screenshot files i consoleLog. Kazde jest opcjonalne ale puste zadanie
+    /// konczy sie na 400. Autoryzuje jednorazowy uploadToken z odpowiedzi POST /tickets podany
+    /// w naglowku X-Upload-Token. Token dziala raz i tylko dla swojego zgloszenia.
+    /// Typ pliku jest sprawdzany po zawartosci a nie po nazwie ani naglowku.
+    /// </remarks>
     [HttpPost]
+    // wysylka z widgetu autoryzuje sie jednorazowym uploadToken a nie tokenem sesji
+    [AllowAnonymous]
     [EnableCors(CorsPolicies.WidgetUpload)]
+    [Consumes(MediaTypeNames.Multipart.FormData)]
     [RequestSizeLimit(AttachmentLimits.MaxRequestBytes)]
     [DisableFormValueModelBinding]
     [ProducesResponseType<IReadOnlyList<TicketAttachmentResponse>>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     public async Task<IActionResult> Upload(Guid ticketId, CancellationToken cancellationToken)
     {
@@ -50,6 +69,32 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
         if (!await ConsumeToken(ticketId, provided!, cancellationToken))
         {
             return Unauthorized();
+        }
+
+        // status sprawdzamy dopiero po tokenie zeby nie zdradzac stanu zgloszenia bez uprawnien
+        var ticketInfo = await db.Tickets
+            .AsNoTracking()
+            .Where(t => t.Id == ticketId)
+            .Select(t => new
+            {
+                t.Status,
+                t.ProjectId
+            })
+            .SingleAsync(cancellationToken);
+
+        var status = ticketInfo.Status;
+        var projectId = ticketInfo.ProjectId;
+
+        // tombstone stracil juz swoje dane wiec doklejenie pliku cofneloby skutek kasowania
+        if (status == TicketStatus.Deleted)
+        {
+            var conflict = Problem(
+                title: "Deleted ticket cannot be modified.",
+                statusCode: StatusCodes.Status409Conflict);
+
+            ((ProblemDetails)conflict.Value!).Extensions["currentStatus"] = status;
+
+            return conflict;
         }
 
         var written = new List<string>();
@@ -99,15 +144,37 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
                 var target = Path.Combine(storage.RootPath, $"{Guid.NewGuid()}.tmp");
                 written.Add(target);
 
-                var size = await Copy(section.Body, target, limit, cancellationToken);
+        var size = await Copy(section.Body, target, limit, cancellationToken);
 
-                if (size < 0)
-                {
-                    Discard(written);
-                    return StatusCode(StatusCodes.Status413PayloadTooLarge);
-                }
+        if (size < 0)
+        {
+            Discard(written);
+            return StatusCode(StatusCodes.Status413PayloadTooLarge);
+        }
 
-                var attachment = Store(target, field, kind.Value, disposition.FileName.Value!, size, written);
+        if (kind == AttachmentKind.ConsoleLog)
+        {
+            size = await SanitizeConsoleLogAsync(
+                target,
+                projectId,
+                ticketId,
+                field,
+                cancellationToken);
+
+            if (size < 0)
+            {
+                Discard(written);
+                return ValidationProblem(ModelState);
+            }
+        }
+
+        var attachment = Store(
+            target,
+            field,
+            kind.Value,
+            disposition.FileName.Value!,
+            size,
+            written);
 
                 if (attachment is not null)
                 {
@@ -132,7 +199,7 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
             await transaction.CommitAsync(cancellationToken);
 
             return StatusCode(StatusCodes.Status201Created, saved
-                .Select(a => new TicketAttachmentResponse(a.Id, a.Kind, a.Uri, a.FileName, a.ContentType, a.SizeBytes))
+                .Select(a => new TicketAttachmentResponse(a.Id, a.Kind, a.FileName, a.ContentType, a.SizeBytes))
                 .ToList());
         }
         catch
@@ -157,6 +224,48 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
 
         return consumed == 1;
     }
+
+    private async Task<long> SanitizeConsoleLogAsync(
+        string temporaryPath,
+        Guid projectId,
+        Guid ticketId,
+        string field,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var bytes = await System.IO.File.ReadAllBytesAsync(
+                temporaryPath,
+                cancellationToken);
+
+            var encoding = new UTF8Encoding(
+                encoderShouldEmitUTF8Identifier: false,
+                throwOnInvalidBytes: true);
+
+            var content = encoding.GetString(bytes);
+
+            var sanitized = await sanitization.SanitizeAsync(
+                projectId,
+                ticketId,
+                field,
+                content,
+                cancellationToken);
+
+            await System.IO.File.WriteAllTextAsync(
+                temporaryPath,
+                sanitized,
+                encoding,
+                cancellationToken);
+
+            return new FileInfo(temporaryPath).Length;
+        }
+        catch (DecoderFallbackException)
+        {
+            ModelState.AddModelError(field, "Console log must be valid UTF-8 text.");
+            return -1;
+        }
+    }
+
 
     private TicketAttachment? Store(
         string temporaryPath,
@@ -218,10 +327,32 @@ public class TicketAttachmentsController(BugShotDbContext db, AttachmentStorageO
             Kind = kind,
             Uri = $"{AttachmentStorageOptions.UriPrefix}/{name}",
             // nazwa od klienta nigdy nie trafia do sciezki
-            FileName = Path.GetFileName(clientFileName),
+            FileName = MetadataFileName(clientFileName),
             ContentType = detected.ContentType,
             SizeBytes = size
         };
+    }
+
+    // nazwa jest sama metadana wiec za dluga przycinamy zamiast odrzucac poprawna wysylke
+    private static string MetadataFileName(string clientFileName)
+    {
+        var name = Path.GetFileName(clientFileName);
+
+        if (name.Length <= AttachmentLimits.MaxFileNameLength)
+        {
+            return name;
+        }
+
+        var extension = Path.GetExtension(name);
+
+        if (extension.Length >= AttachmentLimits.MaxFileNameLength)
+        {
+            return name[..AttachmentLimits.MaxFileNameLength];
+        }
+
+        return string.Concat(
+            name.AsSpan(0, AttachmentLimits.MaxFileNameLength - extension.Length),
+            extension);
     }
 
     private static AttachmentKind? KindOf(string field) => field switch

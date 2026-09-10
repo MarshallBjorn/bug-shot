@@ -181,6 +181,16 @@ namespace BugShot.Api.Migrations
                         .HasDatabaseName("ix_sanitization_rules_project_id");
 
                     b.ToTable("sanitization_rules", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsEnabled = true,
+                            Pattern = "(?<![\\w.+-])[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+",
+                            Replacement = "***"
+                        });
                 });
 
             modelBuilder.Entity("BugShot.Api.Models.Ticket", b =>
@@ -426,6 +436,92 @@ namespace BugShot.Api.Migrations
                     b.ToTable("ticket_upload_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("BugShot.Api.Models.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("email");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsAdmin")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_admin");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("password_hash");
+
+                    b.HasKey("Id")
+                        .HasName("pk_users");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasDatabaseName("ix_users_email");
+
+                    b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("BugShot.Api.Models.UserRefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_refresh_tokens");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_user_refresh_tokens_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_user_refresh_tokens_user_id");
+
+                    b.ToTable("user_refresh_tokens", (string)null);
+                });
+
             modelBuilder.Entity("BugShot.Api.Models.ProjectOrigin", b =>
                 {
                     b.HasOne("BugShot.Api.Models.Project", "Project")
@@ -530,6 +626,18 @@ namespace BugShot.Api.Migrations
                     b.Navigation("Ticket");
                 });
 
+            modelBuilder.Entity("BugShot.Api.Models.UserRefreshToken", b =>
+                {
+                    b.HasOne("BugShot.Api.Models.User", "User")
+                        .WithMany("RefreshTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_refresh_tokens_users_user_id");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("BugShot.Api.Models.Project", b =>
                 {
                     b.Navigation("Origins");
@@ -550,6 +658,11 @@ namespace BugShot.Api.Migrations
                     b.Navigation("StatusHistory");
 
                     b.Navigation("UploadTokens");
+                });
+
+            modelBuilder.Entity("BugShot.Api.Models.User", b =>
+                {
+                    b.Navigation("RefreshTokens");
                 });
 #pragma warning restore 612, 618
         }

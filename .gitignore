@@ -641,6 +641,8 @@ web_modules/
 .env.test.local
 .env.production.local
 .env.local
+.env.dev
+.env.prod
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -813,3 +815,9 @@ backup-out/
 bug-shot-attachments/
 bug-shot-widgets/
 .restore-tmp/
+
+# playwright
+/e2e/test-results/
+/e2e/playwright-report/
+/e2e/blob-report/
+/e2e/.last-run.json

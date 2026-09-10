@@ -13,6 +13,8 @@
   let diagnosticLogBytes = 0;
 
   const originalConsole = {
+    debug: console.debug,
+    info: console.info,
     log: console.log,
     warn: console.warn,
     error: console.error,
@@ -154,6 +156,16 @@
   const widget = document.querySelector(".bugshot-widget");
   if (!widget) return;
 
+  console.debug = function (...args) {
+    addDiagnosticLog("DEBUG", "console.debug", formatConsoleArgs(args));
+    Reflect.apply(originalConsole.debug, console, args);
+  };
+
+  console.info = function (...args) {
+    addDiagnosticLog("INFO", "console.info", formatConsoleArgs(args));
+    Reflect.apply(originalConsole.info, console, args);
+  };
+
   console.log = function (...args) {
     addDiagnosticLog("INFO", "console.log", formatConsoleArgs(args));
     Reflect.apply(originalConsole.log, console, args);
@@ -219,9 +231,11 @@
     ".bugshot-success-ticket code"
   );
 
+  // limit API liczy sie lacznie ze zrzutem wiec jeden slot jest zarezerwowany
   const MAX_FILES = 5;
+  const MAX_USER_FILES = MAX_FILES - 1;
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
-  const MAX_TOTAL_FILE_SIZE = MAX_FILES * MAX_FILE_SIZE;
+  const MAX_TOTAL_FILE_SIZE = MAX_USER_FILES * MAX_FILE_SIZE;
   const MAX_DESCRIPTION_LENGTH = 1200;
   const ACCEPTED_IMAGE_TYPES = new Set([
     "image/png",
@@ -451,7 +465,7 @@
       newCandidates.push(file);
     }
 
-    const availableSlots = Math.max(0, MAX_FILES - selectedFiles.length);
+    const availableSlots = Math.max(0, MAX_USER_FILES - selectedFiles.length);
     const accepted = newCandidates.slice(0, availableSlots);
     const limitedCount = Math.max(0, newCandidates.length - accepted.length);
     const projectedTotalSize =
@@ -513,7 +527,7 @@
             ? "plików"
             : "plików";
       messages.push(
-        `Można dodać maksymalnie ${MAX_FILES} załączników. Nie dodano ${limitedCount} ${fileLabel}.`
+        `Można dodać maksymalnie ${MAX_USER_FILES} załączniki. Nie dodano ${limitedCount} ${fileLabel}.`
       );
     }
 
@@ -613,7 +627,7 @@
 
   }
 
-  async function uploadAttachments(ticketId, uploadToken, attachments) {
+  async function uploadAttachments(ticketId, uploadToken, screenshot, attachments) {
     const response = await fetchWithRetry(
       `${API_BASE_URL}/api/v1/tickets/${ticketId}/attachments`,
       {
@@ -624,6 +638,10 @@
       },
       () => {
         const formData = new FormData();
+
+        if (screenshot) {
+          formData.append("screenshot", screenshot, screenshot.name);
+        }
 
         for (const file of attachments) {
           formData.append("files", file, file.name);
@@ -649,7 +667,7 @@
     return response.json();
   }
 
-  async function submitReport({ description, attachments }) {
+  async function submitReport({ description, screenshot, attachments }) {
     const payload = {
       projectKey: "demo",
       description,
@@ -685,10 +703,11 @@
     const reportAttachments = attachments || [];
     const logs = getDiagnosticLogsText();
 
-    if (reportAttachments.length > 0 || logs) {
+    if (screenshot || reportAttachments.length > 0 || logs) {
       await uploadAttachments(
         data.id,
         data.uploadToken,
+        screenshot,
         reportAttachments
       );
     }
@@ -718,8 +737,11 @@
     setStatus("Wysyłanie zgłoszenia…", "");
 
     try {
+      const screenshot = await window.BUGSHOT_CAPTURE.screenshotFile();
+
       const result = await submitReport({
         description,
+        screenshot,
         attachments: [...selectedFiles],
       });
 

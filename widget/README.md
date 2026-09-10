@@ -6,8 +6,8 @@ Standalone client-side widget for submitting bug reports.
 
 - Floating launcher.
 - Report form with description.
-- Image attachments (PNG, JPEG, WebP, GIF), up to 5 files.
-- Per-file size limit: 10 MiB (10 MB in the user-facing validation message); up to 5 files.
+- Image attachments (PNG, JPEG, WebP, GIF), up to 4 files chosen by the reporter.
+- Per-file size limit: 10 MiB (10 MB in the user-facing validation message); up to 4 user files plus the automatic screenshot, which together fill the API limit of 5.
 - Click-to-select and drag-and-drop.
 - Local UI states for sending, error and success.
 - Sends bug reports to the configured API.

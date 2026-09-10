@@ -43,6 +43,30 @@ Konteneryzacja: Docker + docker-compose
 CI/CD: GitHub Actions
 ```
 
+## Uruchomienie lokalne
+
+```powershell
+cp .env.example .env
+make dev
+```
+
+Panel wstaje na `http://localhost:5173`, API na `http://localhost:8080`, Swagger na `http://localhost:8080/swagger`.
+
+Swagger stoi otworem tylko w środowisku `Development`. Poza nim trzeba go włączyć zmienną `SWAGGER_ENABLED` i podać `SWAGGER_USER` z `SWAGGER_PASSWORD`, bo dokument opisuje całe API razem z trasami za tokenem. Bez tej pary API nie wstanie, żeby włączony dokument nigdy nie wyszedł bez hasła.
+
+`.env.example` ma komplet zmiennych potrzebnych do startu. Bez `JWT_SIGNING_KEY` API nie wstanie, bo klucz podpisu tokenów nie jest ustawieniem opcjonalnym. Konto do panelu powstaje przy pierwszym starcie z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, wyłącznie wtedy gdy tabela `users` jest pusta. Do środowisk innych niż lokalne klucz generuje się osobno, na przykład `openssl rand -base64 48`.
+
+Testy:
+
+```powershell
+make test
+make e2e
+```
+
+`make test` uruchamia backend i frontend i potrzebuje bazy z `make dev`. `make e2e` stawia własne API i własny panel na osobnych portach, więc nie koliduje z działającym środowiskiem, ale bazy z compose też potrzebuje. Zależności obu zestawów instalują się same przy pierwszym uruchomieniu.
+
+Testy backendu czyszczą tabele `tickets` i `users` w bazie deweloperskiej. Po ich uruchomieniu konto z `.env` wraca dopiero po wyczyszczeniu tabeli `users` i restarcie API.
+
 ## Migracje bazy danych
 
 W środowisku `Development` migracje Entity Framework Core są uruchamiane automatycznie przy starcie API.
@@ -68,7 +92,7 @@ flowchart LR
     subgraph app["Aplikacja (docker-compose)"]
         api[".NET Web API<br/>BugShot.Api"]
         dashboard["React Dashboard<br/>panel administracyjny"]
-        nginx["nginx<br/>serwowanie mediów"]
+        nginx["nginx<br/>serwowanie bundli widgetu"]
     end
 
     subgraph data["Warstwa danych"]
@@ -103,13 +127,12 @@ flowchart LR
     caddy --> nginx
 
     api -- "walidacja Origin<br/>rate limit<br/>sanityzacja" --> pg
-    api -- "zapis plików" --> vol
+    api -- "zapis plików<br/>wydawanie za JWT" --> vol
     api -. "walidacja tokena" .-> turnstile
-    nginx -- "serwowanie<br/>Content-Disposition: attachment" --> vol
 
     admin -- "CRUD projektów<br/>rotacja klucza<br/>reguły sanityzacji" --> dashboard
     dev -- "przegląd ticketów<br/>komentarze, statusy" --> dashboard
-    dashboard -- "REST" --> api
+    dashboard -- "REST<br/>Authorization: Bearer" --> api
 
     gh -- "test + build + scan" --> ghcr
     gh -- "publish tag widget-v*" --> npm
@@ -133,6 +156,7 @@ flowchart LR
 
 **Uwagi:**
 - Widget jest jedynym komponentem żyjącym poza naszą infrastrukturą — na cudzej domenie, dostarczany przez CDN
-- Baza trzyma tylko `uri` do plików, same pliki na wolumenie serwowane przez nginx bezpośrednio (API ich nie proxuje)
+- Baza trzyma tylko `uri` do plików, same pliki leżą na wolumenie. Wydaje je API po sprawdzeniu tokena, bo załączniki są danymi użytkownika i nie mogą wisieć pod publicznym adresem. nginx serwuje bezpośrednio już tylko bundle widgetu, który z definicji jest publiczny
+- Panel chroni JWT: access token w nagłówku, token odświeżający w cookie `HttpOnly`. Widget zostaje bez logowania, chroni go `projectKey`, `Origin` i jednorazowy token wysyłki
 - Rate limit i walidacja `Origin` są w API, nie na Caddy — łatwiej ich odpalać per-endpoint
 - Turnstile podłączany warunkowo per projekt (flaga w `projects`)
