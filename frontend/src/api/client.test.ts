@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renewSession, signIn } from '../auth/session'
-import { ApiError, apiGet, apiRequest } from './client'
+import { ApiError, apiGet, apiPost, apiRequest } from './client'
 
 const session = {
   accessToken: 'token-1',
@@ -120,6 +120,30 @@ describe('wygasly token', () => {
     const refreshes = fetched.mock.calls.filter(([url]) => (url as string).includes('/auth/refresh'))
 
     expect(refreshes).toHaveLength(1)
+  })
+})
+
+describe('blad mutacji', () => {
+  it('niesie tytul z ProblemDetails zamiast ogolnego opisu', async () => {
+    fetchMock().mockResolvedValue(respond(409, { title: 'Project has tickets and cannot be deleted.' }))
+
+    const failure = await apiPost('/api/v1/projects', { name: 'x', key: 'x' }).catch(
+      (cause: ApiError) => cause,
+    )
+
+    expect((failure as ApiError).message).toBe('Project has tickets and cannot be deleted.')
+  })
+
+  it('niesie komunikaty walidacji z pol errors', async () => {
+    fetchMock().mockResolvedValue(
+      respond(400, { errors: { key: ['A project with this key already exists.'] } }),
+    )
+
+    const failure = await apiPost('/api/v1/projects', { name: 'x', key: 'x' }).catch(
+      (cause: ApiError) => cause,
+    )
+
+    expect((failure as ApiError).message).toBe('A project with this key already exists.')
   })
 })
 

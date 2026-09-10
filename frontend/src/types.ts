@@ -66,3 +66,26 @@ export interface AuthenticatedUser {
   isAdmin: boolean
   isActive: boolean
 }
+
+export interface ProjectOrigin {
+  id: string
+  origin: string
+}
+
+export interface Project {
+  id: string
+  name: string
+  key: string
+  createdAt: string
+  origins: ProjectOrigin[]
+}
+
+// projectId puste oznacza regule globalna
+export interface SanitizationRule {
+  id: string
+  projectId: string | null
+  pattern: string
+  replacement: string
+  isEnabled: boolean
+  createdAt: string
+}
