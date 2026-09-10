@@ -76,7 +76,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       # Router API — tylko HTTPS, tylko host api.bugshot.app
-      - "traefik.http.routers.bugshot-api.rule=Host(`api.bugshot.on-labs.dev`)"
+      - "traefik.http.routers.bugshot-api.rule=Host(`api-bugshot.on-labs.dev`)"
       - "traefik.http.routers.bugshot-api.entrypoints=websecure"
       - "traefik.http.routers.bugshot-api.tls=true"
       - "traefik.http.routers.bugshot-api.tls.certresolver=le"
@@ -155,7 +155,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
-      - "traefik.http.routers.bugshot-static.rule=Host(`fs.bugshot.on-labs.dev`)"
+      - "traefik.http.routers.bugshot-static.rule=Host(`fs-bugshot.on-labs.dev`)"
       - "traefik.http.routers.bugshot-static.entrypoints=websecure"
       - "traefik.http.routers.bugshot-static.tls=true"
       - "traefik.http.routers.bugshot-static.tls.certresolver=le"
