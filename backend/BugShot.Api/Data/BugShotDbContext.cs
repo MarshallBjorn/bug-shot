@@ -193,6 +193,7 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
                 .WithMany(p => p.SanitizationRules)
                 .HasForeignKey(r => r.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
+
             entity.HasData(new SanitizationRule
             {
                 Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
@@ -214,7 +215,7 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             {
                 Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
                 ProjectId = null,
-                Pattern = @"(?i)\b(password|passwd|pwd)\s*[:=]\s*\S+",
+                Pattern = @"(?i)""?\b(password|passwd|pwd)""?\s*[:=]\s*""?[^""'\r\n,\s}]+""?",
                 Replacement = "***",
                 IsEnabled = true,
                 CreatedAt = new DateTimeOffset(
@@ -231,7 +232,7 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             {
                 Id = Guid.Parse("44444444-4444-4444-4444-444444444444"),
                 ProjectId = null,
-                Pattern = @"(?i)\b(login|username|user_name)\s*[:=]\s*\S+",
+                Pattern = @"(?i)""?\b(login|username|user_name)""?\s*[:=]\s*""?[^""'\r\n,\s}]+""?",
                 Replacement = "***",
                 IsEnabled = true,
                 CreatedAt = new DateTimeOffset(
@@ -248,7 +249,7 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             {
                 Id = Guid.Parse("55555555-5555-5555-5555-555555555555"),
                 ProjectId = null,
-                Pattern = @"(?i)(\bAuthorization\s*:\s*Bearer\s+)\S+",
+                Pattern = @"(?i)(\bAuthorization\s*:\s*(?:Bearer|Digest)\s+)\S+",
                 Replacement = "$1***",
                 IsEnabled = true,
                 CreatedAt = new DateTimeOffset(
@@ -282,7 +283,7 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             {
                 Id = Guid.Parse("77777777-7777-7777-7777-777777777777"),
                 ProjectId = null,
-                Pattern = @"(?i)\b(?:access_token|refresh_token|id_token|session_id|sessionId)\s*[:=]\s*\S+",
+                Pattern = @"(?i)""?\b(?:access_token|refresh_token|id_token|session_id|sessionId)""?\s*[:=]\s*""?[^""'\r\n,\s}]+""?",
                 Replacement = "***",
                 IsEnabled = true,
                 CreatedAt = new DateTimeOffset(
@@ -299,7 +300,7 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             {
                 Id = Guid.Parse("88888888-8888-8888-8888-888888888888"),
                 ProjectId = null,
-                Pattern = @"(?i)\b(?:api[_-]?key|x-api-key|client[_-]?secret|x-client-secret|api[_-]?secret)\s*[:=]\s*\S+",
+                Pattern = @"(?i)""?\b(?:api[_-]?key|x-api-key|client[_-]?secret|x-client-secret|api[_-]?secret)""?\s*[:=]\s*""?[^""'\r\n,\s}]+""?",
                 Replacement = "***",
                 IsEnabled = true,
                 CreatedAt = new DateTimeOffset(
@@ -316,7 +317,7 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             {
                 Id = Guid.Parse("99999999-9999-9999-9999-999999999999"),
                 ProjectId = null,
-                Pattern = @"(?i)\b(?:csrf[_-]?token|xsrf[_-]?token|x-csrf-token|x-xsrf-token)\s*[:=]\s*\S+",
+                Pattern = @"(?i)""?\b(?:csrf[_-]?token|xsrf[_-]?token|x-csrf-token|x-xsrf-token)""?\s*[:=]\s*""?[^""'\r\n,\s}]+""?",
                 Replacement = "***",
                 IsEnabled = true,
                 CreatedAt = new DateTimeOffset(
@@ -345,7 +346,6 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
                     0,
                     TimeSpan.Zero)
             });
-
         });
 
         modelBuilder.Entity<User>(entity =>
