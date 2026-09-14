@@ -209,7 +209,18 @@ Domyślnie każdy endpoint wymaga tokena, wyjątki wylicza sekcja `Uwierzytelnia
 | `POST /users` | działa | nowe konto, tylko dla administratora |
 | `PATCH /users/{id}/deactivate` | działa | wyłączenie konta, tylko dla administratora |
 | `POST /users/{id}/reset-password` | działa | ustawienie nowego hasła, tylko dla administratora |
-| `DELETE /projects/{id}` | planowane | zablokowane, dopóki projekt ma zgłoszenia |
+| `GET /projects` | działa | lista projektów z originami, tylko dla administratora |
+| `POST /projects` | działa | nowy projekt, zajęty klucz kończy się błędem walidacji |
+| `PATCH /projects/{id}` | działa | zmiana nazwy projektu, klucz jest niezmienny |
+| `DELETE /projects/{id}` | działa | zablokowane, dopóki projekt ma zgłoszenia |
+| `POST /projects/{id}/origins` | działa | dodanie dozwolonego originu projektu |
+| `DELETE /projects/{id}/origins/{originId}` | działa | usunięcie originu projektu |
+| `GET /sanitization-rules` | działa | lista reguł, opcjonalny filtr `projectId` dolicza reguły globalne |
+| `POST /sanitization-rules` | działa | nowa reguła globalna (`projectId` puste) albo projektowa |
+| `PATCH /sanitization-rules/{id}` | działa | zmiana wzorca i zamiennika |
+| `PATCH /sanitization-rules/{id}/enabled` | działa | włączenie albo wyłączenie reguły, bez restartu API |
+| `DELETE /sanitization-rules/{id}` | działa | kasowanie reguły |
+| `POST /sanitization-rules/test` | działa | test wzorca i zamiennika na przykładowym tekście, bez zapisu |
 
 ### POST /tickets
 
@@ -450,6 +461,16 @@ Pierwsze konto powstaje przy starcie API z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, wy�
 
 `POST /users`, `PATCH /users/{id}/deactivate` i `POST /users/{id}/reset-password` są tylko dla `is_admin`. Administrator nie może wyłączyć własnego konta, bo ostatni administrator zamknąłby się na zewnątrz. Ekranu do tego w panelu jeszcze nie ma, konta zakłada się żądaniem.
 
+### Projekty
+
+`GET`, `POST` i `PATCH /projects` oraz zarządzanie originami są tylko dla `is_admin`, tak samo jak `sanitization-rules` niżej.
+
+Klucz projektu jest wpięty w widget na cudzej stronie, więc jest niezmienny po utworzeniu: `PATCH /projects/{id}` zmienia tylko nazwę. Zajęty klucz przy `POST /projects` kończy się błędem walidacji na polu `key`, tą samą ścieżką co inne błędy walidacji w tym API.
+
+`DELETE /projects/{id}` usuwa projekt razem z jego originami i regułami projektowymi, ale tylko gdy projekt nie ma ani jednego zgłoszenia. W przeciwnym razie kończy się `409` z komunikatem, żeby dashboard mógł go pokazać wprost, zamiast tłumaczyć błąd bazy.
+
+Origin dodany przez `POST /projects/{id}/origins` jest przycinany z białych znaków i końcowego ukośnika przed zapisem, z tego samego powodu co przy walidacji w `POST /tickets`: przeglądarka i tak normalizuje schemat i host, ale ukośnik na końcu wpisany ręcznie stworzyłby fantomowy duplikat. Powtórzony origin tego samego projektu kończy się `409`.
+
 ## Dokument OpenAPI
 
 Dokument stoi pod `/openapi/v1.json`, Swagger UI pod `/swagger`. Oba adresy są anonimowe względem tokena panelu, bo Swagger UI jest zwykłą stroną w przeglądarce, a access token żyje w pamięci karty panelu i nie ma jak trafić do żądania o dokument.
@@ -491,11 +512,13 @@ Logi konsoli są zwykłym załącznikiem z `kind = console_log`, a nie kolumną 
 
 ## Sanityzacja
 
-Model danych jest przygotowany, logiki jeszcze nie ma.
+Reguły siedzą w `sanitization_rules`, a nie w kolumnie `jsonb`, żeby dało się je indeksować i audytować pojedynczo. `project_id` równe `null` oznacza regułę globalną, na przykład dla adresów e-mail, numerów kart czy tokenów. Reguła projektowa z tym samym wzorcem co globalna nadpisuje ją tylko dla swojego projektu, patrz `SanitizationService`.
 
-Reguły siedzą w `sanitization_rules`, a nie w kolumnie `jsonb`, żeby dało się je indeksować i audytować pojedynczo. `project_id` równe `null` oznacza regułę globalną, na przykład dla adresów e-mail, numerów kart czy tokenów. Reguły projektowe rozszerzają globalne.
+Maskowanie działa po stronie backendu przed zapisem, dla opisu, adresu strony i user agenta. Każde trafienie dopisuje wpis w `sanitization_logs` z nazwą pola i liczbą dopasowań, bez zapisywania oryginału. Ticket wraca do klienta zawsze w wersji zamaskowanej, baza nie trzyma nic innego.
 
-Maskowanie ma się odbywać po stronie backendu przed zapisem, dla opisu, adresu strony i user agenta w bazie oraz dla logów konsoli na wolumenie. Trafienia trafiają do `sanitization_logs` z nazwą pola i liczbą dopasowań, bez zapisywania oryginału. Ticket wraca do klienta zawsze w wersji zamaskowanej.
+Wzorzec jest zwykłym wyrażeniem regularnym .NET, dopasowanie ma limit czasu 100ms. Niepoprawny wzorzec albo przekroczony limit pomijają regułę zamiast wywalać całe zgłoszenie.
+
+`sanitization-rules` to ekran administracyjny nad tą samą tabelą. Włączenie i wyłączenie reguły przez `PATCH /sanitization-rules/{id}/enabled` działa od razu, bo `SanitizationService` czyta `is_enabled` z bazy przy każdym zgłoszeniu, bez żadnego cache w pamięci procesu. `POST /sanitization-rules/test` liczy to samo dopasowanie na przykładowym tekście z ciała żądania i niczego nie zapisuje, więc pozwala zobaczyć wynik przed założeniem albo edycją reguły. Niepoprawny wzorzec w `POST /sanitization-rules`, `PATCH /sanitization-rules/{id}` i `POST /sanitization-rules/test` kończy się błędem walidacji na polu `pattern`.
 
 ## CORS
 

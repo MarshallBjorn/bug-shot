@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -7,8 +6,6 @@ namespace BugShot.Api.Sanitization;
 
 public sealed class SanitizationService(BugShotDbContext db) : ISanitizationService
 {
-    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(100);
-
     public async Task<string> SanitizeAsync(
         Guid projectId,
         Guid ticketId,
@@ -42,42 +39,20 @@ public sealed class SanitizationService(BugShotDbContext db) : ISanitizationServ
 
         foreach (var rule in effectiveRules)
         {
-            Regex regex;
-
-            try
-            {
-                regex = new Regex(
-                    rule.Pattern,
-                    RegexOptions.CultureInvariant,
-                    RegexTimeout);
-            }
-            catch (ArgumentException)
-            {
-                continue;
-            }
-
-            MatchCollection matches;
-
-            try
-            {
-                matches = regex.Matches(value);
-            }
-            catch (RegexMatchTimeoutException)
-            {
-                continue;
-            }
-
-            if (matches.Count == 0)
+            if (!RegexRule.TryApply(rule.Pattern, rule.Replacement, value, out var replaced, out var matchCount))
                 continue;
 
-            value = regex.Replace(value, rule.Replacement);
+            if (matchCount == 0)
+                continue;
+
+            value = replaced;
 
             db.SanitizationLogs.Add(new SanitizationLog
             {
                 TicketId = ticketId,
                 RuleId = rule.Id,
                 FieldName = fieldName,
-                MatchCount = matches.Count
+                MatchCount = matchCount
             });
         }
 
