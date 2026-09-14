@@ -3,7 +3,7 @@
 # A real local .env can be supplied explicitly:
 #   make ENV_FILE=.env config
 
-.PHONY: dev dev-d down logs config migrate test test-backend test-frontend e2e backup-pg backup-media cleanup restore-test
+.PHONY: dev dev-d down logs config migrate test test-backend test-frontend e2e seed seed-reset backup-pg backup-media cleanup restore-test
 
 ENV_FILE ?= .env
 COMPOSE = docker compose --env-file $(ENV_FILE) -f docker-compose.yml
@@ -41,6 +41,18 @@ test-frontend: frontend/node_modules
 e2e: e2e/node_modules
 	dotnet tool restore
 	cd e2e && npm test
+
+# --- dane testowe ---
+# zgloszenia z ostatnich 90 dni w projekcie seed idace przez API z docker-compose.dev.yml
+# wiecej pod testy wydajnosci: make seed SEED_COUNT=10000
+SEED_COUNT ?= 600
+
+seed:
+	node scripts/seed.mjs --count $(SEED_COUNT) --env-file $(ENV_FILE)
+
+# najpierw kasuje zgloszenia projektu seed razem z plikami
+seed-reset:
+	node scripts/seed.mjs --reset --count $(SEED_COUNT) --env-file $(ENV_FILE)
 
 # katalog jest celem a nie akcja wiec instalacja rusza tylko na czystym klonie
 # albo gdy ktos zmienil zaleznosci
