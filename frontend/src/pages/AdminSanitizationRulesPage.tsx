@@ -126,7 +126,7 @@ function AdminSanitizationRulesPage() {
     if (nextReplacement === null) return
 
     try {
-      const updated = await updateSanitizationRule(rule.id, nextPattern.trim(), nextReplacement)
+      const updated = await updateSanitizationRule(rule.id, nextPattern, nextReplacement)
       setAnswer((current) => ({
         ...current,
         rules: current.rules.map((r) => (r.id === rule.id ? updated : r)),

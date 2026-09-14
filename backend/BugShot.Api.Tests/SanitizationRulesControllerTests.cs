@@ -117,6 +117,43 @@ public class SanitizationRulesControllerTests
         Assert.Contains(nameof(TestSanitizationRuleRequest.Pattern), problem.Errors.Keys);
     }
 
+    // wzorzec z katastrofalnym nawrotem ktory na takim tekscie zawsze przekracza limit czasu
+    private const string SlowPattern = "(a+)+$";
+
+    private static readonly string SlowText = new string('a', 40) + "!";
+
+    [Fact]
+    public void TestRegulyPrzekraczajacejLimitCzasuDajeBladWalidacji()
+    {
+        var db = NewContext();
+        var controller = new SanitizationRulesController(db);
+
+        var response = controller.Test(new TestSanitizationRuleRequest(SlowPattern, "***", SlowText));
+
+        var badRequest = Assert.IsType<ObjectResult>(response.Result);
+        var problem = Assert.IsType<ValidationProblemDetails>(badRequest.Value);
+        Assert.Contains(nameof(TestSanitizationRuleRequest.Pattern), problem.Errors.Keys);
+    }
+
+    [Fact]
+    public async Task RegulaPrzekraczajacaLimitCzasuJestPomijanaPrzySanityzacji()
+    {
+        var db = NewContext();
+        var controller = new SanitizationRulesController(db);
+        var sanitization = new SanitizationService(db);
+
+        var project = await NewProject(db);
+        var ticket = await NewTicket(db, project.Id);
+
+        await controller.Create(new CreateSanitizationRuleRequest(project.Id, SlowPattern, "***"), CancellationToken.None);
+        await controller.Create(new CreateSanitizationRuleRequest(project.Id, "sekret", "***"), CancellationToken.None);
+
+        var masked = await sanitization.SanitizeAsync(
+            project.Id, ticket.Id, "Description", $"sekret {SlowText}", CancellationToken.None);
+
+        Assert.Equal($"*** {SlowText}", masked);
+    }
+
     [Fact]
     public async Task WylaczenieRegulyDzialaNatychmiastBezRestartuApi()
     {
