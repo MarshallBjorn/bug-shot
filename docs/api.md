@@ -55,6 +55,15 @@ erDiagram
         varchar description
         varchar page_url
         varchar user_agent
+        varchar page "adres bez zapytania i fragmentu"
+        varchar browser_name
+        varchar os_name
+        varchar device_type
+        int viewport_width
+        int viewport_height
+        float device_pixel_ratio
+        varchar language
+        varchar time_zone
         ticket_status status
         timestamptz reported_at
         timestamptz received_at
@@ -232,7 +241,10 @@ Jedyny endpoint integrowany spoza naszego kodu, więc kontrakt zapisany wprost.
   "description": "Koszyk gubi produkty po odswiezeniu",
   "pageUrl": "https://acme.example/cart",
   "userAgent": "Mozilla/5.0 ...",
-  "reportedAt": "2026-08-24T09:12:33+02:00"
+  "reportedAt": "2026-08-24T09:12:33+02:00",
+  "viewport": { "width": 1536, "height": 730, "devicePixelRatio": 1.25 },
+  "language": "pl-PL",
+  "timeZone": "Europe/Warsaw"
 }
 ```
 
@@ -249,6 +261,8 @@ Odpowiedź `201 Created` z identyfikatorem zgłoszenia i jednorazowym tokenem do
 Token wraca wyłącznie w tej odpowiedzi. W bazie leży sam skrót SHA-256, więc nie da się go odzyskać ani odtworzyć po stronie serwera. Ważność to 15 minut od utworzenia zgłoszenia, licząc do momentu walidacji, a nie do rozpoczęcia wysyłki. Token jest jednorazowy: pierwsze udane użycie stempluje `used_at` i kolejna próba dostaje 401. Sposób przekazania tokena opisuje sekcja `POST /tickets/{id}/attachments`.
 
 Wymagane są `projectKey` i `description`. Opis do 1200 znaków, czyli tyle samo co limit w widgecie. `pageUrl` musi być poprawnym adresem. Nieznany `projectKey` daje 400 z błędem walidacji na tym polu.
+
+`viewport`, `language` i `timeZone` są opcjonalne i nie mają walidacji. Wartość, która nie wygląda sensownie, na przykład zerowy viewport, język spoza BCP 47 albo strefa spoza IANA, jest pomijana, bo metadane nie mogą zablokować zgłoszenia. Przy przyjęciu API wylicza z `userAgent` rodzinę przeglądarki, system i typ urządzenia, a z `pageUrl` po sanityzacji stronę bez schematu, zapytania i fragmentu. Kasowanie czyści te pola razem z adresem i user agentem.
 
 Błędy walidacji wracają jako `ProblemDetails` zgodnie z RFC 9110, z mapą `errors` po nazwach pól.
 

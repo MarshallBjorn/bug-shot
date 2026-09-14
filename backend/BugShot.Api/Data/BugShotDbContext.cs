@@ -116,6 +116,12 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             entity.Property(t => t.Description).HasMaxLength(1200);
             entity.Property(t => t.PageUrl).HasMaxLength(2048);
             entity.Property(t => t.UserAgent).HasMaxLength(512);
+            entity.Property(t => t.Page).HasMaxLength(2048);
+            entity.Property(t => t.BrowserName).HasMaxLength(32);
+            entity.Property(t => t.OsName).HasMaxLength(32);
+            entity.Property(t => t.DeviceType).HasMaxLength(16);
+            entity.Property(t => t.Language).HasMaxLength(Analytics.TicketClientDetails.LanguageMaxLength);
+            entity.Property(t => t.TimeZone).HasMaxLength(Analytics.TicketClientDetails.TimeZoneMaxLength);
             entity.Property(t => t.DeletedBy).HasMaxLength(128);
             entity.Property(t => t.RowVersion).IsConcurrencyToken();
 

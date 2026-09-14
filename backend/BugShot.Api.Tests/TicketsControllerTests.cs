@@ -171,6 +171,38 @@ public class TicketsControllerTests
         Assert.Equal(payload.Id, ticket.Id);
         Assert.Equal(project.Id, ticket.ProjectId);
         Assert.Equal(TicketStatus.New, ticket.Status);
+        Assert.Equal("acme.example/cart", ticket.Page);
+        Assert.Equal("Other", ticket.BrowserName);
+        Assert.Equal("desktop", ticket.DeviceType);
+    }
+
+    [Fact]
+    public async Task StronaLiczySieZZamaskowanegoAdresuAMetadaneWidgetuSaZapisywane()
+    {
+        using var db = NewContext();
+        var controller = NewController(db);
+
+        var request = Request("demo");
+        request.PageUrl = "https://acme.example/konto/jan.kowalski@example.com?tab=zamowienia";
+        request.UserAgent =
+            "Mozilla/5.0 (Linux; Android 15; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36";
+        request.Viewport = new TicketViewport { Width = 412, Height = 839, DevicePixelRatio = 2.625 };
+        request.Language = "pl-PL";
+        request.TimeZone = "Europe/Warsaw";
+
+        await controller.Create(request, CancellationToken.None);
+
+        var ticket = await db.Tickets.SingleAsync();
+
+        // globalna regula maskuje adres e-mail wiec nie moze wrocic do bazy przez kolumne ze strona
+        Assert.Equal("acme.example/konto/***", ticket.Page);
+        Assert.Equal("Chrome", ticket.BrowserName);
+        Assert.Equal("Android", ticket.OsName);
+        Assert.Equal("mobile", ticket.DeviceType);
+        Assert.Equal(412, ticket.ViewportWidth);
+        Assert.Equal(2.625, ticket.DevicePixelRatio);
+        Assert.Equal("pl-PL", ticket.Language);
+        Assert.Equal("Europe/Warsaw", ticket.TimeZone);
     }
 
     [Fact]
@@ -568,6 +600,11 @@ public class TicketsControllerTests
         Assert.Equal(
             string.Empty,
             ticket.UserAgent);
+
+        // pola wyliczone z adresu i user agenta znikaja razem z nimi
+        Assert.Equal(string.Empty, ticket.Page);
+        Assert.Equal(string.Empty, ticket.BrowserName);
+        Assert.Equal(string.Empty, ticket.DeviceType);
 
         Assert.NotNull(ticket.DeletedAt);
         Assert.Equal("system", ticket.DeletedBy);

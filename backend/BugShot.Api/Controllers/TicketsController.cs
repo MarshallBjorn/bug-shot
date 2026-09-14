@@ -2,6 +2,7 @@ using System.Net.Mime;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using BugShot.Api.Analytics;
 using BugShot.Api.Attachments;
 using BugShot.Api.Sanitization;
 using BugShot.Api.Contracts;
@@ -112,6 +113,9 @@ public class TicketsController(
             Status = TicketStatus.New
         };
 
+        // rodzina przegladarki niczego nie zdradza wiec liczymy ja z oryginalu zanim sanityzacja cos zamaskuje
+        TicketClientDetails.Apply(ticket, request);
+
         db.Tickets.Add(ticket);
 
         ticket.Description = await sanitization.SanitizeAsync(
@@ -127,6 +131,9 @@ public class TicketsController(
             nameof(Ticket.PageUrl),
             ticket.PageUrl,
             cancellationToken);
+
+        // strona liczona z zamaskowanego adresu bo inaczej sekret wracalby do bazy w drugiej kolumnie
+        ticket.Page = PageAddress.Normalize(ticket.PageUrl);
 
         ticket.UserAgent = await sanitization.SanitizeAsync(
             project.Id,
@@ -381,6 +388,7 @@ public class TicketsController(
         ticket.Description = string.Empty;
         ticket.PageUrl = string.Empty;
         ticket.UserAgent = string.Empty;
+        TicketClientDetails.Clear(ticket);
         ticket.Status = TicketStatus.Deleted;
         ticket.DeletedAt = now;
         ticket.DeletedBy = "system";
