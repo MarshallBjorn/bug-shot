@@ -18,7 +18,7 @@ function csvField(value: CsvValue) {
 
 export function downloadCsv(fileName: string, csv: string) {
   // BOM na początku bo bez niego Excel czyta polskie znaki w złym kodowaniu
-  const url = URL.createObjectURL(new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' }))
+  const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }))
   const link = document.createElement('a')
 
   link.href = url
