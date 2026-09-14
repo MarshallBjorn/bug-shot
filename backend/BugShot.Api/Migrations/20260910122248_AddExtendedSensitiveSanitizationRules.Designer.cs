@@ -4,6 +4,7 @@ using BugShot.Api.Data;
 using BugShot.Api.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BugShot.Api.Migrations
 {
     [DbContext(typeof(BugShotDbContext))]
-    partial class BugShotDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260910122248_AddExtendedSensitiveSanitizationRules")]
+    partial class AddExtendedSensitiveSanitizationRules
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -196,7 +199,7 @@ namespace BugShot.Api.Migrations
                             Id = new Guid("33333333-3333-3333-3333-333333333333"),
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsEnabled = true,
-                            Pattern = "(?i)\"?\\b(password|passwd|pwd)\"?\\s*[:=]\\s*\"?[^\"'\\r\\n,\\s}]+\"?",
+                            Pattern = "(?i)\\b(password|passwd|pwd)\\s*[:=]\\s*\\S+",
                             Replacement = "***"
                         },
                         new
@@ -204,7 +207,7 @@ namespace BugShot.Api.Migrations
                             Id = new Guid("44444444-4444-4444-4444-444444444444"),
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsEnabled = true,
-                            Pattern = "(?i)\"?\\b(login|username|user_name)\"?\\s*[:=]\\s*\"?[^\"'\\r\\n,\\s}]+\"?",
+                            Pattern = "(?i)\\b(login|username|user_name)\\s*[:=]\\s*\\S+",
                             Replacement = "***"
                         },
                         new
@@ -212,7 +215,7 @@ namespace BugShot.Api.Migrations
                             Id = new Guid("55555555-5555-5555-5555-555555555555"),
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsEnabled = true,
-                            Pattern = "(?i)(\\bAuthorization\\s*:\\s*(?:Bearer|Digest)\\s+)\\S+",
+                            Pattern = "(?i)(\\bAuthorization\\s*:\\s*Bearer\\s+)\\S+",
                             Replacement = "$1***"
                         },
                         new
@@ -228,7 +231,7 @@ namespace BugShot.Api.Migrations
                             Id = new Guid("77777777-7777-7777-7777-777777777777"),
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsEnabled = true,
-                            Pattern = "(?i)\"?\\b(?:access_token|refresh_token|id_token|session_id|sessionId)\"?\\s*[:=]\\s*\"?[^\"'\\r\\n,\\s}]+\"?",
+                            Pattern = "(?i)\\b(?:access_token|refresh_token|id_token|session_id|sessionId)\\s*[:=]\\s*\\S+",
                             Replacement = "***"
                         },
                         new
@@ -236,7 +239,7 @@ namespace BugShot.Api.Migrations
                             Id = new Guid("88888888-8888-8888-8888-888888888888"),
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsEnabled = true,
-                            Pattern = "(?i)\"?\\b(?:api[_-]?key|x-api-key|client[_-]?secret|x-client-secret|api[_-]?secret)\"?\\s*[:=]\\s*\"?[^\"'\\r\\n,\\s}]+\"?",
+                            Pattern = "(?i)\\b(?:api[_-]?key|x-api-key|client[_-]?secret|x-client-secret|api[_-]?secret)\\s*[:=]\\s*\\S+",
                             Replacement = "***"
                         },
                         new
@@ -244,7 +247,7 @@ namespace BugShot.Api.Migrations
                             Id = new Guid("99999999-9999-9999-9999-999999999999"),
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsEnabled = true,
-                            Pattern = "(?i)\"?\\b(?:csrf[_-]?token|xsrf[_-]?token|x-csrf-token|x-xsrf-token)\"?\\s*[:=]\\s*\"?[^\"'\\r\\n,\\s}]+\"?",
+                            Pattern = "(?i)\\b(?:csrf[_-]?token|xsrf[_-]?token|x-csrf-token|x-xsrf-token)\\s*[:=]\\s*\\S+",
                             Replacement = "***"
                         },
                         new

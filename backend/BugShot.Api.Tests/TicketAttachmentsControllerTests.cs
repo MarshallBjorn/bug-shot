@@ -343,7 +343,10 @@ public class TicketAttachmentsControllerTests : IDisposable
 
         var globalRule = await db.SanitizationRules
             .AsNoTracking()
-            .SingleAsync(r => r.ProjectId == null && r.IsEnabled);
+            .SingleAsync(r =>
+                r.ProjectId == null &&
+                r.IsEnabled &&
+                r.Pattern == @"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+");
 
         var original = """
                        Start
