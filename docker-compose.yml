@@ -119,6 +119,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      CRON_PG: ${CRON_PG:-}
+      CRON_MEDIA: ${CRON_MEDIA:-}
+      CRON_CLEANUP: ${CRON_CLEANUP:-}
     volumes:
       - ./bug-shot-attachments:/attachments:ro
     networks:
