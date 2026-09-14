@@ -82,7 +82,7 @@ secret_scan:
 
 _check-service:
 	@if [ -z "$(SERVICE)" ]; then \
-	    echo "SERVICE required <backend|frontend|wiget>"; exit 1; fi
+	    echo "SERVICE required <backend|frontend|wiget|backup>"; exit 1; fi
 
 image-lint: _check-service
 	docker run --rm -v $(CURDIR)/.hadolint.yaml:/.hadolint.yaml -i $(HADOLINT_IMAGE) < $(SERVICE)/Dockerfile

@@ -1,3 +1,8 @@
+FROM golang:1.26-alpine AS builder
+
+ARG SUPERCRONIC_VERSION=v0.2.33
+RUN go install github.com/aptible/supercronic@${SUPERCRONIC_VERSION}
+
 # Kontener obok API z cronem. Robi backupy Postgres i wolumenu mediów,
 # szyfruje age i wypycha na S3-kompatybilny endpoint (Garage w dev, R2 w prod).
 FROM alpine:3.20
@@ -25,14 +30,7 @@ RUN apk add --no-cache \
         jq \
     && mkdir -p /scripts /var/log
 
-# supercronic — cron dla kontenerow, dziala jako non-root.
-# Pinujemy wersje + checksume (nie zaciagamy latest).
-ARG SUPERCRONIC_VERSION=0.2.33
-ARG SUPERCRONIC_SHA256=feefa310da569c81b99e1027b86b27b51e6ee9ab647747b49099645120cfc671
-RUN curl -fsSLo /usr/local/bin/supercronic \
-        "https://github.com/aptible/supercronic/releases/download/v${SUPERCRONIC_VERSION}/supercronic-linux-amd64" \
-    && echo "${SUPERCRONIC_SHA256}  /usr/local/bin/supercronic" | sha256sum -c - \
-    && chmod +x /usr/local/bin/supercronic
+COPY --from=builder /go/bin/supercronic /usr/local/bin/supercronic
 
 RUN adduser -D -u 1000 backup \
     && chown -R backup:backup /var/log
