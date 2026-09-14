@@ -37,7 +37,6 @@ RUN curl -fsSLo /usr/local/bin/supercronic \
 RUN adduser -D -u 1000 backup \
     && chown -R backup:backup /var/log
 
-COPY --chown=backup:backup crontab            /crontab
 COPY --chown=backup:backup --chmod=0755 entrypoint.sh /entrypoint.sh
 COPY --chown=backup:backup --chmod=0755 scripts/      /scripts/
 

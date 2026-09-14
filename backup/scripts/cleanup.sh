@@ -16,7 +16,7 @@ on_error() {
     local exit_code=$?
     local line=$1
     log "FAILED at line ${line} (exit ${exit_code})"
-    /scripts/notify-failure.sh "${SCRIPT_NAME}" "${line}" "${exit_code}" || true
+    /scripts/notify.sh failure "${SCRIPT_NAME}" "line ${line}, exit ${exit_code}" || true
     exit "${exit_code}"
 }
 trap 'on_error $LINENO' ERR
