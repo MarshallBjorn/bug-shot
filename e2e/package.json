@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "description": "Testy end to end panelu bug-shot",
   "scripts": {
-    "pretest": "node scripts/prepare-db.ts",
-    "test": "playwright test",
+    "test": "node scripts/run-e2e.mjs",
     "report": "playwright show-report"
   },
   "type": "module",
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
     "pg": "^8.23.0"
   },
