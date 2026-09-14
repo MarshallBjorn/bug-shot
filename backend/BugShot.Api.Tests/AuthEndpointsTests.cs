@@ -217,9 +217,15 @@ public class AuthEndpointsTests : IDisposable
         var developer = await CreateDeveloper();
         var admin = await Read(await Login(client, AdminEmail, AdminPassword));
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/v1/projects", developer.AccessToken)).StatusCode);
+        // liste projektow widzi kazdy zalogowany bo z niej dashboard wybiera projekt
+        Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/v1/projects", developer.AccessToken)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/v1/projects", admin.AccessToken)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/projects")).StatusCode);
+
+        var project = new { name = "Projekt dewelopera", key = $"test-{Guid.NewGuid():N}" };
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/v1/projects", developer.AccessToken, project)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Delete, $"/api/v1/projects/{Guid.NewGuid()}", developer.AccessToken)).StatusCode);
 
         Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/v1/sanitization-rules", developer.AccessToken)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/v1/sanitization-rules", admin.AccessToken)).StatusCode);

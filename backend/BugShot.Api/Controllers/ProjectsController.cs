@@ -14,16 +14,14 @@ namespace BugShot.Api.Controllers;
 [ApiController]
 [Route("api/v1/projects")]
 [EnableCors(CorsPolicies.Dashboard)]
-[Authorize(Roles = AccessTokenIssuer.AdminRole)]
 [Produces(MediaTypeNames.Application.Json)]
 public class ProjectsController(BugShotDbContext db) : ControllerBase
 {
     /// <summary>Zwraca wszystkie projekty razem z ich originami.</summary>
-    /// <remarks>Tylko dla administratora.</remarks>
+    /// <remarks>Dla kazdego zalogowanego, dashboard wybiera z tej listy projekt.</remarks>
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<ProjectResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IReadOnlyList<ProjectResponse>>> GetList(CancellationToken cancellationToken)
     {
         var projects = await db.Projects
@@ -43,6 +41,7 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     /// <summary>Zaklada projekt.</summary>
     /// <remarks>Tylko dla administratora. Zajety klucz konczy sie bledem walidacji.</remarks>
     [HttpPost]
+    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
     [ProducesResponseType<ProjectResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -79,6 +78,7 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     /// <summary>Zmienia nazwe projektu.</summary>
     /// <remarks>Tylko dla administratora. Klucz jest wpiety w widget wiec zostaje niezmienny.</remarks>
     [HttpPatch("{id:guid}")]
+    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
     [ProducesResponseType<ProjectResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -110,6 +110,7 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     /// Tylko dla administratora. Projekt z choc jednym zgloszeniem nie da sie skasowac i konczy sie na 409.
     /// </remarks>
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -144,6 +145,7 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     /// Powtorzony origin tego samego projektu konczy sie na 409.
     /// </remarks>
     [HttpPost("{id:guid}/origins")]
+    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
     [ProducesResponseType<ProjectOriginResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -194,6 +196,7 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     /// <summary>Usuwa origin projektu.</summary>
     /// <remarks>Tylko dla administratora.</remarks>
     [HttpDelete("{id:guid}/origins/{originId:guid}")]
+    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]

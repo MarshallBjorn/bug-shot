@@ -152,7 +152,7 @@ function AdminSanitizationRulesPage() {
     <>
       <div className="list-heading">
         <h2>Reguły sanityzacji</h2>
-        <Link to="/admin/projects">Projekty</Link>
+        <Link to="/admin/projects">Zarządzanie projektami</Link>
       </div>
 
       <form className="admin-form" onSubmit={handleTest}>

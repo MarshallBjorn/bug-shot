@@ -6,7 +6,6 @@ import {
   connectionString,
   dashboardBaseUrl,
   dashboardPortNumber,
-  demoProjectId,
   signingKey,
   widgetOrigin,
 } from './e2e.config'
@@ -60,7 +59,6 @@ export default defineConfig({
       reuseExistingServer: false,
       env: {
         VITE_API_BASE_URL: apiBaseUrl,
-        VITE_PROJECT_ID: demoProjectId,
       },
     },
   ],

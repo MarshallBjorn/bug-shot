@@ -406,7 +406,7 @@ Pierwsze konto powstaje przy starcie API z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, wy�
 
 ### Projekty
 
-`GET`, `POST` i `PATCH /projects` oraz zarządzanie originami są tylko dla `is_admin`, tak samo jak `sanitization-rules` niżej.
+`GET /projects` jest dla każdego zalogowanego, bo z tej listy dashboard wybiera projekt. Konta nie są przypisane do projektów, więc zalogowany i tak widzi zgłoszenia każdego z nich. `POST`, `PATCH` i `DELETE /projects` oraz zarządzanie originami są tylko dla `is_admin`, tak samo jak `sanitization-rules` niżej.
 
 Klucz projektu jest wpięty w widget na cudzej stronie, więc jest niezmienny po utworzeniu: `PATCH /projects/{id}` zmienia tylko nazwę. Zajęty klucz przy `POST /projects` kończy się błędem walidacji na polu `key`, tą samą ścieżką co inne błędy walidacji w tym API. Dotyczy to też dwóch równoległych żądań z tym samym kluczem, drugie nie kończy się błędem bazy.
 
