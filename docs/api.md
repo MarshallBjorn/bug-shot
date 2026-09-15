@@ -55,6 +55,15 @@ erDiagram
         varchar description
         varchar page_url
         varchar user_agent
+        varchar page "adres bez zapytania i fragmentu"
+        varchar browser_name
+        varchar os_name
+        varchar device_type
+        int viewport_width
+        int viewport_height
+        float device_pixel_ratio
+        varchar language
+        varchar time_zone
         ticket_status status
         timestamptz reported_at
         timestamptz received_at
@@ -194,6 +203,7 @@ Domyślnie każdy endpoint wymaga tokena, wyjątki wylicza sekcja `Uwierzytelnia
 |---|---|---|
 | `POST /tickets` | działa | zgłoszenie z widgetu, zwraca `uploadToken`, patrz niżej |
 | `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtr po statusie, szukanie, paginacja |
+| `GET /projects/{projectId}/analytics` | działa | analityka projektu w zakresie 7d, 30d, 90d albo all |
 | `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
 | `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken`, tombstone daje 409 |
 | `PATCH /tickets/{id}/status` | działa | wymaga `If-Match` z `rowVersion`, konflikt daje 409 |
@@ -232,7 +242,10 @@ Jedyny endpoint integrowany spoza naszego kodu, więc kontrakt zapisany wprost.
   "description": "Koszyk gubi produkty po odswiezeniu",
   "pageUrl": "https://acme.example/cart",
   "userAgent": "Mozilla/5.0 ...",
-  "reportedAt": "2026-08-24T09:12:33+02:00"
+  "reportedAt": "2026-08-24T09:12:33+02:00",
+  "viewport": { "width": 1536, "height": 730, "devicePixelRatio": 1.25 },
+  "language": "pl-PL",
+  "timeZone": "Europe/Warsaw"
 }
 ```
 
@@ -249,6 +262,8 @@ Odpowiedź `201 Created` z identyfikatorem zgłoszenia i jednorazowym tokenem do
 Token wraca wyłącznie w tej odpowiedzi. W bazie leży sam skrót SHA-256, więc nie da się go odzyskać ani odtworzyć po stronie serwera. Ważność to 15 minut od utworzenia zgłoszenia, licząc do momentu walidacji, a nie do rozpoczęcia wysyłki. Token jest jednorazowy: pierwsze udane użycie stempluje `used_at` i kolejna próba dostaje 401. Sposób przekazania tokena opisuje sekcja `POST /tickets/{id}/attachments`.
 
 Wymagane są `projectKey` i `description`. Opis do 1200 znaków, czyli tyle samo co limit w widgecie. `pageUrl` musi być poprawnym adresem. Nieznany `projectKey` daje 400 z błędem walidacji na tym polu.
+
+`viewport`, `language` i `timeZone` są opcjonalne i nie mają walidacji. Wartość, która nie wygląda sensownie, na przykład zerowy viewport, język spoza BCP 47 albo strefa spoza IANA, jest pomijana, bo metadane nie mogą zablokować zgłoszenia. Przy przyjęciu API wylicza z `userAgent` rodzinę przeglądarki, system i typ urządzenia, a z `pageUrl` po sanityzacji stronę bez schematu, zapytania i fragmentu. Kasowanie czyści te pola razem z adresem i user agentem.
 
 Błędy walidacji wracają jako `ProblemDetails` zgodnie z RFC 9110, z mapą `errors` po nazwach pól.
 
@@ -344,6 +359,31 @@ Ciało `409` to `ProblemDetails` z dwoma dodatkowymi polami, `currentStatus` i `
 Kasowanie idzie wyłącznie przez `DELETE /tickets/{id}`, więc `Deleted` w ciele dostaje 400. W drugą stronę tombstone nie wraca do żywego statusu, bo opis, adres strony i załączniki są już skasowane i nie ma czego przywrócić.
 
 Sprawdzenie wersji leci dwa razy. Najpierw porównanie `If-Match` z odczytanym `rowVersion`, potem `row_version` w warunku `UPDATE`, bo jest tokenem współbieżności EF. Drugie łapie zapis, który wszedł między odczytem a zapisem, i też kończy się `409`.
+
+### GET /projects/{projectId}/analytics
+
+Analityka projektu dla panelu, dostępna dla każdego zalogowanego tak samo jak lista zgłoszeń.
+
+`range` przyjmuje `7d`, `30d`, `90d` albo `all`, domyślnie `30d`. `tz` to strefa IANA, w której liczą się dni i "dziś", domyślnie `UTC`. `includeToday` mówi, czy liczyć dzisiejszy, jeszcze trwający dzień, domyślnie `true`. Inna wartość kończy się błędem walidacji na tym polu. Nazwy stref z Windows są odrzucane, bo .NET je zna, a Postgres nie.
+
+Zakres to pełne dni kalendarzowe w strefie `tz`, liczone zawsze po `received_at`, bo `reported_at` podaje zegar klienta. `7d` z dzisiejszym dniem to sześć pełnych dni i dzisiaj do chwili żądania, a bez niego siedem pełnych dni kończących się wczoraj o północy. Poprzedni okres to tyle samo pełnych dni tuż przed bieżącym. Dla `all` nie ma poprzedniego okresu ani rosnących stron, a oś czasu idzie tygodniami zamiast dniami.
+
+W odpowiedzi:
+
+- `summary`: nowe zgłoszenia i liczba z poprzedniego okresu, nowe dzisiaj, otwarty backlog, odsetek rozwiązanych, odrzuconych i ze zrzutem, mediana i p90 czasu do rozwiązania oraz do pierwszej reakcji
+- `timeline`: nowe i rozwiązane na każdy dzień albo tydzień, razem z pustymi
+- `statuses`, `topPages` (10), `risingPages` (5), `browsers`, `operatingSystems` i `devices` (po 8), `sanitization` per reguła
+
+Definicje, które nie wynikają z nazw:
+
+- skasowane zgłoszenia wchodzą do sum i statusów, ale nie do stron, przeglądarek, urządzeń ani odsetków, bo tombstone nie ma już tych danych
+- otwarty backlog to `New` i `InProgress` na teraz, niezależnie od zakresu
+- czas do rozwiązania liczy się dla zgłoszeń, które są teraz `Resolved`, do ostatniego przejścia na ten status, więc ponowne otwarcie przesuwa wynik
+- pierwsza reakcja to pierwsza zmiana statusu albo pierwszy komentarz, zależnie co było wcześniej
+- mediana i p90 zamiast średniej, bo jedno zgłoszenie leżące miesiącami rozwala średnią
+- strona to adres bez schematu, zapytania i fragmentu, małymi literami, liczony przy przyjęciu z adresu po sanityzacji. Starsze zgłoszenia uzupełniła migracja tymi samymi regułami
+
+Metryki liczą się zapytaniami SQL na indeksie `tickets(project_id, received_at)` i indeksach historii, komentarzy i załączników. Kolumna `page` nie ma indeksu, bo adres do 2048 znaków może nie zmieścić się w limicie wiersza indeksu btree.
 
 ### Zachowania listy
 

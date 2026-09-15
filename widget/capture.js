@@ -35,6 +35,8 @@
         height: root.clientHeight,
         devicePixelRatio: window.devicePixelRatio || 1,
       },
+      language: navigator.language || null,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
     };
   }
 
@@ -207,14 +209,18 @@
       return api.screenshot ? api.screenshot.file : null;
     },
 
-    // POST /tickets przyjmuje tylko te trzy pola a reszta snapshotu jest do wgladu
     payload() {
       const metadata = api.metadata || api.collect();
+      const { width, height } = metadata.viewport;
 
       return {
         pageUrl: metadata.pageUrl,
         userAgent: metadata.userAgent,
         reportedAt: metadata.reportedAt,
+        // ukryta ramka potrafi zglosic zerowy rozmiar ktory niczego nie mowi
+        viewport: width > 0 && height > 0 ? metadata.viewport : null,
+        language: metadata.language,
+        timeZone: metadata.timeZone,
       };
     },
   };

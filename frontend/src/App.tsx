@@ -7,6 +7,7 @@ import AdminSanitizationRulesPage from './pages/AdminSanitizationRulesPage'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
+import ProjectAnalyticsPage from './pages/ProjectAnalyticsPage'
 import TicketDetailsPage from './pages/TicketDetailsPage'
 import TicketListPage from './pages/TicketListPage'
 
@@ -19,6 +20,7 @@ function App() {
           <Route index element={<HomePage />} />
           <Route path="projects/:projectId/tickets" element={<TicketListPage />} />
           <Route path="projects/:projectId/tickets/:ticketId" element={<TicketDetailsPage />} />
+          <Route path="projects/:projectId/analytics" element={<ProjectAnalyticsPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="admin/projects" element={<AdminProjectsPage />} />
             <Route path="admin/sanitization-rules" element={<AdminSanitizationRulesPage />} />

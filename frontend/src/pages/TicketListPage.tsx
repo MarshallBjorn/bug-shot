@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { useParams, useSearchParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import Pagination from '../components/Pagination'
 import TicketFilters from '../components/TicketFilters'
 import TicketTable from '../components/TicketTable'
@@ -30,7 +30,10 @@ function TicketListPage() {
 
   return (
     <>
-      <h2>Zgłoszenia</h2>
+      <div className="list-heading">
+        <h2>Zgłoszenia</h2>
+        <Link to={`/projects/${projectId}/analytics`}>Analityka</Link>
+      </div>
 
       <TicketFilters query={query} onChange={updateQuery} />
 

@@ -67,6 +67,15 @@ make e2e
 
 Testy backendu czyszczą tabele `tickets` i `users` w bazie deweloperskiej. Po ich uruchomieniu konto z `.env` wraca dopiero po wyczyszczeniu tabeli `users` i restarcie API.
 
+Dane do sprawdzania panelu i analityki:
+
+```powershell
+make seed
+make seed-reset
+```
+
+`make seed` dokłada do projektu `seed` kilkaset zgłoszeń z ostatnich 90 dni, ze zmianami statusów, komentarzami, załącznikami i trafieniami sanityzacji. Zgłoszenia idą przez API, więc środowisko z `docker-compose.dev.yml` musi chodzić, a daty przesuwa na koniec jedno zapytanie do bazy. `make seed-reset` najpierw kasuje zgłoszenia tego projektu razem z plikami. Liczbę zmienia `SEED_COUNT`, na przykład `make seed SEED_COUNT=10000` pod testy wydajności.
+
 ## Migracje bazy danych
 
 W środowisku `Development` migracje Entity Framework Core są uruchamiane automatycznie przy starcie API.

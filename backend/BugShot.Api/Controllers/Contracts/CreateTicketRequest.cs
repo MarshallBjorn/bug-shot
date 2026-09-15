@@ -22,4 +22,20 @@ public class CreateTicketRequest
     public string UserAgent { get; set; } = string.Empty;
 
     public DateTimeOffset? ReportedAt { get; set; }
+
+    // metadane sa opcjonalne i bez walidacji bo zla wartosc nie moze zablokowac zgloszenia
+    public TicketViewport? Viewport { get; set; }
+
+    public string? Language { get; set; }
+
+    public string? TimeZone { get; set; }
+}
+
+public class TicketViewport
+{
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    public double DevicePixelRatio { get; set; }
 }
