@@ -217,13 +217,78 @@ public class AuthEndpointsTests : IDisposable
         var developer = await CreateDeveloper();
         var admin = await Read(await Login(client, AdminEmail, AdminPassword));
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/v1/projects", developer.AccessToken)).StatusCode);
+        // liste projektow widzi kazdy zalogowany bo z niej dashboard wybiera projekt
+        Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/v1/projects", developer.AccessToken)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/v1/projects", admin.AccessToken)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/projects")).StatusCode);
+
+        var project = new { name = "Projekt dewelopera", key = $"test-{Guid.NewGuid():N}" };
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/v1/projects", developer.AccessToken, project)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Delete, $"/api/v1/projects/{Guid.NewGuid()}", developer.AccessToken)).StatusCode);
 
         Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/v1/sanitization-rules", developer.AccessToken)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/v1/sanitization-rules", admin.AccessToken)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/sanitization-rules")).StatusCode);
+    }
+
+    // walidacja modelu dziala tylko przy prawdziwym zadaniu HTTP wiec nie da sie tego sprawdzic wolajac kontroler wprost
+    [Fact]
+    public async Task PustyZamiennikIPustyTekstPrzechodzaWalidacjeReguly()
+    {
+        var admin = await Read(await Login(client, AdminEmail, AdminPassword));
+
+        var test = await Send(
+            HttpMethod.Post,
+            "/api/v1/sanitization-rules/test",
+            admin.AccessToken,
+            new { pattern = "sekret", replacement = "", sampleText = "to sekret" });
+
+        Assert.Equal(HttpStatusCode.OK, test.StatusCode);
+        Assert.Equal("to ", (await test.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("result").GetString());
+
+        var emptySample = await Send(
+            HttpMethod.Post,
+            "/api/v1/sanitization-rules/test",
+            admin.AccessToken,
+            new { pattern = "sekret", replacement = "***", sampleText = "" });
+
+        Assert.Equal(HttpStatusCode.OK, emptySample.StatusCode);
+
+        var missingReplacement = await Send(
+            HttpMethod.Post,
+            "/api/v1/sanitization-rules/test",
+            admin.AccessToken,
+            new { pattern = "sekret", sampleText = "to sekret" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, missingReplacement.StatusCode);
+
+        var project = await Send(
+            HttpMethod.Post,
+            "/api/v1/projects",
+            admin.AccessToken,
+            new { name = "Projekt z pustym zamiennikiem", key = $"test-{Guid.NewGuid():N}" });
+        var projectId = (await project.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        var rule = await Send(
+            HttpMethod.Post,
+            "/api/v1/sanitization-rules",
+            admin.AccessToken,
+            new { projectId, pattern = "sekret", replacement = "" });
+
+        Assert.Equal(HttpStatusCode.Created, rule.StatusCode);
+
+        var ruleId = (await rule.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        var updated = await Send(
+            HttpMethod.Patch,
+            $"/api/v1/sanitization-rules/{ruleId}",
+            admin.AccessToken,
+            new { pattern = "inny", replacement = "" });
+
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+
+        await Send(HttpMethod.Delete, $"/api/v1/projects/{projectId}", admin.AccessToken);
     }
 
     [Fact]

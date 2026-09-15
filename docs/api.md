@@ -406,13 +406,13 @@ Pierwsze konto powstaje przy starcie API z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, wy�
 
 ### Projekty
 
-`GET`, `POST` i `PATCH /projects` oraz zarządzanie originami są tylko dla `is_admin`, tak samo jak `sanitization-rules` niżej.
+`GET /projects` jest dla każdego zalogowanego, bo z tej listy dashboard wybiera projekt. Konta nie są przypisane do projektów, więc zalogowany i tak widzi zgłoszenia każdego z nich. `POST`, `PATCH` i `DELETE /projects` oraz zarządzanie originami są tylko dla `is_admin`, tak samo jak `sanitization-rules` niżej.
 
-Klucz projektu jest wpięty w widget na cudzej stronie, więc jest niezmienny po utworzeniu: `PATCH /projects/{id}` zmienia tylko nazwę. Zajęty klucz przy `POST /projects` kończy się błędem walidacji na polu `key`, tą samą ścieżką co inne błędy walidacji w tym API.
+Klucz projektu jest wpięty w widget na cudzej stronie, więc jest niezmienny po utworzeniu: `PATCH /projects/{id}` zmienia tylko nazwę. Zajęty klucz przy `POST /projects` kończy się błędem walidacji na polu `key`, tą samą ścieżką co inne błędy walidacji w tym API. Dotyczy to też dwóch równoległych żądań z tym samym kluczem, drugie nie kończy się błędem bazy.
 
 `DELETE /projects/{id}` usuwa projekt razem z jego originami i regułami projektowymi, ale tylko gdy projekt nie ma ani jednego zgłoszenia. W przeciwnym razie kończy się `409` z komunikatem, żeby dashboard mógł go pokazać wprost, zamiast tłumaczyć błąd bazy.
 
-Origin dodany przez `POST /projects/{id}/origins` jest przycinany z białych znaków i końcowego ukośnika przed zapisem, z tego samego powodu co przy walidacji w `POST /tickets`: przeglądarka i tak normalizuje schemat i host, ale ukośnik na końcu wpisany ręcznie stworzyłby fantomowy duplikat. Powtórzony origin tego samego projektu kończy się `409`.
+Origin w `POST /projects/{id}/origins` musi mieć postać, w jakiej przeglądarka wysyła nagłówek `Origin`: schemat `http` albo `https`, host i opcjonalny port. Adres bez schematu, ze ścieżką, zapytaniem albo fragmentem kończy się błędem walidacji na polu `origin`, bo taki wpis nigdy nie przepuściłby żadnego zgłoszenia. Przed zapisem znikają białe znaki, końcowy ukośnik i domyślny port, a schemat i host schodzą do małych liter, więc `HTTPS://Sklep.example:443/` trafia do bazy jako `https://sklep.example` i nie tworzy fantomowego duplikatu. Powtórzony origin tego samego projektu kończy się `409`.
 
 ## Dokument OpenAPI
 
@@ -461,7 +461,7 @@ Maskowanie działa po stronie backendu przed zapisem, dla opisu, adresu strony i
 
 Wzorzec jest zwykłym wyrażeniem regularnym .NET, dopasowanie ma limit czasu 100ms. Niepoprawny wzorzec albo przekroczony limit pomijają regułę zamiast wywalać całe zgłoszenie.
 
-`sanitization-rules` to ekran administracyjny nad tą samą tabelą. Włączenie i wyłączenie reguły przez `PATCH /sanitization-rules/{id}/enabled` działa od razu, bo `SanitizationService` czyta `is_enabled` z bazy przy każdym zgłoszeniu, bez żadnego cache w pamięci procesu. `POST /sanitization-rules/test` liczy to samo dopasowanie na przykładowym tekście z ciała żądania i niczego nie zapisuje, więc pozwala zobaczyć wynik przed założeniem albo edycją reguły. Niepoprawny wzorzec w `POST /sanitization-rules`, `PATCH /sanitization-rules/{id}` i `POST /sanitization-rules/test` kończy się błędem walidacji na polu `pattern`.
+`sanitization-rules` to ekran administracyjny nad tą samą tabelą. Włączenie i wyłączenie reguły przez `PATCH /sanitization-rules/{id}/enabled` działa od razu, bo `SanitizationService` czyta `is_enabled` z bazy przy każdym zgłoszeniu, bez żadnego cache w pamięci procesu. `POST /sanitization-rules/test` liczy to samo dopasowanie na przykładowym tekście z ciała żądania i niczego nie zapisuje, więc pozwala zobaczyć wynik przed założeniem albo edycją reguły. Niepoprawny wzorzec w `POST /sanitization-rules`, `PATCH /sanitization-rules/{id}` i `POST /sanitization-rules/test` kończy się błędem walidacji na polu `pattern`. W `POST /sanitization-rules/test` tak samo kończy się przekroczony limit czasu, bo w zgłoszeniach taka reguła byłaby pomijana. Pusty zamiennik jest dozwolony i wycina dopasowanie, pusty przykładowy tekst też.
 
 ## CORS
 

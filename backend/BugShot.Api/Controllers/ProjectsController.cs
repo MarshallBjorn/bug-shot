@@ -7,22 +7,21 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace BugShot.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/projects")]
 [EnableCors(CorsPolicies.Dashboard)]
-[Authorize(Roles = AccessTokenIssuer.AdminRole)]
 [Produces(MediaTypeNames.Application.Json)]
 public class ProjectsController(BugShotDbContext db) : ControllerBase
 {
     /// <summary>Zwraca wszystkie projekty razem z ich originami.</summary>
-    /// <remarks>Tylko dla administratora.</remarks>
+    /// <remarks>Dla kazdego zalogowanego, dashboard wybiera z tej listy projekt.</remarks>
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<ProjectResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IReadOnlyList<ProjectResponse>>> GetList(CancellationToken cancellationToken)
     {
         var projects = await db.Projects
@@ -42,6 +41,7 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     /// <summary>Zaklada projekt.</summary>
     /// <remarks>Tylko dla administratora. Zajety klucz konczy sie bledem walidacji.</remarks>
     [HttpPost]
+    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
     [ProducesResponseType<ProjectResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -54,15 +54,22 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
 
         if (await db.Projects.AnyAsync(p => p.Key == key, cancellationToken))
         {
-            ModelState.AddModelError(nameof(request.Key), "A project with this key already exists.");
-            return ValidationProblem(ModelState);
+            return KeyTaken();
         }
 
         var project = new Project { Name = request.Name.Trim(), Key = key };
 
         db.Projects.Add(project);
 
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+        {
+            // rownolegle zadanie zajelo klucz miedzy sprawdzeniem a zapisem
+            return KeyTaken();
+        }
 
         // bez Location bo edycja i tak schodzi po id z listy
         return Created((string?)null, Describe(project));
@@ -71,6 +78,7 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     /// <summary>Zmienia nazwe projektu.</summary>
     /// <remarks>Tylko dla administratora. Klucz jest wpiety w widget wiec zostaje niezmienny.</remarks>
     [HttpPatch("{id:guid}")]
+    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
     [ProducesResponseType<ProjectResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -102,6 +110,7 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     /// Tylko dla administratora. Projekt z choc jednym zgloszeniem nie da sie skasowac i konczy sie na 409.
     /// </remarks>
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -131,8 +140,12 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     }
 
     /// <summary>Dodaje dozwolony origin projektu.</summary>
-    /// <remarks>Tylko dla administratora. Powtorzony origin tego samego projektu konczy sie na 409.</remarks>
+    /// <remarks>
+    /// Tylko dla administratora. Origin to sam schemat http albo https z hostem i opcjonalnym portem.
+    /// Powtorzony origin tego samego projektu konczy sie na 409.
+    /// </remarks>
     [HttpPost("{id:guid}/origins")]
+    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
     [ProducesResponseType<ProjectOriginResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -151,21 +164,31 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
             return NotFound();
         }
 
-        // koncowy ukosnik nie ma znaczenia dla przegladarki ale w bazie tworzylby fantomowy duplikat
-        var origin = request.Origin.Trim().TrimEnd('/');
+        if (!TryNormalizeOrigin(request.Origin, out var origin))
+        {
+            ModelState.AddModelError(
+                nameof(request.Origin),
+                "Origin must be a scheme and host without a path, for example https://acme.example.");
+            return ValidationProblem(ModelState);
+        }
 
         if (await db.ProjectOrigins.AnyAsync(o => o.ProjectId == id && o.Origin == origin, cancellationToken))
         {
-            return Problem(
-                title: "This origin is already allowed for the project.",
-                statusCode: StatusCodes.Status409Conflict);
+            return OriginTaken();
         }
 
         var projectOrigin = new ProjectOrigin { ProjectId = id, Origin = origin };
 
         db.ProjectOrigins.Add(projectOrigin);
 
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+        {
+            return OriginTaken();
+        }
 
         return Created((string?)null, new ProjectOriginResponse(projectOrigin.Id, projectOrigin.Origin));
     }
@@ -173,6 +196,7 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     /// <summary>Usuwa origin projektu.</summary>
     /// <remarks>Tylko dla administratora.</remarks>
     [HttpDelete("{id:guid}/origins/{originId:guid}")]
+    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -193,6 +217,38 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
 
         return NoContent();
     }
+
+    // przegladarka wysyla origin bez sciezki i bez domyslnego portu wiec w tej samej postaci trafia do bazy
+    private static bool TryNormalizeOrigin(string value, out string origin)
+    {
+        origin = string.Empty;
+
+        if (!Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            || uri.AbsolutePath != "/"
+            || uri.Query.Length > 0
+            || uri.Fragment.Length > 0
+            || uri.UserInfo.Length > 0)
+        {
+            return false;
+        }
+
+        origin = uri.GetLeftPart(UriPartial.Authority);
+        return true;
+    }
+
+    private static bool IsUniqueViolation(DbUpdateException exception) =>
+        exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
+
+    private ActionResult KeyTaken()
+    {
+        ModelState.AddModelError(nameof(CreateProjectRequest.Key), "A project with this key already exists.");
+        return ValidationProblem(ModelState);
+    }
+
+    private ObjectResult OriginTaken() => Problem(
+        title: "This origin is already allowed for the project.",
+        statusCode: StatusCodes.Status409Conflict);
 
     private static ProjectResponse Describe(Project project) => new(
         project.Id,

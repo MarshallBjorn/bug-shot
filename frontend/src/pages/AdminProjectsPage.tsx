@@ -123,7 +123,7 @@ function AdminProjectsPage() {
   return (
     <>
       <div className="list-heading">
-        <h2>Projekty</h2>
+        <h2>Zarządzanie projektami</h2>
         <Link to="/admin/sanitization-rules">Reguły sanityzacji</Link>
       </div>
 
@@ -168,6 +168,7 @@ function AdminProjectsPage() {
               <div className="admin-project-header">
                 <strong>{project.name}</strong>
                 <code>{project.key}</code>
+                <Link to={`/projects/${project.id}/tickets`}>Zgłoszenia</Link>
                 <button type="button" onClick={() => handleRename(project)}>
                   Zmień nazwę
                 </button>
