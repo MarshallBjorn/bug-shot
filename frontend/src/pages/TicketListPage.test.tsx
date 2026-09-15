@@ -9,6 +9,13 @@ const { setSearchParams, searchParams } = vi.hoisted(() => ({
 }))
 
 vi.mock('react-router', () => ({
+  Link: ({
+    to,
+    children,
+  }: {
+    to: string
+    children: React.ReactNode
+  }) => <a href={to}>{children}</a>,
   useParams: () => ({ projectId: 'project-1' }),
   useSearchParams: () => [searchParams, setSearchParams],
 }))

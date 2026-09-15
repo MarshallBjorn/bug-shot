@@ -63,7 +63,6 @@
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: http://localhost:8085
-        VITE_PROJECT_ID: 11111111-1111-1111-1111-111111111111
     depends_on:
       backend-e2e:
         condition: service_started

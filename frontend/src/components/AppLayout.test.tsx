@@ -48,7 +48,7 @@ describe('AppLayout', () => {
 
     expect(screen.getByText('Bug-shot')).toBeDefined()
     expect(screen.getByText('admin@test.local')).toBeDefined()
-    expect(screen.getByRole('link', { name: 'Projekty' })).toBeDefined()
+    expect(screen.getByRole('link', { name: 'Zarządzanie projektami' })).toBeDefined()
     expect(screen.getByRole('link', { name: 'Sanityzacja' })).toBeDefined()
     expect(screen.getByTestId('outlet')).toBeDefined()
   })
@@ -69,7 +69,7 @@ describe('AppLayout', () => {
     render(<AppLayout />)
 
     expect(screen.getByText('user@test.local')).toBeDefined()
-    expect(screen.queryByRole('link', { name: 'Projekty' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Zarządzanie projektami' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'Sanityzacja' })).toBeNull()
   })
 
