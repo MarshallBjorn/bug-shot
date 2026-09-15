@@ -3,7 +3,7 @@
 # A real local .env can be supplied explicitly:
 #   make ENV_FILE=.env config
 
-.PHONY: dev dev-d down logs config migrate test test-backend test-frontend e2e seed seed-reset backup-pg backup-media cleanup restore-test
+.PHONY: dev dev-d down logs config migrate test test-backend test-frontend e2e e2e-install seed seed-reset backup-pg backup-media cleanup restore-test
 
 ENV_FILE ?= .env
 COMPOSE = docker compose --env-file $(ENV_FILE) -f docker-compose.yml
@@ -42,6 +42,8 @@ e2e: e2e/node_modules
 	dotnet tool restore
 	cd e2e && npm test
 
+e2e-install:
+	cd e2e && npm ci && npx playwright install chromium
 # --- dane testowe ---
 # zgloszenia z ostatnich 90 dni w projekcie seed idace przez API z docker-compose.dev.yml
 # wiecej pod testy wydajnosci: make seed SEED_COUNT=10000
