@@ -27,12 +27,12 @@ jobs:
 
       - uses: ./.github/actions/wg-connect
         with:
-          wg_private_key:    ${{ secrets.WG_PRIVATE_KEY }}
-          wg_endpoint:       ${{ secrets.WG_ENDPOINT }}
+          wg_private_key:     ${{ secrets.WG_PRIVATE_KEY }}
+          wg_endpoint:        ${{ secrets.WG_ENDPOINT }}
           wg_peer_public_key: ${{ secrets.WG_PEER_PUBLIC_KEY }}
-          wg_runner_address: ${{ secrets.WG_RUNNER_ADDRESS }}
-          vps_address:       ${{ secrets.WG_VPS_ADDRESS }}
-          deploy_ssh_key:    ${{ secrets.DEPLOY_SSH_KEY }}
+          wg_runner_address:  ${{ secrets.WG_RUNNER_ADDRESS }}
+          vps_address:        ${{ secrets.WG_VPS_ADDRESS }}
+          deploy_ssh_key:     ${{ secrets.DEPLOY_SSH_KEY }}
 
       - name: Validate image exists
         run: |
@@ -55,27 +55,27 @@ jobs:
           ENV="${{ inputs.environment }}"
           DIR="bugshot-${ENV}"
 
-          ssh vps << REMOTE
+          ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_VER="$VER" DEPLOY_DIR="$DIR" bash << 'REMOTE'
           set -euo pipefail
-          cd ~/${DIR}
+          cd ~/"$DEPLOY_DIR"
           COMPOSE="docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml"
 
-          export BACKEND_IMAGE="ghcr.io/${OWNER}/bugshot-backend:${VER}"
-          export FRONTEND_IMAGE="ghcr.io/${OWNER}/bugshot-frontend:${VER}"
+          export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VER}"
+          export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${DEPLOY_VER}"
 
-          docker pull "\$BACKEND_IMAGE"
-          docker pull "\$FRONTEND_IMAGE"
+          docker pull "$BACKEND_IMAGE"
+          docker pull "$FRONTEND_IMAGE"
 
           [ -f .deploy-tag ] && cp .deploy-tag .deploy-tag-prev
-          echo "${VER}" > .deploy-tag
+          echo "$DEPLOY_VER" > .deploy-tag
 
-          \$COMPOSE up -d --no-build --remove-orphans
-          echo "Rollback to ${VER} done"
+          $COMPOSE up -d --no-build --remove-orphans
+          echo "Rollback to $DEPLOY_VER done"
           REMOTE
 
       - name: Smoke test
         run: |
-          ssh vps << 'REMOTE'
+          ssh vps bash << 'REMOTE'
           for url in http://localhost:8080/healthz http://localhost:3000/healthz; do
             status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$url")
             [ "$status" = "200" ] || { echo "FAIL: $url → $status"; exit 1; }
@@ -85,18 +85,22 @@ jobs:
 
       - name: Notify Discord
         if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           STATUS="${{ job.status }}"
+          VER="${{ inputs.version }}"
           [ "$STATUS" = "success" ] && COLOR=15105570 || COLOR=15158332
           curl -sS -H "Content-Type: application/json" -d "{
             \"embeds\": [{
-              \"title\": \"⏪ Rollback ${{ inputs.environment }} → v${{ inputs.version }} — $STATUS\",
+              \"title\": \"⏪ Rollback ${{ inputs.environment }} → v${VER} — $STATUS\",
               \"color\": $COLOR,
               \"fields\": [
                 {\"name\": \"By\", \"value\": \"${{ github.actor }}\", \"inline\": true}
               ]
             }]
-          }" "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+          }" "$DISCORD_WEBHOOK_URL" || true
 
-      - if: always()
+      - name: Teardown WireGuard
+        if: always()
         run: sudo wg-quick down wg0 || true

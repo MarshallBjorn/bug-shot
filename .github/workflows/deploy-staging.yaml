@@ -22,12 +22,12 @@ jobs:
 
       - uses: ./.github/actions/wg-connect
         with:
-          wg_private_key:    ${{ secrets.WG_PRIVATE_KEY }}
-          wg_endpoint:       ${{ secrets.WG_ENDPOINT }}
+          wg_private_key:     ${{ secrets.WG_PRIVATE_KEY }}
+          wg_endpoint:        ${{ secrets.WG_ENDPOINT }}
           wg_peer_public_key: ${{ secrets.WG_PEER_PUBLIC_KEY }}
-          wg_runner_address: ${{ secrets.WG_RUNNER_ADDRESS }}
-          vps_address:       ${{ secrets.WG_VPS_ADDRESS }}
-          deploy_ssh_key:    ${{ secrets.DEPLOY_SSH_KEY }}
+          wg_runner_address:  ${{ secrets.WG_RUNNER_ADDRESS }}
+          vps_address:        ${{ secrets.WG_VPS_ADDRESS }}
+          deploy_ssh_key:     ${{ secrets.DEPLOY_SSH_KEY }}
 
       - name: Wait for images in GHCR
         run: |
@@ -50,17 +50,17 @@ jobs:
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           TAG="${GITHUB_SHA::7}"
 
-          ssh vps << REMOTE
+          ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_TAG="$TAG" bash << 'REMOTE'
           set -euo pipefail
           cd ~/bugshot-staging
 
-          export BACKEND_IMAGE="ghcr.io/${OWNER}/bugshot-backend:${TAG}"
-          export FRONTEND_IMAGE="ghcr.io/${OWNER}/bugshot-frontend:${TAG}"
+          export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_TAG}"
+          export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${DEPLOY_TAG}"
 
-          docker pull "\$BACKEND_IMAGE"
-          docker pull "\$FRONTEND_IMAGE"
+          docker pull "$BACKEND_IMAGE"
+          docker pull "$FRONTEND_IMAGE"
 
-          echo "${TAG}" > .deploy-tag
+          echo "$DEPLOY_TAG" > .deploy-tag
 
           docker compose --env-file .env \
             -f docker-compose.yml \
@@ -70,7 +70,7 @@ jobs:
 
       - name: Wait healthy
         run: |
-          ssh vps << 'REMOTE'
+          ssh vps bash << 'REMOTE'
           set -euo pipefail
           cd ~/bugshot-staging
           COMPOSE="docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml"
@@ -87,7 +87,7 @@ jobs:
 
       - name: Smoke test
         run: |
-          ssh vps << 'REMOTE'
+          ssh vps bash << 'REMOTE'
           set -euo pipefail
 
           for url in http://localhost:8080/healthz http://localhost:3000/healthz; do
@@ -99,6 +99,8 @@ jobs:
 
       - name: Notify Discord
         if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           STATUS="${{ job.status }}"
           TAG="${GITHUB_SHA::7}"
@@ -114,7 +116,7 @@ jobs:
                 {\"name\": \"Logs\", \"value\": \"[Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}
               ]
             }]
-          }" "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+          }" "$DISCORD_WEBHOOK_URL" || true
 
       - name: Teardown WireGuard
         if: always()

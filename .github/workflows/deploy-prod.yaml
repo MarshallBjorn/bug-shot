@@ -57,58 +57,53 @@ jobs:
 
       - uses: ./.github/actions/wg-connect
         with:
-          wg_private_key:    ${{ secrets.WG_PRIVATE_KEY }}
-          wg_endpoint:       ${{ secrets.WG_ENDPOINT }}
+          wg_private_key:     ${{ secrets.WG_PRIVATE_KEY }}
+          wg_endpoint:        ${{ secrets.WG_ENDPOINT }}
           wg_peer_public_key: ${{ secrets.WG_PEER_PUBLIC_KEY }}
-          wg_runner_address: ${{ secrets.WG_RUNNER_ADDRESS }}
-          vps_address:       ${{ secrets.WG_VPS_ADDRESS }}
-          deploy_ssh_key:    ${{ secrets.DEPLOY_SSH_KEY }}
+          wg_runner_address:  ${{ secrets.WG_RUNNER_ADDRESS }}
+          vps_address:        ${{ secrets.WG_VPS_ADDRESS }}
+          deploy_ssh_key:     ${{ secrets.DEPLOY_SSH_KEY }}
 
       - name: Rolling deploy
-        env:
-          VERSION: ${{ needs.build-tag-push.outputs.version }}
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          VERSION="${{ needs.build-tag-push.outputs.version }}"
 
-          ssh vps << REMOTE
+          ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_VERSION="$VERSION" bash << 'REMOTE'
           set -euo pipefail
           cd ~/bugshot-prod
           COMPOSE="docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml"
 
-          export BACKEND_IMAGE="ghcr.io/${OWNER}/bugshot-backend:${VERSION}"
-          export FRONTEND_IMAGE="ghcr.io/${OWNER}/bugshot-frontend:${VERSION}"
+          export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VERSION}"
+          export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${DEPLOY_VERSION}"
 
-          docker pull "\$BACKEND_IMAGE"
-          docker pull "\$FRONTEND_IMAGE"
+          docker pull "$BACKEND_IMAGE"
+          docker pull "$FRONTEND_IMAGE"
 
-          # Zachowaj poprzedni tag do rollbacku
           [ -f .deploy-tag ] && cp .deploy-tag .deploy-tag-prev
-          echo "${VERSION}" > .deploy-tag
+          echo "$DEPLOY_VERSION" > .deploy-tag
 
-          # Rolling: po jednym serwisie, czekaj na healthy
           for svc in backend frontend; do
-            echo "=== Rolling: \$svc ==="
-            \$COMPOSE up -d --no-build --no-deps "\$svc"
+            echo "=== Rolling: $svc ==="
+            $COMPOSE up -d --no-build --no-deps "$svc"
 
-            for i in \$(seq 1 24); do
-              HEALTH=\$(\$COMPOSE ps "\$svc" --format '{{.Health}}')
-              [ "\$HEALTH" = "healthy" ] && break
-              [ "\$i" -eq 24 ] && { echo "Timeout: \$svc"; exit 1; }
+            for i in $(seq 1 24); do
+              HEALTH=$($COMPOSE ps "$svc" --format '{{.Health}}')
+              [ "$HEALTH" = "healthy" ] && break
+              [ "$i" -eq 24 ] && { echo "Timeout: $svc"; exit 1; }
               sleep 5
             done
-            echo "\$svc healthy"
+            echo "$svc healthy"
           done
 
-          \$COMPOSE up -d --no-build --remove-orphans
-          echo "=== Deploy ${VERSION} complete ==="
+          $COMPOSE up -d --no-build --remove-orphans
+          echo "=== Deploy $DEPLOY_VERSION complete ==="
           REMOTE
 
       - name: Smoke test
         id: smoke
-        env:
-          VERSION: ${{ needs.build-tag-push.outputs.version }}
         run: |
-          ssh vps << 'REMOTE'
+          ssh vps bash << 'REMOTE'
           set -euo pipefail
 
           for url in http://localhost:8080/healthz http://localhost:3000/healthz; do
@@ -121,7 +116,7 @@ jobs:
       - name: Playwright smoke
         continue-on-error: true
         run: |
-          ssh vps << 'REMOTE'
+          ssh vps bash << 'REMOTE'
           cd ~/bugshot-prod/e2e
           [ -f package.json ] && npx playwright test smoke.spec.ts --reporter=list || echo "skip"
           REMOTE
@@ -131,7 +126,7 @@ jobs:
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
-          ssh vps << 'REMOTE'
+          ssh vps DEPLOY_OWNER="$OWNER" bash << 'REMOTE'
           set -euo pipefail
           cd ~/bugshot-prod
 
@@ -139,13 +134,15 @@ jobs:
           [ -z "$PREV" ] && { echo "No previous tag"; exit 1; }
 
           echo "=== ROLLBACK to $PREV ==="
-          COMPOSE="docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml"
 
-          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          export BACKEND_IMAGE="ghcr.io/${OWNER_LC}/bugshot-backend:${PREV}"
-          export FRONTEND_IMAGE="ghcr.io/${OWNER_LC}/bugshot-frontend:${PREV}"
+          export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${PREV}"
+          export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${PREV}"
 
-          $COMPOSE up -d --no-build --remove-orphans
+          docker compose --env-file .env \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            up -d --no-build --remove-orphans
+
           echo "$PREV" > .deploy-tag
           echo "=== Rollback done ==="
           REMOTE
@@ -154,6 +151,7 @@ jobs:
         if: always()
         env:
           VERSION: ${{ needs.build-tag-push.outputs.version }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           STATUS="${{ job.status }}"
           [ "$STATUS" = "success" ] && COLOR=3066993 || COLOR=15158332
@@ -168,7 +166,7 @@ jobs:
                 {\"name\": \"Logs\", \"value\": \"[Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}
               ]
             }]
-          }" "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+          }" "$DISCORD_WEBHOOK_URL" || true
 
       - name: Teardown WireGuard
         if: always()
