@@ -1,7 +1,8 @@
-import { Route, Routes } from 'react-router'
+﻿import { Route, Routes } from 'react-router'
 import AppLayout from './components/AppLayout'
 import RequireAdmin from './components/RequireAdmin'
 import RequireAuth from './components/RequireAuth'
+import AdminProjectNotificationsPage from './pages/AdminProjectNotificationsPage'
 import AdminProjectsPage from './pages/AdminProjectsPage'
 import AdminSanitizationRulesPage from './pages/AdminSanitizationRulesPage'
 import HomePage from './pages/HomePage'
@@ -23,6 +24,7 @@ function App() {
           <Route path="projects/:projectId/analytics" element={<ProjectAnalyticsPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="admin/projects" element={<AdminProjectsPage />} />
+            <Route path="admin/projects/:projectId/notifications" element={<AdminProjectNotificationsPage />} />
             <Route path="admin/sanitization-rules" element={<AdminSanitizationRulesPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
@@ -33,3 +35,4 @@ function App() {
 }
 
 export default App
+

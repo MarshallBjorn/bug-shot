@@ -5,6 +5,8 @@ using BugShot.Api.Contracts;
 using BugShot.Api.Controllers;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
+using BugShot.Api.Notifications;
+using BugShot.Api.Tests.Notifications;
 using BugShot.Api.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -74,7 +76,8 @@ public class TicketAttachmentsControllerTests : IDisposable
             new AttachmentStorageOptions(Path.GetTempPath()),
             cache,
             NullLogger<TicketsController>.Instance,
-            new SanitizationService(db))
+            new SanitizationService(db),
+            new NoOpNotificationEnqueuer(), new NoOpNotificationWorkerSignal())
         {
             ControllerContext = new ControllerContext { HttpContext = context }
         };

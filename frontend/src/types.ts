@@ -1,4 +1,4 @@
-export type TicketStatus = 'New' | 'InProgress' | 'Resolved' | 'Rejected' | 'Deleted'
+﻿export type TicketStatus = 'New' | 'InProgress' | 'Resolved' | 'Rejected' | 'Deleted'
 
 export interface TicketListItem {
   id: string
@@ -89,3 +89,29 @@ export interface SanitizationRule {
   isEnabled: boolean
   createdAt: string
 }
+export type NotificationChannelType = 'Email' | 'Webhook'
+
+export type NotificationEventType = 'TicketCreated' | 'CommentAdded' | 'StatusChanged'
+
+export interface NotificationChannel {
+  id: string
+  projectId: string
+  type: NotificationChannelType
+  isEnabled: boolean
+  emailAddress: string | null
+  webhookUrl: string | null
+  throttleWindowSeconds: number | null
+  throttleMaxEvents: number | null
+  createdAt: string
+}
+
+export interface NotificationTemplate {
+  id: string
+  projectId: string | null
+  eventType: NotificationEventType
+  channelType: NotificationChannelType
+  subject: string | null
+  body: string
+  createdAt: string
+}
+

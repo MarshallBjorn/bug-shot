@@ -1,4 +1,4 @@
-import { accessToken, renewSession } from '../auth/session'
+﻿import { accessToken, renewSession } from '../auth/session'
 import { apiBaseUrl } from '../config'
 import { ApiError } from './error'
 
@@ -42,7 +42,7 @@ function send(path: string, signal?: AbortSignal) {
 
 async function sendMutation<T>(
   path: string,
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body?: unknown,
   headers?: HeadersInit,
   retried = false,
@@ -108,6 +108,10 @@ export async function apiPost<T>(path: string, body: unknown) {
   return sendMutation<T>(path, 'POST', body)
 }
 
+export async function apiPut<T>(path: string, body: unknown) {
+  return sendMutation<T>(path, 'PUT', body)
+}
+
 export async function apiPatch<T>(
   path: string,
   body: unknown,
@@ -119,3 +123,4 @@ export async function apiPatch<T>(
 export async function apiDelete(path: string) {
   return sendMutation<void>(path, 'DELETE')
 }
+
