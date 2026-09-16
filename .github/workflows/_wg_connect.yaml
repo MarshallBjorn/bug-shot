@@ -1,0 +1,53 @@
+name: _wg-connect
+
+on:
+  workflow_call:
+    inputs:
+      vps_address:
+        required: true
+        type: string
+    secrets:
+      WG_PRIVATE_KEY:
+        required: true
+      WG_ENDPOINT:
+        required: true
+      WG_PEER_PUBLIC_KEY:
+        required: true
+      WG_RUNNER_ADDRESS:
+        required: true
+      DEPLOY_SSH_KEY:
+        required: true
+
+jobs:
+  connect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install WireGuard
+        run: sudo apt-get update && sudo apt-get install -y wireguard
+
+      - name: Configure WireGuard tunnel
+        run: |
+          cat > /tmp/wg0.conf << EOF
+          [Interface]
+          PrivateKey = ${{ secrets.WG_PRIVATE_KEY }}
+          Address = ${{ secrets.WG_RUNNER_ADDRESS }}
+
+          [Peer]
+          PublicKey = ${{ secrets.WG_PEER_PUBLIC_KEY }}
+          Endpoint = ${{ secrets.WG_ENDPOINT }}
+          AllowedIPs = ${{ inputs.vps_address }}/32
+          PersistentKeepalive = 25
+          EOF
+          sudo cp /tmp/wg0.conf /etc/wireguard/wg0.conf
+          sudo chmod 600 /etc/wireguard/wg0.conf
+          sudo wg-quick up wg0
+
+      - name: Verify tunnel
+        run: ping -c 3 -W 5 "${{ inputs.vps_address }}"
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ inputs.vps_address }}" >> ~/.ssh/known_hosts 2>/dev/null || true

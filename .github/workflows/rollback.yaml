@@ -1,0 +1,102 @@
+name: rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (np. 1.2.3)'
+        required: true
+        type: string
+      environment:
+        description: 'Environment'
+        required: true
+        type: choice
+        options: [prod, staging]
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/wg-connect
+        with:
+          wg_private_key:    ${{ secrets.WG_PRIVATE_KEY }}
+          wg_endpoint:       ${{ secrets.WG_ENDPOINT }}
+          wg_peer_public_key: ${{ secrets.WG_PEER_PUBLIC_KEY }}
+          wg_runner_address: ${{ secrets.WG_RUNNER_ADDRESS }}
+          vps_address:       ${{ secrets.WG_VPS_ADDRESS }}
+          deploy_ssh_key:    ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Validate image exists
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          VER="${{ inputs.version }}"
+          VER="${VER#v}"
+
+          for svc in backend frontend; do
+            IMAGE="ghcr.io/${OWNER}/bugshot-${svc}:${VER}"
+            docker manifest inspect "$IMAGE" > /dev/null 2>&1 || \
+              { echo "Not found: $IMAGE"; exit 1; }
+            echo "✓ $IMAGE"
+          done
+
+      - name: Rollback
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          VER="${{ inputs.version }}"
+          VER="${VER#v}"
+          ENV="${{ inputs.environment }}"
+          DIR="bugshot-${ENV}"
+
+          ssh vps << REMOTE
+          set -euo pipefail
+          cd ~/${DIR}
+          COMPOSE="docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml"
+
+          export BACKEND_IMAGE="ghcr.io/${OWNER}/bugshot-backend:${VER}"
+          export FRONTEND_IMAGE="ghcr.io/${OWNER}/bugshot-frontend:${VER}"
+
+          docker pull "\$BACKEND_IMAGE"
+          docker pull "\$FRONTEND_IMAGE"
+
+          [ -f .deploy-tag ] && cp .deploy-tag .deploy-tag-prev
+          echo "${VER}" > .deploy-tag
+
+          \$COMPOSE up -d --no-build --remove-orphans
+          echo "Rollback to ${VER} done"
+          REMOTE
+
+      - name: Smoke test
+        run: |
+          ssh vps << 'REMOTE'
+          for url in http://localhost:8080/healthz http://localhost:3000/healthz; do
+            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$url")
+            [ "$status" = "200" ] || { echo "FAIL: $url → $status"; exit 1; }
+            echo "OK: $url"
+          done
+          REMOTE
+
+      - name: Notify Discord
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          [ "$STATUS" = "success" ] && COLOR=15105570 || COLOR=15158332
+          curl -sS -H "Content-Type: application/json" -d "{
+            \"embeds\": [{
+              \"title\": \"⏪ Rollback ${{ inputs.environment }} → v${{ inputs.version }} — $STATUS\",
+              \"color\": $COLOR,
+              \"fields\": [
+                {\"name\": \"By\", \"value\": \"${{ github.actor }}\", \"inline\": true}
+              ]
+            }]
+          }" "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+
+      - if: always()
+        run: sudo wg-quick down wg0 || true

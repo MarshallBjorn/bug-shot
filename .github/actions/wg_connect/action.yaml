@@ -1,0 +1,57 @@
+name: WireGuard + SSH connect
+description: Stawia tunel WireGuard i konfiguruje SSH do VPS
+
+inputs:
+  wg_private_key:
+    required: true
+  wg_endpoint:
+    required: true
+  wg_peer_public_key:
+    required: true
+  wg_runner_address:
+    required: true
+  vps_address:
+    required: true
+  deploy_ssh_key:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install WireGuard
+      shell: bash
+      run: sudo apt-get update -qq && sudo apt-get install -yqq wireguard
+
+    - name: Start tunnel
+      shell: bash
+      run: |
+        cat << EOF | sudo tee /etc/wireguard/wg0.conf > /dev/null
+        [Interface]
+        PrivateKey = ${{ inputs.wg_private_key }}
+        Address = ${{ inputs.wg_runner_address }}
+
+        [Peer]
+        PublicKey = ${{ inputs.wg_peer_public_key }}
+        Endpoint = ${{ inputs.wg_endpoint }}
+        AllowedIPs = ${{ inputs.vps_address }}/32
+        PersistentKeepalive = 25
+        EOF
+        sudo chmod 600 /etc/wireguard/wg0.conf
+        sudo wg-quick up wg0
+        ping -c 2 -W 5 "${{ inputs.vps_address }}"
+
+    - name: Setup SSH
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ inputs.deploy_ssh_key }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan -H "${{ inputs.vps_address }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+        cat > ~/.ssh/config << CONF
+        Host vps
+          HostName ${{ inputs.vps_address }}
+          User deployer
+          IdentityFile ~/.ssh/deploy_key
+          StrictHostKeyChecking accept-new
+          ConnectTimeout 15
+        CONF
