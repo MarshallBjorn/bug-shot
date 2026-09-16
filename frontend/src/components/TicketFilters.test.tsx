@@ -7,8 +7,7 @@ const query: TicketQuery = {
   status: null,
   search: '',
   sort: 'receivedAt:desc',
-  page: 1,
-  pageSize: 20,
+  limit: 20,
 }
 
 afterEach(() => {

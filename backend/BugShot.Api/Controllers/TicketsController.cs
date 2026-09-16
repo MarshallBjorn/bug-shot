@@ -8,6 +8,7 @@ using BugShot.Api.Sanitization;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Idempotency;
+using BugShot.Api.Live;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -25,6 +26,7 @@ public class TicketsController(
     BugShotDbContext db,
     AttachmentStorageOptions storage,
     IDistributedCache idempotencyCache,
+    ITicketNotifier notifier,
     ILogger<TicketsController> logger,
     ISanitizationService sanitization) : ControllerBase
 {
@@ -164,6 +166,8 @@ public class TicketsController(
                 new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = IdempotencyTtl },
                 cancellationToken);
         }
+
+        await notifier.Created(project.Id, ListItem(ticket));
 
         // token wraca w odpowiedzi jeden raz bo w bazie zostaje sam skrot
         return CreatedAtAction(
@@ -425,6 +429,8 @@ public class TicketsController(
             }
         }
 
+        await notifier.Deleted(ticket.ProjectId, ticket.Id);
+
         return NoContent();
     }
 
@@ -520,6 +526,8 @@ public class TicketsController(
             return entry.State == EntityState.Detached ? NotFound() : VersionConflict(ticket);
         }
 
+        await notifier.Changed(ticket.ProjectId, ListItem(ticket));
+
         return Ok(StatusResponse(ticket));
     }
 
@@ -532,6 +540,16 @@ public class TicketsController(
         var json = JsonSerializer.Serialize(request);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
     }
+
+    // kanal live niesie ten sam ksztalt co lista wiec panel podmienia wiersz bez dodatkowego GET
+    private static TicketListItem ListItem(Ticket ticket) => new(
+        ticket.Id,
+        ticket.Description,
+        ticket.PageUrl,
+        ticket.Status,
+        ticket.ReportedAt,
+        ticket.ReceivedAt,
+        ticket.UpdatedAt);
 
     private static TicketStatusResponse StatusResponse(Ticket ticket) => new(
         ticket.Id,

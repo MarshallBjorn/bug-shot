@@ -1,5 +1,5 @@
-﻿import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+﻿import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import TicketsEmptyState from './TicketsEmptyState'
 import type { TicketQuery } from '../ticketQuery'
 
@@ -7,16 +7,18 @@ const base: TicketQuery = {
   status: null,
   search: '',
   sort: 'receivedAt:desc',
-  page: 1,
-  pageSize: 20,
+  limit: 20,
 }
+
+afterEach(() => {
+  cleanup()
+})
 
 describe('TicketsEmptyState', () => {
   it('pokazuje komunikat gdy lista jest filtrowana', () => {
     render(
       <TicketsEmptyState
         query={{ ...base, search: 'koszyk' }}
-        total={0}
         onChange={vi.fn()}
       />,
     )
@@ -30,33 +32,27 @@ describe('TicketsEmptyState', () => {
     ).toBeDefined()
   })
 
-  it('pozwala wrocic do pierwszej strony gdy zostaly wyniki poza biezaca strona', () => {
+  it('czysci filtry i zostawia sortowanie', () => {
     const onChange = vi.fn()
 
     render(
       <TicketsEmptyState
-        query={{ ...base, page: 3 }}
-        total={45}
+        query={{ ...base, status: 'Resolved', sort: 'reportedAt:asc' }}
         onChange={onChange}
       />,
     )
 
-    expect(
-      screen.getByText('Strona 3 nie ma już wyników.'),
-    ).toBeDefined()
-
     fireEvent.click(
-      screen.getByRole('button', { name: 'Wróć na pierwszą stronę' }),
+      screen.getByRole('button', { name: 'Wyczyść filtry' }),
     )
 
-    expect(onChange).toHaveBeenCalledWith({ page: 1 })
+    expect(onChange).toHaveBeenCalledWith({ status: null, search: '' })
   })
 
   it('pokazuje pusty projekt bez filtrow', () => {
     render(
       <TicketsEmptyState
         query={base}
-        total={0}
         onChange={vi.fn()}
       />,
     )

@@ -3,6 +3,7 @@ using BugShot.Api;
 using BugShot.Api.Attachments;
 using BugShot.Api.Sanitization;
 using BugShot.Api.Data;
+using BugShot.Api.Live;
 using BugShot.Api.Models;
 using BugShot.Api.OpenApi;
 using BugShot.Api.Security;
@@ -65,6 +66,21 @@ builder.Services
 
         options.Events = new JwtBearerEvents
         {
+            // WebSocket nie ustawia naglowkow wiec klient kanalu live dokleja token do adresu
+            // poza sciezka huba zostaje sam Authorization
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["access_token"];
+
+                if (!string.IsNullOrEmpty(token)
+                    && context.Request.Path.StartsWithSegments(HubRoutes.Prefix))
+                {
+                    context.Token = token;
+                }
+
+                return Task.CompletedTask;
+            },
+
             // token niesie stan konta z chwili logowania wiec bez zajrzenia do bazy
             // wylaczone konto pracowaloby dalej az do wygasniecia swojego access tokena
             OnTokenValidated = async context =>
@@ -88,6 +104,14 @@ builder.Services
 builder.Services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder()
     .RequireAuthenticatedUser()
     .Build());
+
+// kanal live dla panelu. Przy wiecej niz jednej instancji API dojdzie tu backplane
+// protokol huba ma wlasne ustawienia serializacji wiec enumy trzeba mu wskazac osobno
+// inaczej ten sam ticket wychodzi stringiem z REST a liczba z kanalu
+builder.Services
+    .AddSignalR()
+    .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddSingleton<ITicketNotifier, SignalRTicketNotifier>();
 
 // zaplecze Idempotency-Key na POST /tickets. Podmiana na Redis to jedna linia
 builder.Services.AddDistributedMemoryCache();
@@ -165,6 +189,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// panel dosyla cookie sesji przy negocjacji wiec hub idzie na polityce dashboardu
+app.MapHub<TicketsHub>(HubRoutes.Tickets).RequireCors(CorsPolicies.Dashboard);
 
 app.Run();
 
