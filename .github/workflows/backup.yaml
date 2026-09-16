@@ -1,0 +1,43 @@
+name: backup
+
+on:
+  push:
+    paths:
+      - 'backup/**'
+      - '.github/workflows/backup.yaml'
+      - '.github/workflows/_image.yaml'
+      - 'Makefile'
+  pull_request:
+    branches: [ "develop", "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # backup nie ma testow jednostkowych — analog "testu" to walidacja skryptow shell
+      - name: Shell syntax check (bash -n)
+        run: |
+          for f in backup/entrypoint.sh backup/scripts/*.sh; do
+            echo "checking $f"
+            bash -n "$f"
+          done
+
+      # shellcheck jest preinstalowany na ubuntu-latest. --severity=error łapie realne bugi,
+      # nie czepia sie stylu (SC2086 itp.), zeby nie wywalac CI na kosmetyce.
+      - name: ShellCheck
+        run: shellcheck --severity=error backup/entrypoint.sh backup/scripts/*.sh
+
+  image:
+    needs: build-test
+    uses: ./.github/workflows/_image.yaml
+    with:
+      service: backup
+    permissions:
+      contents: read
+      packages: write

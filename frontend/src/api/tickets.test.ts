@@ -17,59 +17,77 @@ vi.mock('./client', () => ({
 }))
 
 describe('tickets api', () => {
-  it('pobiera liste bez query', async () => {
-    vi.mocked(apiGet).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 })
+  it('pierwsza strona prosi o licznik', async () => {
+    vi.mocked(apiGet).mockResolvedValue({ items: [], nextCursor: null, total: 0 })
 
     const query = {
       status: null,
       search: '',
       sort: 'receivedAt:desc' as const,
-      page: 1,
-      pageSize: 20,
+      limit: 20,
     }
 
-    await getTickets('p1', query)
+    await getTickets('p1', query, null)
 
     expect(apiGet).toHaveBeenCalledWith(
-      '/api/v1/projects/p1/tickets',
+      '/api/v1/projects/p1/tickets?withTotal=true',
       undefined,
     )
   })
 
   it('dodaje query do listy ticketow', async () => {
-    vi.mocked(apiGet).mockResolvedValue({ items: [], total: 0, page: 2, pageSize: 50 })
+    vi.mocked(apiGet).mockResolvedValue({ items: [], nextCursor: null, total: 0 })
 
     const query = {
       status: 'Resolved' as const,
       search: 'login bug',
       sort: 'reportedAt:asc' as const,
-      page: 2,
-      pageSize: 50,
+      limit: 50,
     }
 
-    await getTickets('p1', query)
+    await getTickets('p1', query, null)
 
     expect(apiGet).toHaveBeenCalledWith(
-      '/api/v1/projects/p1/tickets?status=Resolved&search=login+bug&sort=reportedAt%3Aasc&page=2&pageSize=50',
+      '/api/v1/projects/p1/tickets?status=Resolved&search=login+bug&sort=reportedAt%3Aasc&limit=50&withTotal=true',
+      undefined,
+    )
+  })
+
+  it('kolejna strona idzie z kursorem i bez licznika', async () => {
+    vi.mocked(apiGet).mockResolvedValue({ items: [], nextCursor: null, total: null })
+
+    const query = {
+      status: null,
+      search: '',
+      sort: 'receivedAt:desc' as const,
+      limit: 20,
+    }
+
+    await getTickets('p1', query, 'kursor-1')
+
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/v1/projects/p1/tickets?cursor=kursor-1',
       undefined,
     )
   })
 
   it('przekazuje signal do listy ticketow', async () => {
     const signal = new AbortController().signal
-    vi.mocked(apiGet).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 })
+    vi.mocked(apiGet).mockResolvedValue({ items: [], nextCursor: null, total: 0 })
 
     const query = {
       status: null,
       search: '',
       sort: 'receivedAt:desc' as const,
-      page: 1,
-      pageSize: 20,
+      limit: 20,
     }
 
-    await getTickets('p1', query, signal)
+    await getTickets('p1', query, null, signal)
 
-    expect(apiGet).toHaveBeenCalledWith('/api/v1/projects/p1/tickets', signal)
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/v1/projects/p1/tickets?withTotal=true',
+      signal,
+    )
   })
 
   it('pobiera szczegoly ticketu', async () => {

@@ -21,7 +21,7 @@ on_error() {
     local exit_code=$?
     local line=$1
     log "FAILED at line ${line} (exit ${exit_code})"
-    /scripts/notify-failure.sh "${SCRIPT_NAME}" "${line}" "${exit_code}" || true
+    /scripts/notify.sh failure "${SCRIPT_NAME}" "line ${line}, exit ${exit_code}" || true
     aws s3 rm "s3://${S3_BUCKET}/${TMP_KEY}" \
         --endpoint-url "${S3_ENDPOINT_URL}" 2>/dev/null || true
     exit "${exit_code}"
@@ -68,3 +68,6 @@ log "done: uploaded ${size} bytes"
 if [[ "${size}" -lt 200 ]]; then
     log "WARNING: backup < 200B, ${SOURCE_DIR} prawdopodobnie pusty"
 fi
+
+# sukces — daj znac na Discord (rozmiar + docelowy klucz)
+/scripts/notify.sh success "${SCRIPT_NAME}" "uploaded ${size} bytes → ${KEY}" || true

@@ -24,9 +24,9 @@ config:
 	$(COMPOSE) config
 
 # --- testy ---
-# Baza deweloperska, ta sama co w compose. Testy backendu czyszcza tabele tickets i users,
-# wiec po ich uruchomieniu lokalny administrator wraca dopiero po restarcie API.
-TEST_CONNECTION ?= Host=127.0.0.1;Port=5433;Database=bugshot_dev;Username=bugshot;Password=change-me-dev-only
+# Wlasna baza obok tej z compose bo testy czyszcza tabele i nie moga siegac po dane deweloperskie.
+# Schemat zaklada sie sam przy pierwszym uruchomieniu, wystarczy zeby postgres z compose chodzil.
+TEST_CONNECTION ?= Host=127.0.0.1;Port=5433;Database=bugshot_test;Username=bugshot;Password=change-me-dev-only
 
 test: test-backend test-frontend
 
@@ -96,7 +96,7 @@ secret_scan:
 
 _check-service:
 	@if [ -z "$(SERVICE)" ]; then \
-	    echo "SERVICE required <backend|frontend|wiget>"; exit 1; fi
+	    echo "SERVICE required <backend|frontend|wiget|backup>"; exit 1; fi
 
 image-lint: _check-service
 	docker run --rm -v $(CURDIR)/.hadolint.yaml:/.hadolint.yaml -i $(HADOLINT_IMAGE) < $(SERVICE)/Dockerfile

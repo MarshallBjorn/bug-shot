@@ -2,23 +2,10 @@ import { isFiltered, type TicketQuery } from '../ticketQuery'
 
 interface TicketsEmptyStateProps {
   query: TicketQuery
-  total: number
   onChange: (patch: Partial<TicketQuery>) => void
 }
 
-function TicketsEmptyState({ query, total, onChange }: TicketsEmptyStateProps) {
-  // coś pasuje ale nie na tej stronie, zwykle po wklejeniu linku z wyższym numerem
-  if (total > 0) {
-    return (
-      <div className="empty-state">
-        <p>Strona {query.page} nie ma już wyników.</p>
-        <button type="button" onClick={() => onChange({ page: 1 })}>
-          Wróć na pierwszą stronę
-        </button>
-      </div>
-    )
-  }
-
+function TicketsEmptyState({ query, onChange }: TicketsEmptyStateProps) {
   if (isFiltered(query)) {
     return (
       <div className="empty-state">

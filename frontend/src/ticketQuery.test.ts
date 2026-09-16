@@ -1,131 +1,122 @@
 import { describe, expect, it } from 'vitest'
 import {
-  defaultPageSize,
+  defaultLimit,
   defaultSort,
   isFiltered,
+  matchesQuery,
   parseTicketQuery,
   ticketQueryToParams,
+  type TicketQuery,
 } from './ticketQuery'
+import type { TicketListItem } from './types'
 
-describe('parseTicketQuery', () => {
-  it('zwraca wartości domyślne dla pustych parametrów', () => {
-    expect(parseTicketQuery(new URLSearchParams())).toEqual({
-      status: null,
-      search: '',
-      sort: defaultSort,
-      page: 1,
-      pageSize: defaultPageSize,
-    })
-  })
+const base: TicketQuery = {
+  status: null,
+  search: '',
+  sort: 'receivedAt:desc',
+  limit: defaultLimit,
+}
 
-  it('parsuje poprawne wartości', () => {
-    expect(
-      parseTicketQuery(
-        new URLSearchParams(
-          'status=Resolved&search=%20bug%20&sort=reportedAt%3Aasc&page=3&pageSize=50',
-        ),
-      ),
-    ).toEqual({
-      status: 'Resolved',
-      search: 'bug',
-      sort: 'reportedAt:asc',
-      page: 3,
-      pageSize: 50,
-    })
-  })
+function ticket(patch: Partial<TicketListItem> = {}): TicketListItem {
+  return {
+    id: 't1',
+    description: 'Koszyk gubi produkty',
+    pageUrl: 'https://acme.example/cart',
+    status: 'New',
+    reportedAt: null,
+    receivedAt: '2026-09-09T10:00:00+00:00',
+    updatedAt: '2026-09-09T10:00:00+00:00',
+    ...patch,
+  }
+}
 
-  it('odrzuca niepoprawny status i sortowanie', () => {
-    expect(
-      parseTicketQuery(
-        new URLSearchParams('status=Unknown&sort=invalid'),
-      ),
-    ).toEqual({
-      status: null,
-      search: '',
-      sort: defaultSort,
-      page: 1,
-      pageSize: defaultPageSize,
-    })
-  })
-
-  it('odrzuca niepoprawne numery stron', () => {
-    expect(
-      parseTicketQuery(
-        new URLSearchParams('page=0&pageSize=-5'),
-      ),
-    ).toEqual({
-      status: null,
-      search: '',
-      sort: defaultSort,
-      page: 1,
-      pageSize: defaultPageSize,
-    })
-  })
-
-  it('ogranicza pageSize do 100', () => {
-    expect(
-      parseTicketQuery(new URLSearchParams('pageSize=500')).pageSize,
-    ).toBe(100)
-  })
-
-  it('odrzuca liczby niecałkowite', () => {
-    expect(
-      parseTicketQuery(
-        new URLSearchParams('page=2.5&pageSize=10.5'),
-      ),
-    ).toEqual({
-      status: null,
-      search: '',
-      sort: defaultSort,
-      page: 1,
-      pageSize: defaultPageSize,
-    })
-  })
-})
-
-describe('isFiltered', () => {
-  it('rozpoznaje filtr statusu', () => {
-    const query = parseTicketQuery(new URLSearchParams('status=Resolved'))
-    expect(isFiltered(query)).toBe(true)
-  })
-
-  it('rozpoznaje filtr wyszukiwania', () => {
-    const query = parseTicketQuery(new URLSearchParams('search=bug'))
-    expect(isFiltered(query)).toBe(true)
-  })
-
-  it('nie uznaje samego sortowania i paginacji za filtr', () => {
+describe('parametry listy', () => {
+  it('czyta filtry i limit z adresu', () => {
     const query = parseTicketQuery(
-      new URLSearchParams('sort=reportedAt:asc&page=2&pageSize=50'),
+      new URLSearchParams('status=Resolved&search=koszyk&sort=reportedAt:asc&limit=50'),
     )
-    expect(isFiltered(query)).toBe(false)
-  })
-})
 
-describe('ticketQueryToParams', () => {
-  it('pomija wartości domyślne', () => {
-    expect(
-      ticketQueryToParams({
-        status: null,
-        search: '',
-        sort: defaultSort,
-        page: 1,
-        pageSize: defaultPageSize,
-      }).toString(),
-    ).toBe('')
+    expect(query).toEqual({
+      status: 'Resolved',
+      search: 'koszyk',
+      sort: 'reportedAt:asc',
+      limit: 50,
+    })
   })
 
-  it('serializuje wszystkie niestandardowe wartości', () => {
+  it('pusty adres daje wartosci domyslne', () => {
+    expect(parseTicketQuery(new URLSearchParams())).toEqual(base)
+  })
+
+  it('obcina spacje wokol szukanej frazy', () => {
+    expect(parseTicketQuery(new URLSearchParams('search=%20bug%20')).search).toBe('bug')
+  })
+
+  it('przycina limit do granicy z kontrolera', () => {
+    expect(parseTicketQuery(new URLSearchParams('limit=500')).limit).toBe(100)
+    expect(parseTicketQuery(new URLSearchParams('limit=0')).limit).toBe(defaultLimit)
+    expect(parseTicketQuery(new URLSearchParams('limit=nic')).limit).toBe(defaultLimit)
+    expect(parseTicketQuery(new URLSearchParams('limit=-5')).limit).toBe(defaultLimit)
+    expect(parseTicketQuery(new URLSearchParams('limit=10.5')).limit).toBe(defaultLimit)
+  })
+
+  it('nieznany status i sortowanie wracaja do domyslnych', () => {
+    const query = parseTicketQuery(new URLSearchParams('status=Nieznany&sort=cokolwiek'))
+
+    expect(query.status).toBeNull()
+    expect(query.sort).toBe('receivedAt:desc')
+  })
+
+  it('pomija wartosci domyslne w adresie', () => {
+    expect(ticketQueryToParams(base).toString()).toBe('')
+    expect(ticketQueryToParams({ ...base, limit: 50 }).toString()).toBe('limit=50')
+  })
+
+  it('serializuje wszystkie niestandardowe wartosci', () => {
     expect(
       ticketQueryToParams({
         status: 'Resolved',
         search: 'login bug',
         sort: 'reportedAt:asc',
-        page: 3,
-        pageSize: 50,
+        limit: 50,
       }).toString(),
-    ).toBe(
-      'status=Resolved&search=login+bug&sort=reportedAt%3Aasc&page=3&pageSize=50',
-    )
+    ).toBe('status=Resolved&search=login+bug&sort=reportedAt%3Aasc&limit=50')
+  })
+
+  // kursor nie siedzi w adresie bo po odswiezeniu strony i tak zaczynamy od poczatku listy
+  it('nie zapisuje kursora w adresie', () => {
+    expect(ticketQueryToParams({ ...base, search: 'koszyk' }).toString()).toBe('search=koszyk')
+  })
+})
+
+describe('dopasowanie zgloszenia do filtra', () => {
+  it('bez filtra przechodzi wszystko poza tombstone', () => {
+    expect(matchesQuery(ticket(), base)).toBe(true)
+    expect(matchesQuery(ticket({ status: 'Deleted' }), base)).toBe(false)
+  })
+
+  it('filtr statusu przepuszcza tylko swoj status', () => {
+    const query = { ...base, status: 'Resolved' as const }
+
+    expect(matchesQuery(ticket({ status: 'Resolved' }), query)).toBe(true)
+    expect(matchesQuery(ticket({ status: 'New' }), query)).toBe(false)
+  })
+
+  it('szukanie idzie po opisie i adresie bez wzgledu na wielkosc liter', () => {
+    expect(matchesQuery(ticket(), { ...base, search: 'KOSZYK' })).toBe(true)
+    expect(matchesQuery(ticket(), { ...base, search: 'ACME.example' })).toBe(true)
+    expect(matchesQuery(ticket(), { ...base, search: 'faktura' })).toBe(false)
+  })
+})
+
+describe('isFiltered', () => {
+  it('rozpoznaje filtr statusu i wyszukiwania', () => {
+    expect(isFiltered({ ...base, status: 'Resolved' })).toBe(true)
+    expect(isFiltered({ ...base, search: 'bug' })).toBe(true)
+  })
+
+  it('nie uznaje sortowania ani limitu za filtr', () => {
+    expect(isFiltered({ ...base, sort: 'reportedAt:asc', limit: 50 })).toBe(false)
+    expect(base.sort).toBe(defaultSort)
   })
 })

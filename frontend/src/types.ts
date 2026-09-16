@@ -60,6 +60,14 @@ export interface PagedResult<T> {
   pageSize: number
 }
 
+// puste nextCursor oznacza koniec listy
+// total przychodzi tylko przy pierwszej stronie i tylko gdy panel o niego poprosi
+export interface CursorPage<T> {
+  items: T[]
+  nextCursor: string | null
+  total: number | null
+}
+
 export interface AuthenticatedUser {
   id: string
   email: string

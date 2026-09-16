@@ -85,7 +85,7 @@ services:
       - internal
 
   minio:
-    image: minio/minio:latest
+    image: elestio/minio:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -108,7 +108,7 @@ services:
       - internal
 
   minio-init:
-    image: minio/mc:latest
+    image: elestio/minio:latest
     depends_on:
       minio:
         condition: service_started
@@ -147,6 +147,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-bugshot_dev}
       POSTGRES_USER: ${POSTGRES_USER:-bugshot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-dev-only}
+      CRON_PG: ${CRON_PG:-}
+      CRON_MEDIA: ${CRON_MEDIA:-}
+      CRON_CLEANUP: ${CRON_CLEANUP:-}
     volumes:
       - ./bug-shot-attachments:/attachments:ro
     networks:
