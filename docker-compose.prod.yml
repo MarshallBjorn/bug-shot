@@ -41,6 +41,8 @@ services:
 
   backend:
     <<: *hardened
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE required}
+    build: !reset null
     restart: unless-stopped
     logging: *default-logging
     # W Dockerfile musi być: USER app (non-root, uid >= 10000). Jeśli nie ma — dodać przed budową.
@@ -88,6 +90,8 @@ services:
 
   frontend:
     <<: *hardened
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE required}
+    build: !reset null
     restart: unless-stopped
     logging: *default-logging
     build:
