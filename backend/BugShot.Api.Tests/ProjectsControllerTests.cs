@@ -134,4 +134,57 @@ public class ProjectsControllerTests
         Assert.IsType<NoContentResult>(removed);
         Assert.False(await db.ProjectOrigins.AnyAsync(o => o.Id == origin.Id));
     }
+
+    [Theory]
+    [InlineData("acme.example")]
+    [InlineData("localhost:5500")]
+    [InlineData("https://acme.example/cart")]
+    [InlineData("https://acme.example?utm=1")]
+    [InlineData("ftp://acme.example")]
+    [InlineData("https://user@acme.example")]
+    public async Task OriginInnyNizSchematIHostDajeBladWalidacji(string value)
+    {
+        var db = NewContext();
+        var controller = new ProjectsController(db);
+        var project = await CreateProject(controller, "Zle originy");
+
+        var added = await controller.AddOrigin(project.Id, new CreateProjectOriginRequest(value), CancellationToken.None);
+
+        var badRequest = Assert.IsType<ObjectResult>(added.Result);
+        var problem = Assert.IsType<ValidationProblemDetails>(badRequest.Value);
+        Assert.Contains(nameof(CreateProjectOriginRequest.Origin), problem.Errors.Keys);
+        Assert.False(await db.ProjectOrigins.AnyAsync(o => o.ProjectId == project.Id));
+    }
+
+    [Fact]
+    public async Task OriginTrafiaDoBazyWPostaciWysylanejPrzezPrzegladarke()
+    {
+        var db = NewContext();
+        var controller = new ProjectsController(db);
+        var project = await CreateProject(controller, "Normalizacja originu");
+
+        var added = await controller.AddOrigin(
+            project.Id,
+            new CreateProjectOriginRequest(" HTTPS://Sklep.Example:443/ "),
+            CancellationToken.None);
+        var origin = Assert.IsType<ProjectOriginResponse>(Assert.IsType<CreatedResult>(added.Result).Value);
+
+        Assert.Equal("https://sklep.example", origin.Origin);
+
+        var withPort = await controller.AddOrigin(
+            project.Id,
+            new CreateProjectOriginRequest("http://127.0.0.1:5500"),
+            CancellationToken.None);
+        var portOrigin = Assert.IsType<ProjectOriginResponse>(Assert.IsType<CreatedResult>(withPort.Result).Value);
+
+        Assert.Equal("http://127.0.0.1:5500", portOrigin.Origin);
+
+        // ten sam origin w innym zapisie to nadal duplikat
+        var duplicate = await controller.AddOrigin(
+            project.Id,
+            new CreateProjectOriginRequest("https://sklep.example"),
+            CancellationToken.None);
+        var conflict = Assert.IsType<ObjectResult>(duplicate.Result);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+    }
 }

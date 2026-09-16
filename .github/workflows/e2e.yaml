@@ -6,6 +6,7 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'e2e/**'
+      - 'docker-compose.e2e.yml'
       - '.github/workflows/e2e.yaml'
   pull_request:
     branches: [ "develop", "main" ]
@@ -34,8 +35,11 @@ jobs:
           --health-retries 5
 
     env:
+      E2E_POSTGRES_HOST: '127.0.0.1'
       E2E_POSTGRES_PORT: '5432'
+      E2E_POSTGRES_USER: bugshot
       E2E_POSTGRES_PASSWORD: bugshot_test
+      E2E_POSTGRES_DB: bugshot_e2e
 
     steps:
       - uses: actions/checkout@v4
@@ -53,9 +57,42 @@ jobs:
       - name: Restore .NET tools
         run: dotnet tool restore
 
-      # API startuje przez playwright wiec build musi byc gotowy zanim ruszy webServer
       - name: Build API
         run: dotnet build backend/BugShot.slnx --configuration Debug
+
+      - name: Prepare backend test database
+        run: >
+          dotnet ef database update
+          --project backend/BugShot.Api/BugShot.Api.csproj
+          --startup-project backend/BugShot.Api/BugShot.Api.csproj
+        env:
+          ConnectionStrings__DefaultConnection: Host=127.0.0.1;Port=5432;Database=bugshot_test;Username=bugshot;Password=bugshot_test
+
+      - name: Backend tests with coverage
+        run: >
+          dotnet test backend/BugShot.slnx
+          --configuration Debug
+          --no-build
+          --no-restore
+          --settings e2e/backend.coverage.runsettings
+          --verbosity normal
+          --collect:"XPlat Code Coverage"
+          --results-directory ${{ runner.temp }}/bugshot-backend-coverage
+          --
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+        env:
+          ConnectionStrings__DefaultConnection: Host=127.0.0.1;Port=5432;Database=bugshot_test;Username=bugshot;Password=bugshot_test
+
+      - name: Enforce backend coverage >= 70%
+        run: node e2e/scripts/check-backend-coverage.mjs "${{ runner.temp }}/bugshot-backend-coverage" 70
+
+      - name: Upload backend coverage
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: ${{ runner.temp }}/bugshot-backend-coverage/
+          retention-days: 7
 
       - name: Install dashboard dependencies
         run: npm ci
@@ -73,7 +110,7 @@ jobs:
         run: npm test
         working-directory: ./e2e
 
-      - name: Upload report
+      - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:

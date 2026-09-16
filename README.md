@@ -69,6 +69,15 @@ make e2e
 
 Każdy zestaw testów ma własną bazę na tym samym Postgresie z compose: backend `bugshot_test`, end to end `bugshot_e2e`. Obie zakładają się same przy pierwszym uruchomieniu. Testy czyszczą tabele, więc nie mogą sięgać po `bugshot_dev`: konto z `.env` i dane deweloperskie zostają nietknięte.
 
+Dane do sprawdzania panelu i analityki:
+
+```powershell
+make seed
+make seed-reset
+```
+
+`make seed` dokłada do projektu `seed` kilkaset zgłoszeń z ostatnich 90 dni, ze zmianami statusów, komentarzami, załącznikami i trafieniami sanityzacji. Zgłoszenia idą przez API, więc środowisko z `docker-compose.dev.yml` musi chodzić, a daty przesuwa na koniec jedno zapytanie do bazy. `make seed-reset` najpierw kasuje zgłoszenia tego projektu razem z plikami. Liczbę zmienia `SEED_COUNT`, na przykład `make seed SEED_COUNT=10000` pod testy wydajności.
+
 ## Migracje bazy danych
 
 W środowisku `Development` migracje Entity Framework Core są uruchamiane automatycznie przy starcie API.

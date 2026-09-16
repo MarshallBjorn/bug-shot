@@ -37,24 +37,25 @@ public static class RegexRule
             return false;
         }
 
-        MatchCollection matches;
-
+        // Matches jest leniwe i dopasowanie rusza dopiero przy Count wiec timeout trzeba lapac tez tam i w Replace
         try
         {
-            matches = regex.Matches(value);
+            var count = regex.Matches(value).Count;
+
+            if (count == 0)
+            {
+                return true;
+            }
+
+            result = regex.Replace(value, replacement);
+            matchCount = count;
         }
         catch (RegexMatchTimeoutException)
         {
+            result = value;
+            matchCount = 0;
             return false;
         }
-
-        if (matches.Count == 0)
-        {
-            return true;
-        }
-
-        result = regex.Replace(value, replacement);
-        matchCount = matches.Count;
 
         return true;
     }

@@ -1,4 +1,4 @@
-using BugShot.Api.Models;
+﻿using BugShot.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace BugShot.Api.Data;
@@ -116,6 +116,12 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             entity.Property(t => t.Description).HasMaxLength(1200);
             entity.Property(t => t.PageUrl).HasMaxLength(2048);
             entity.Property(t => t.UserAgent).HasMaxLength(512);
+            entity.Property(t => t.Page).HasMaxLength(2048);
+            entity.Property(t => t.BrowserName).HasMaxLength(32);
+            entity.Property(t => t.OsName).HasMaxLength(32);
+            entity.Property(t => t.DeviceType).HasMaxLength(16);
+            entity.Property(t => t.Language).HasMaxLength(Analytics.TicketClientDetails.LanguageMaxLength);
+            entity.Property(t => t.TimeZone).HasMaxLength(Analytics.TicketClientDetails.TimeZoneMaxLength);
             entity.Property(t => t.DeletedBy).HasMaxLength(128);
             entity.Property(t => t.RowVersion).IsConcurrencyToken();
 
@@ -193,6 +199,7 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
                 .WithMany(p => p.SanitizationRules)
                 .HasForeignKey(r => r.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
+
             entity.HasData(new SanitizationRule
             {
                 Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
@@ -210,6 +217,141 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
                     TimeSpan.Zero)
             });
 
+            entity.HasData(new SanitizationRule
+            {
+                Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+                ProjectId = null,
+                Pattern = @"(?i)""?\b(password|passwd|pwd)""?\s*[:=]\s*""?[^""'\r\n,\s}]+""?",
+                Replacement = "***",
+                IsEnabled = true,
+                CreatedAt = new DateTimeOffset(
+                    2026,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    TimeSpan.Zero)
+            });
+
+            entity.HasData(new SanitizationRule
+            {
+                Id = Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                ProjectId = null,
+                Pattern = @"(?i)""?\b(login|username|user_name)""?\s*[:=]\s*""?[^""'\r\n,\s}]+""?",
+                Replacement = "***",
+                IsEnabled = true,
+                CreatedAt = new DateTimeOffset(
+                    2026,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    TimeSpan.Zero)
+            });
+
+            entity.HasData(new SanitizationRule
+            {
+                Id = Guid.Parse("55555555-5555-5555-5555-555555555555"),
+                ProjectId = null,
+                Pattern = @"(?i)(\bAuthorization\s*:\s*(?:Bearer|Digest)\s+)\S+",
+                Replacement = "$1***",
+                IsEnabled = true,
+                CreatedAt = new DateTimeOffset(
+                    2026,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    TimeSpan.Zero)
+            });
+
+            entity.HasData(new SanitizationRule
+            {
+                Id = Guid.Parse("66666666-6666-6666-6666-666666666666"),
+                ProjectId = null,
+                Pattern = @"(?i)(\bAuthorization\s*:\s*Basic\s+)\S+",
+                Replacement = "$1***",
+                IsEnabled = true,
+                CreatedAt = new DateTimeOffset(
+                    2026,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    TimeSpan.Zero)
+            });
+
+            entity.HasData(new SanitizationRule
+            {
+                Id = Guid.Parse("77777777-7777-7777-7777-777777777777"),
+                ProjectId = null,
+                Pattern = @"(?i)""?\b(?:access_token|refresh_token|id_token|session_id|sessionId)""?\s*[:=]\s*""?[^""'\r\n,\s}]+""?",
+                Replacement = "***",
+                IsEnabled = true,
+                CreatedAt = new DateTimeOffset(
+                    2026,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    TimeSpan.Zero)
+            });
+
+            entity.HasData(new SanitizationRule
+            {
+                Id = Guid.Parse("88888888-8888-8888-8888-888888888888"),
+                ProjectId = null,
+                Pattern = @"(?i)""?\b(?:api[_-]?key|x-api-key|client[_-]?secret|x-client-secret|api[_-]?secret)""?\s*[:=]\s*""?[^""'\r\n,\s}]+""?",
+                Replacement = "***",
+                IsEnabled = true,
+                CreatedAt = new DateTimeOffset(
+                    2026,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    TimeSpan.Zero)
+            });
+
+            entity.HasData(new SanitizationRule
+            {
+                Id = Guid.Parse("99999999-9999-9999-9999-999999999999"),
+                ProjectId = null,
+                Pattern = @"(?i)""?\b(?:csrf[_-]?token|xsrf[_-]?token|x-csrf-token|x-xsrf-token)""?\s*[:=]\s*""?[^""'\r\n,\s}]+""?",
+                Replacement = "***",
+                IsEnabled = true,
+                CreatedAt = new DateTimeOffset(
+                    2026,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    TimeSpan.Zero)
+            });
+
+            entity.HasData(new SanitizationRule
+            {
+                Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                ProjectId = null,
+                Pattern = @"(?i)(\bCookie\s*:\s*)[^\r\n]+",
+                Replacement = "$1***",
+                IsEnabled = true,
+                CreatedAt = new DateTimeOffset(
+                    2026,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    TimeSpan.Zero)
+            });
         });
 
         modelBuilder.Entity<User>(entity =>

@@ -190,6 +190,70 @@ namespace BugShot.Api.Migrations
                             IsEnabled = true,
                             Pattern = "(?<![\\w.+-])[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+",
                             Replacement = "***"
+                        },
+                        new
+                        {
+                            Id = new Guid("33333333-3333-3333-3333-333333333333"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsEnabled = true,
+                            Pattern = "(?i)\"?\\b(password|passwd|pwd)\"?\\s*[:=]\\s*\"?[^\"'\\r\\n,\\s}]+\"?",
+                            Replacement = "***"
+                        },
+                        new
+                        {
+                            Id = new Guid("44444444-4444-4444-4444-444444444444"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsEnabled = true,
+                            Pattern = "(?i)\"?\\b(login|username|user_name)\"?\\s*[:=]\\s*\"?[^\"'\\r\\n,\\s}]+\"?",
+                            Replacement = "***"
+                        },
+                        new
+                        {
+                            Id = new Guid("55555555-5555-5555-5555-555555555555"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsEnabled = true,
+                            Pattern = "(?i)(\\bAuthorization\\s*:\\s*(?:Bearer|Digest)\\s+)\\S+",
+                            Replacement = "$1***"
+                        },
+                        new
+                        {
+                            Id = new Guid("66666666-6666-6666-6666-666666666666"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsEnabled = true,
+                            Pattern = "(?i)(\\bAuthorization\\s*:\\s*Basic\\s+)\\S+",
+                            Replacement = "$1***"
+                        },
+                        new
+                        {
+                            Id = new Guid("77777777-7777-7777-7777-777777777777"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsEnabled = true,
+                            Pattern = "(?i)\"?\\b(?:access_token|refresh_token|id_token|session_id|sessionId)\"?\\s*[:=]\\s*\"?[^\"'\\r\\n,\\s}]+\"?",
+                            Replacement = "***"
+                        },
+                        new
+                        {
+                            Id = new Guid("88888888-8888-8888-8888-888888888888"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsEnabled = true,
+                            Pattern = "(?i)\"?\\b(?:api[_-]?key|x-api-key|client[_-]?secret|x-client-secret|api[_-]?secret)\"?\\s*[:=]\\s*\"?[^\"'\\r\\n,\\s}]+\"?",
+                            Replacement = "***"
+                        },
+                        new
+                        {
+                            Id = new Guid("99999999-9999-9999-9999-999999999999"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsEnabled = true,
+                            Pattern = "(?i)\"?\\b(?:csrf[_-]?token|xsrf[_-]?token|x-csrf-token|x-xsrf-token)\"?\\s*[:=]\\s*\"?[^\"'\\r\\n,\\s}]+\"?",
+                            Replacement = "***"
+                        },
+                        new
+                        {
+                            Id = new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsEnabled = true,
+                            Pattern = "(?i)(\\bCookie\\s*:\\s*)[^\\r\\n]+",
+                            Replacement = "$1***"
                         });
                 });
 
@@ -199,6 +263,12 @@ namespace BugShot.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<string>("BrowserName")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("browser_name");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -218,6 +288,33 @@ namespace BugShot.Api.Migrations
                         .HasMaxLength(1200)
                         .HasColumnType("character varying(1200)")
                         .HasColumnName("description");
+
+                    b.Property<double?>("DevicePixelRatio")
+                        .HasColumnType("double precision")
+                        .HasColumnName("device_pixel_ratio");
+
+                    b.Property<string>("DeviceType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("device_type");
+
+                    b.Property<string>("Language")
+                        .HasMaxLength(35)
+                        .HasColumnType("character varying(35)")
+                        .HasColumnName("language");
+
+                    b.Property<string>("OsName")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("os_name");
+
+                    b.Property<string>("Page")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("page");
 
                     b.Property<string>("PageUrl")
                         .IsRequired()
@@ -247,6 +344,11 @@ namespace BugShot.Api.Migrations
                         .HasColumnType("ticket_status")
                         .HasColumnName("status");
 
+                    b.Property<string>("TimeZone")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("time_zone");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -256,6 +358,14 @@ namespace BugShot.Api.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)")
                         .HasColumnName("user_agent");
+
+                    b.Property<int?>("ViewportHeight")
+                        .HasColumnType("integer")
+                        .HasColumnName("viewport_height");
+
+                    b.Property<int?>("ViewportWidth")
+                        .HasColumnType("integer")
+                        .HasColumnName("viewport_width");
 
                     b.HasKey("Id")
                         .HasName("pk_tickets");

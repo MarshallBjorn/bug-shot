@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { useParams, useSearchParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import LiveStatus from '../components/LiveStatus'
 import LoadMore from '../components/LoadMore'
 import TicketFilters from '../components/TicketFilters'
@@ -37,7 +37,10 @@ function TicketListPage() {
     <>
       <div className="list-heading">
         <h2>Zgłoszenia</h2>
-        <LiveStatus status={live} />
+        <div className="list-heading-actions">
+          <LiveStatus status={live} />
+          <Link to={`/projects/${projectId}/analytics`}>Analityka</Link>
+        </div>
       </div>
 
       <TicketFilters query={query} onChange={updateQuery} />

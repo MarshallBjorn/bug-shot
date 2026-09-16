@@ -16,7 +16,7 @@ function AppLayout() {
         <Link to="/">Bug-shot</Link>
         {user?.isAdmin && (
           <nav className="app-nav">
-            <Link to="/admin/projects">Projekty</Link>
+            <Link to="/admin/projects">Zarządzanie projektami</Link>
             <Link to="/admin/sanitization-rules">Sanityzacja</Link>
           </nav>
         )}

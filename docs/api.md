@@ -55,6 +55,15 @@ erDiagram
         varchar description
         varchar page_url
         varchar user_agent
+        varchar page "adres bez zapytania i fragmentu"
+        varchar browser_name
+        varchar os_name
+        varchar device_type
+        int viewport_width
+        int viewport_height
+        float device_pixel_ratio
+        varchar language
+        varchar time_zone
         ticket_status status
         timestamptz reported_at
         timestamptz received_at
@@ -194,6 +203,7 @@ Domyślnie każdy endpoint wymaga tokena, wyjątki wylicza sekcja `Uwierzytelnia
 |---|---|---|
 | `POST /tickets` | działa | zgłoszenie z widgetu, zwraca `uploadToken`, patrz niżej |
 | `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtr po statusie, szukanie, paginacja kursorowa |
+| `GET /projects/{projectId}/analytics` | działa | analityka projektu w zakresie 7d, 30d, 90d albo all |
 | `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
 | `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken`, tombstone daje 409 |
 | `PATCH /tickets/{id}/status` | działa | wymaga `If-Match` z `rowVersion`, konflikt daje 409 |
@@ -232,7 +242,10 @@ Jedyny endpoint integrowany spoza naszego kodu, więc kontrakt zapisany wprost.
   "description": "Koszyk gubi produkty po odswiezeniu",
   "pageUrl": "https://acme.example/cart",
   "userAgent": "Mozilla/5.0 ...",
-  "reportedAt": "2026-08-24T09:12:33+02:00"
+  "reportedAt": "2026-08-24T09:12:33+02:00",
+  "viewport": { "width": 1536, "height": 730, "devicePixelRatio": 1.25 },
+  "language": "pl-PL",
+  "timeZone": "Europe/Warsaw"
 }
 ```
 
@@ -249,6 +262,8 @@ Odpowiedź `201 Created` z identyfikatorem zgłoszenia i jednorazowym tokenem do
 Token wraca wyłącznie w tej odpowiedzi. W bazie leży sam skrót SHA-256, więc nie da się go odzyskać ani odtworzyć po stronie serwera. Ważność to 15 minut od utworzenia zgłoszenia, licząc do momentu walidacji, a nie do rozpoczęcia wysyłki. Token jest jednorazowy: pierwsze udane użycie stempluje `used_at` i kolejna próba dostaje 401. Sposób przekazania tokena opisuje sekcja `POST /tickets/{id}/attachments`.
 
 Wymagane są `projectKey` i `description`. Opis do 1200 znaków, czyli tyle samo co limit w widgecie. `pageUrl` musi być poprawnym adresem. Nieznany `projectKey` daje 400 z błędem walidacji na tym polu.
+
+`viewport`, `language` i `timeZone` są opcjonalne i nie mają walidacji. Wartość, która nie wygląda sensownie, na przykład zerowy viewport, język spoza BCP 47 albo strefa spoza IANA, jest pomijana, bo metadane nie mogą zablokować zgłoszenia. Przy przyjęciu API wylicza z `userAgent` rodzinę przeglądarki, system i typ urządzenia, a z `pageUrl` po sanityzacji stronę bez schematu, zapytania i fragmentu. Kasowanie czyści te pola razem z adresem i user agentem.
 
 Błędy walidacji wracają jako `ProblemDetails` zgodnie z RFC 9110, z mapą `errors` po nazwach pól.
 
@@ -389,6 +404,31 @@ Rzeczy, których nie widać z sygnatury endpointu:
 
 Paginacja komentarzy została przy numerach stron. Lista komentarzy jednego zgłoszenia jest krótka i nie ma nad nią kanału live, więc kursor niczego by tam nie kupił.
 
+### GET /projects/{projectId}/analytics
+
+Analityka projektu dla panelu, dostępna dla każdego zalogowanego tak samo jak lista zgłoszeń.
+
+`range` przyjmuje `7d`, `30d`, `90d` albo `all`, domyślnie `30d`. `tz` to strefa IANA, w której liczą się dni i "dziś", domyślnie `UTC`. `includeToday` mówi, czy liczyć dzisiejszy, jeszcze trwający dzień, domyślnie `true`. Inna wartość kończy się błędem walidacji na tym polu. Nazwy stref z Windows są odrzucane, bo .NET je zna, a Postgres nie.
+
+Zakres to pełne dni kalendarzowe w strefie `tz`, liczone zawsze po `received_at`, bo `reported_at` podaje zegar klienta. `7d` z dzisiejszym dniem to sześć pełnych dni i dzisiaj do chwili żądania, a bez niego siedem pełnych dni kończących się wczoraj o północy. Poprzedni okres to tyle samo pełnych dni tuż przed bieżącym. Dla `all` nie ma poprzedniego okresu ani rosnących stron, a oś czasu idzie tygodniami zamiast dniami.
+
+W odpowiedzi:
+
+- `summary`: nowe zgłoszenia i liczba z poprzedniego okresu, nowe dzisiaj, otwarty backlog, odsetek rozwiązanych, odrzuconych i ze zrzutem, mediana i p90 czasu do rozwiązania oraz do pierwszej reakcji
+- `timeline`: nowe i rozwiązane na każdy dzień albo tydzień, razem z pustymi
+- `statuses`, `topPages` (10), `risingPages` (5), `browsers`, `operatingSystems` i `devices` (po 8), `sanitization` per reguła
+
+Definicje, które nie wynikają z nazw:
+
+- skasowane zgłoszenia wchodzą do sum i statusów, ale nie do stron, przeglądarek, urządzeń ani odsetków, bo tombstone nie ma już tych danych
+- otwarty backlog to `New` i `InProgress` na teraz, niezależnie od zakresu
+- czas do rozwiązania liczy się dla zgłoszeń, które są teraz `Resolved`, do ostatniego przejścia na ten status, więc ponowne otwarcie przesuwa wynik
+- pierwsza reakcja to pierwsza zmiana statusu albo pierwszy komentarz, zależnie co było wcześniej
+- mediana i p90 zamiast średniej, bo jedno zgłoszenie leżące miesiącami rozwala średnią
+- strona to adres bez schematu, zapytania i fragmentu, małymi literami, liczony przy przyjęciu z adresu po sanityzacji. Starsze zgłoszenia uzupełniła migracja tymi samymi regułami
+
+Metryki liczą się zapytaniami SQL na indeksie `tickets(project_id, received_at)` i indeksach historii, komentarzy i załączników. Kolumna `page` nie ma indeksu, bo adres do 2048 znaków może nie zmieścić się w limicie wiersza indeksu btree.
+
 ## Kanał live
 
 Panel trzyma otwarty kanał na `/api/v1/hubs/tickets` (SignalR) i dostaje zmiany bez odpytywania API. Adres siedzi pod tym samym prefiksem wersji co reszta API, bo kanał niesie te same kontrakty co `v1`. Przy okazji proxy przed API ma jedną regułę do przepuszczenia, a nie dwie.
@@ -463,13 +503,13 @@ Pierwsze konto powstaje przy starcie API z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, wy�
 
 ### Projekty
 
-`GET`, `POST` i `PATCH /projects` oraz zarządzanie originami są tylko dla `is_admin`, tak samo jak `sanitization-rules` niżej.
+`GET /projects` jest dla każdego zalogowanego, bo z tej listy dashboard wybiera projekt. Konta nie są przypisane do projektów, więc zalogowany i tak widzi zgłoszenia każdego z nich. `POST`, `PATCH` i `DELETE /projects` oraz zarządzanie originami są tylko dla `is_admin`, tak samo jak `sanitization-rules` niżej.
 
-Klucz projektu jest wpięty w widget na cudzej stronie, więc jest niezmienny po utworzeniu: `PATCH /projects/{id}` zmienia tylko nazwę. Zajęty klucz przy `POST /projects` kończy się błędem walidacji na polu `key`, tą samą ścieżką co inne błędy walidacji w tym API.
+Klucz projektu jest wpięty w widget na cudzej stronie, więc jest niezmienny po utworzeniu: `PATCH /projects/{id}` zmienia tylko nazwę. Zajęty klucz przy `POST /projects` kończy się błędem walidacji na polu `key`, tą samą ścieżką co inne błędy walidacji w tym API. Dotyczy to też dwóch równoległych żądań z tym samym kluczem, drugie nie kończy się błędem bazy.
 
 `DELETE /projects/{id}` usuwa projekt razem z jego originami i regułami projektowymi, ale tylko gdy projekt nie ma ani jednego zgłoszenia. W przeciwnym razie kończy się `409` z komunikatem, żeby dashboard mógł go pokazać wprost, zamiast tłumaczyć błąd bazy.
 
-Origin dodany przez `POST /projects/{id}/origins` jest przycinany z białych znaków i końcowego ukośnika przed zapisem, z tego samego powodu co przy walidacji w `POST /tickets`: przeglądarka i tak normalizuje schemat i host, ale ukośnik na końcu wpisany ręcznie stworzyłby fantomowy duplikat. Powtórzony origin tego samego projektu kończy się `409`.
+Origin w `POST /projects/{id}/origins` musi mieć postać, w jakiej przeglądarka wysyła nagłówek `Origin`: schemat `http` albo `https`, host i opcjonalny port. Adres bez schematu, ze ścieżką, zapytaniem albo fragmentem kończy się błędem walidacji na polu `origin`, bo taki wpis nigdy nie przepuściłby żadnego zgłoszenia. Przed zapisem znikają białe znaki, końcowy ukośnik i domyślny port, a schemat i host schodzą do małych liter, więc `HTTPS://Sklep.example:443/` trafia do bazy jako `https://sklep.example` i nie tworzy fantomowego duplikatu. Powtórzony origin tego samego projektu kończy się `409`.
 
 ## Dokument OpenAPI
 
@@ -518,7 +558,7 @@ Maskowanie działa po stronie backendu przed zapisem, dla opisu, adresu strony i
 
 Wzorzec jest zwykłym wyrażeniem regularnym .NET, dopasowanie ma limit czasu 100ms. Niepoprawny wzorzec albo przekroczony limit pomijają regułę zamiast wywalać całe zgłoszenie.
 
-`sanitization-rules` to ekran administracyjny nad tą samą tabelą. Włączenie i wyłączenie reguły przez `PATCH /sanitization-rules/{id}/enabled` działa od razu, bo `SanitizationService` czyta `is_enabled` z bazy przy każdym zgłoszeniu, bez żadnego cache w pamięci procesu. `POST /sanitization-rules/test` liczy to samo dopasowanie na przykładowym tekście z ciała żądania i niczego nie zapisuje, więc pozwala zobaczyć wynik przed założeniem albo edycją reguły. Niepoprawny wzorzec w `POST /sanitization-rules`, `PATCH /sanitization-rules/{id}` i `POST /sanitization-rules/test` kończy się błędem walidacji na polu `pattern`.
+`sanitization-rules` to ekran administracyjny nad tą samą tabelą. Włączenie i wyłączenie reguły przez `PATCH /sanitization-rules/{id}/enabled` działa od razu, bo `SanitizationService` czyta `is_enabled` z bazy przy każdym zgłoszeniu, bez żadnego cache w pamięci procesu. `POST /sanitization-rules/test` liczy to samo dopasowanie na przykładowym tekście z ciała żądania i niczego nie zapisuje, więc pozwala zobaczyć wynik przed założeniem albo edycją reguły. Niepoprawny wzorzec w `POST /sanitization-rules`, `PATCH /sanitization-rules/{id}` i `POST /sanitization-rules/test` kończy się błędem walidacji na polu `pattern`. W `POST /sanitization-rules/test` tak samo kończy się przekroczony limit czasu, bo w zgłoszeniach taka reguła byłaby pomijana. Pusty zamiennik jest dozwolony i wycina dopasowanie, pusty przykładowy tekst też.
 
 ## CORS
 

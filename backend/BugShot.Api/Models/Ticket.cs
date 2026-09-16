@@ -14,6 +14,26 @@ public class Ticket : ICreatedAt
 
     public string UserAgent { get; set; } = string.Empty;
 
+    // adres bez zapytania i fragmentu po ktorym analityka grupuje strony
+    public string Page { get; set; } = string.Empty;
+
+    // rodzina przegladarki system i typ urzadzenia wyliczone z user agenta przy przyjeciu
+    public string BrowserName { get; set; } = string.Empty;
+
+    public string OsName { get; set; } = string.Empty;
+
+    public string DeviceType { get; set; } = string.Empty;
+
+    public int? ViewportWidth { get; set; }
+
+    public int? ViewportHeight { get; set; }
+
+    public double? DevicePixelRatio { get; set; }
+
+    public string? Language { get; set; }
+
+    public string? TimeZone { get; set; }
+
     public TicketStatus Status { get; set; }
 
     // czas podany przez przegladarke bo zegar klienta bywa przestawiony

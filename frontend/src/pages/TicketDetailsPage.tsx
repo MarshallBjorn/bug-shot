@@ -206,6 +206,7 @@ function TicketDetailsPage() {
             <dt>Status</dt>
             <dd>
               <select
+                aria-label="Status zgłoszenia"
                 value={ticket.status}
                 onChange={(event) => handleStatusChange(event.target.value as TicketStatus)}
                 disabled={updatingStatus || ticket.status === 'Deleted'}
