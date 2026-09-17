@@ -41,8 +41,21 @@ export function screenshotBytes() {
   ])
 }
 
-// widget nie ma konta wiec zglasza sam Originem i jednorazowym tokenem wysylki
-export async function reportFromWidget(request: APIRequestContext, description: string) {
+// panel nie ma jeszcze ekranu zmiany statusu wiec e2e robi to zadaniem
+export async function signInApi(request: APIRequestContext) {
+  const response = await request.post(`${apiBaseUrl}/api/v1/auth/login`, {
+    data: { email: admin.email, password: admin.password },
+  })
+
+  expect(response.status()).toBe(200)
+
+  const session = (await response.json()) as { accessToken: string }
+
+  return { Authorization: `Bearer ${session.accessToken}` }
+}
+
+// samo zgloszenie bo lista nie pokazuje zalacznikow
+export async function reportTicket(request: APIRequestContext, description: string) {
   const created = await request.post(`${apiBaseUrl}/api/v1/tickets`, {
     headers: { Origin: widgetOrigin },
     data: {
@@ -55,7 +68,12 @@ export async function reportFromWidget(request: APIRequestContext, description: 
 
   expect(created.status()).toBe(201)
 
-  const ticket = await created.json()
+  return (await created.json()) as { id: string; uploadToken: string }
+}
+
+// widget nie ma konta wiec zglasza sam Originem i jednorazowym tokenem wysylki
+export async function reportFromWidget(request: APIRequestContext, description: string) {
+  const ticket = await reportTicket(request, description)
 
   const uploaded = await request.post(`${apiBaseUrl}/api/v1/tickets/${ticket.id}/attachments`, {
     headers: { 'X-Upload-Token': ticket.uploadToken, Origin: widgetOrigin },

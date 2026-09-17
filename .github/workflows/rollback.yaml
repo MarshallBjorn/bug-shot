@@ -1,0 +1,127 @@
+name: rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to rollback to (e.g. 1.2.3 or abc1234)'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/wg_connect
+        with:
+          wg_private_key:     ${{ secrets.WG_PRIVATE_KEY }}
+          wg_endpoint:        ${{ secrets.WG_ENDPOINT }}
+          wg_peer_public_key: ${{ secrets.WG_PEER_PUBLIC_KEY }}
+          wg_runner_address:  ${{ secrets.WG_RUNNER_ADDRESS }}
+          vps_address:        ${{ secrets.WG_VPS_ADDRESS }}
+          deploy_ssh_key:     ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Verify images exist
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          VER="${{ inputs.version }}"
+
+          for svc in backend frontend; do
+            IMAGE="ghcr.io/${OWNER}/bugshot-${svc}:${VER}"
+            echo "Checking $IMAGE..."
+            docker manifest inspect "$IMAGE" > /dev/null 2>&1 || \
+              { echo "Not found: $IMAGE"; exit 1; }
+            echo "✓ $IMAGE"
+          done
+
+      - name: Rollback
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          VER="${{ inputs.version }}"
+          ENV="${{ inputs.environment }}"
+
+          ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_VER="$VER" DEPLOY_ENV="$ENV" bash << 'REMOTE'
+          set -euo pipefail
+
+          case "$DEPLOY_ENV" in
+            staging) DIR=~/bugshot-staging ;;
+            prod)    DIR=~/bugshot-prod ;;
+            *)       echo "Unknown env: $DEPLOY_ENV"; exit 1 ;;
+          esac
+
+          cd "$DIR"
+
+          export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VER}"
+          export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${DEPLOY_VER}"
+
+          docker pull "$BACKEND_IMAGE"
+          docker pull "$FRONTEND_IMAGE"
+
+          [ -f .deploy-tag ] && cp .deploy-tag .deploy-tag-prev
+          echo "$DEPLOY_VER" > .deploy-tag
+
+          docker compose --env-file .env \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            up -d --no-build --remove-orphans
+
+          echo "=== Rollback to $DEPLOY_VER complete ==="
+          REMOTE
+
+      - name: Smoke test
+        run: |
+          ssh vps bash << 'REMOTE'
+          set -euo pipefail
+
+          for url in http://localhost:8080/healthz http://localhost:3000/healthz; do
+            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$url")
+            [ "$status" = "200" ] || { echo "FAIL: $url → $status"; exit 1; }
+            echo "OK: $url → $status"
+          done
+          REMOTE
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          STATUS="${{ job.status }}"
+          VER="${{ inputs.version }}"
+          ENV="${{ inputs.environment }}"
+          [ "$STATUS" = "success" ] && COLOR=3066993 || COLOR=15158332
+
+          curl -sS -H "Content-Type: application/json" -d "{
+            \"embeds\": [{
+              \"title\": \"Rollback ${ENV} → ${VER} — $STATUS\",
+              \"color\": $COLOR,
+              \"fields\": [
+                {\"name\": \"Version\", \"value\": \"\`$VER\`\", \"inline\": true},
+                {\"name\": \"Environment\", \"value\": \"$ENV\", \"inline\": true},
+                {\"name\": \"By\", \"value\": \"${{ github.actor }}\", \"inline\": true},
+                {\"name\": \"Logs\", \"value\": \"[Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}
+              ]
+            }]
+          }" "$DISCORD_WEBHOOK_URL" || true
+
+      - name: Teardown WireGuard
+        if: always()
+        run: sudo wg-quick down wg0 || true

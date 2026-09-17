@@ -1,5 +1,6 @@
 import { ticketQueryToParams, type TicketQuery } from '../ticketQuery'
 import type {
+  CursorPage,
   PagedResult,
   TicketComment,
   TicketDetails,
@@ -8,12 +9,25 @@ import type {
 } from '../types'
 import { apiDelete, apiGet, apiPatch, apiPost } from './client'
 
-export function getTickets(projectId: string, query: TicketQuery, signal?: AbortSignal) {
-  const params = ticketQueryToParams(query).toString()
-  const suffix = params ? `?${params}` : ''
+export function getTickets(
+  projectId: string,
+  query: TicketQuery,
+  cursor: string | null,
+  signal?: AbortSignal,
+) {
+  const params = ticketQueryToParams(query)
 
-  return apiGet<PagedResult<TicketListItem>>(
-    `/api/v1/projects/${projectId}/tickets${suffix}`,
+  if (cursor) {
+    params.set('cursor', cursor)
+  } else {
+    // licznik liczy sie tylko przy wejściu w listę, doładowanie nie ma go po co ruszać
+    params.set('withTotal', 'true')
+  }
+
+  const suffix = params.toString()
+
+  return apiGet<CursorPage<TicketListItem>>(
+    `/api/v1/projects/${projectId}/tickets${suffix ? `?${suffix}` : ''}`,
     signal,
   )
 }

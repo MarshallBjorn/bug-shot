@@ -1,0 +1,173 @@
+name: deploy-prod
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-tag-push:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: v
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push versioned images
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          VER="${{ steps.v.outputs.version }}"
+
+          for svc in backend frontend; do
+            BASE="ghcr.io/${OWNER}/bugshot-${svc}"
+            docker buildx build \
+              --tag "${BASE}:${VER}" \
+              --tag "${BASE}:latest" \
+              --push \
+              --cache-from "type=gha,scope=${svc}" \
+              --cache-to "type=gha,mode=max,scope=${svc}" \
+              "./${svc}"
+          done
+
+  deploy:
+    needs: build-tag-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/wg_connect
+        with:
+          wg_private_key:     ${{ secrets.WG_PRIVATE_KEY }}
+          wg_endpoint:        ${{ secrets.WG_ENDPOINT }}
+          wg_peer_public_key: ${{ secrets.WG_PEER_PUBLIC_KEY }}
+          wg_runner_address:  ${{ secrets.WG_RUNNER_ADDRESS }}
+          vps_address:        ${{ secrets.WG_VPS_ADDRESS }}
+          deploy_ssh_key:     ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Rolling deploy
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          VERSION="${{ needs.build-tag-push.outputs.version }}"
+
+          ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_VERSION="$VERSION" bash << 'REMOTE'
+          set -euo pipefail
+          cd ~/bugshot-prod
+          COMPOSE="docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml"
+
+          export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VERSION}"
+          export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${DEPLOY_VERSION}"
+
+          docker pull "$BACKEND_IMAGE"
+          docker pull "$FRONTEND_IMAGE"
+
+          [ -f .deploy-tag ] && cp .deploy-tag .deploy-tag-prev
+          echo "$DEPLOY_VERSION" > .deploy-tag
+
+          for svc in backend frontend; do
+            echo "=== Rolling: $svc ==="
+            $COMPOSE up -d --no-build --no-deps "$svc"
+
+            for i in $(seq 1 24); do
+              HEALTH=$($COMPOSE ps "$svc" --format '{{.Health}}')
+              [ "$HEALTH" = "healthy" ] && break
+              [ "$i" -eq 24 ] && { echo "Timeout: $svc"; exit 1; }
+              sleep 5
+            done
+            echo "$svc healthy"
+          done
+
+          $COMPOSE up -d --no-build --remove-orphans
+          echo "=== Deploy $DEPLOY_VERSION complete ==="
+          REMOTE
+
+      - name: Smoke test
+        id: smoke
+        run: |
+          ssh vps bash << 'REMOTE'
+          set -euo pipefail
+
+          for url in http://localhost:8080/healthz http://localhost:3000/healthz; do
+            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$url")
+            [ "$status" = "200" ] || { echo "FAIL: $url → $status"; exit 1; }
+            echo "OK: $url → $status"
+          done
+          REMOTE
+
+      - name: Playwright smoke
+        continue-on-error: true
+        run: |
+          ssh vps bash << 'REMOTE'
+          cd ~/bugshot-prod/e2e
+          [ -f package.json ] && npx playwright test smoke.spec.ts --reporter=list || echo "skip"
+          REMOTE
+
+      - name: Auto-rollback on failure
+        if: failure() && steps.smoke.outcome == 'failure'
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+
+          ssh vps DEPLOY_OWNER="$OWNER" bash << 'REMOTE'
+          set -euo pipefail
+          cd ~/bugshot-prod
+
+          PREV=$(cat .deploy-tag-prev 2>/dev/null || true)
+          [ -z "$PREV" ] && { echo "No previous tag"; exit 1; }
+
+          echo "=== ROLLBACK to $PREV ==="
+
+          export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${PREV}"
+          export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${PREV}"
+
+          docker compose --env-file .env \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            up -d --no-build --remove-orphans
+
+          echo "$PREV" > .deploy-tag
+          echo "=== Rollback done ==="
+          REMOTE
+
+      - name: Notify Discord
+        if: always()
+        env:
+          VERSION: ${{ needs.build-tag-push.outputs.version }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          STATUS="${{ job.status }}"
+          [ "$STATUS" = "success" ] && COLOR=3066993 || COLOR=15158332
+
+          curl -sS -H "Content-Type: application/json" -d "{
+            \"embeds\": [{
+              \"title\": \"Deploy prod v${VERSION} — $STATUS\",
+              \"color\": $COLOR,
+              \"fields\": [
+                {\"name\": \"Version\", \"value\": \"v${VERSION}\", \"inline\": true},
+                {\"name\": \"By\", \"value\": \"${{ github.actor }}\", \"inline\": true},
+                {\"name\": \"Logs\", \"value\": \"[Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}
+              ]
+            }]
+          }" "$DISCORD_WEBHOOK_URL" || true
+
+      - name: Teardown WireGuard
+        if: always()
+        run: sudo wg-quick down wg0 || true

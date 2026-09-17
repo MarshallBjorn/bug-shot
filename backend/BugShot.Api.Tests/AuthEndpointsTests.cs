@@ -32,7 +32,7 @@ public class AuthEndpointsTests : IDisposable
     public AuthEndpointsTests()
     {
         // seed admina dziala tylko na pustej tabeli wiec czyscimy ja przed startem aplikacji
-        using (var db = OpenContext())
+        using (var db = TestDatabase.OpenContext())
         {
             db.Users.ExecuteDelete();
         }
@@ -50,7 +50,7 @@ public class AuthEndpointsTests : IDisposable
         factory.Dispose();
 
         // konta z testow zostawione w bazie blokuja seed admina przy nastepnym starcie API
-        using (var db = OpenContext())
+        using (var db = TestDatabase.OpenContext())
         {
             db.Users.ExecuteDelete();
         }
@@ -87,7 +87,7 @@ public class AuthEndpointsTests : IDisposable
     [Fact]
     public async Task SeedAdminaBierzeDaneZEnvIHashujeBcryptemZKosztem12()
     {
-        using var db = OpenContext();
+        using var db = TestDatabase.OpenContext();
 
         var admin = await db.Users.SingleAsync(u => u.Email == AdminEmail);
 
@@ -136,7 +136,7 @@ public class AuthEndpointsTests : IDisposable
     [Fact]
     public async Task ZgloszenieZWidgetuPrzechodziBezTokena()
     {
-        using (var db = OpenContext())
+        using (var db = TestDatabase.OpenContext())
         {
             db.Tickets.ExecuteDelete();
         }
@@ -329,7 +329,7 @@ public class AuthEndpointsTests : IDisposable
     {
         Guid attachmentId;
 
-        using (var db = OpenContext())
+        using (var db = TestDatabase.OpenContext())
         {
             db.Tickets.ExecuteDelete();
 
@@ -388,7 +388,7 @@ public class AuthEndpointsTests : IDisposable
         var second = CookieValue(await Refresh(client, first));
 
         // cofamy moment zuzycia poza okno na duble z panelu
-        using (var db = OpenContext())
+        using (var db = TestDatabase.OpenContext())
         {
             await db.UserRefreshTokens
                 .Where(t => t.UsedAt != null)
@@ -408,7 +408,7 @@ public class AuthEndpointsTests : IDisposable
     {
         var refresh = CookieValue(await Login(client, AdminEmail, AdminPassword));
 
-        using (var db = OpenContext())
+        using (var db = TestDatabase.OpenContext())
         {
             await db.UserRefreshTokens
                 .Where(t => t.UsedAt == null)
@@ -468,7 +468,7 @@ public class AuthEndpointsTests : IDisposable
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        using var db = OpenContext();
+        using var db = TestDatabase.OpenContext();
 
         Assert.False(await db.Users.AnyAsync(u => u.Email == "krotkie@bug-shot.test"));
     }
@@ -552,7 +552,7 @@ public class AuthEndpointsTests : IDisposable
 
     private async Task<Session> CreateAdmin(string email)
     {
-        using (var db = OpenContext())
+        using (var db = TestDatabase.OpenContext())
         {
             db.Users.Add(new User
             {
@@ -569,7 +569,7 @@ public class AuthEndpointsTests : IDisposable
 
     private async Task<Session> CreateDeveloper()
     {
-        using (var db = OpenContext())
+        using (var db = TestDatabase.OpenContext())
         {
             db.Users.Add(new User
             {
@@ -625,23 +625,6 @@ public class AuthEndpointsTests : IDisposable
             .Single(value => value.StartsWith($"{RefreshToken.CookieName}=", StringComparison.Ordinal));
 
         return cookie[(RefreshToken.CookieName.Length + 1)..cookie.IndexOf(';')];
-    }
-
-    private static BugShotDbContext OpenContext()
-    {
-        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? throw new InvalidOperationException("ConnectionStrings__DefaultConnection is not configured.");
-
-        var options = new DbContextOptionsBuilder<BugShotDbContext>()
-            .UseNpgsql(connectionString, npgsql =>
-            {
-                npgsql.MapEnum<TicketStatus>("ticket_status");
-                npgsql.MapEnum<AttachmentKind>("attachment_kind");
-            })
-            .UseSnakeCaseNamingConvention()
-            .Options;
-
-        return new BugShotDbContext(options);
     }
 
     private record Session(string AccessToken, DateTimeOffset ExpiresAt, SessionUser User);

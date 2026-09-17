@@ -23,22 +23,11 @@ public class UploadTokenTests
 {
     private static BugShotDbContext NewContext()
     {
-        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? throw new InvalidOperationException("ConnectionStrings__DefaultConnection is not configured.");
-
-        var options = new DbContextOptionsBuilder<BugShotDbContext>()
-            .UseNpgsql(connectionString, npgsql =>
-            {
-                npgsql.MapEnum<TicketStatus>("ticket_status");
-                npgsql.MapEnum<AttachmentKind>("attachment_kind");
-            })
-            .UseSnakeCaseNamingConvention()
-            .Options;
-
-        var db = new BugShotDbContext(options);
+        var db = TestDatabase.OpenContext();
 
         // kasowanie zgloszen zabiera tokeny kaskada wiec kazdy test startuje z pustej tabeli
         db.Tickets.ExecuteDelete();
+
         return db;
     }
 
@@ -60,6 +49,7 @@ public class UploadTokenTests
             db,
             new AttachmentStorageOptions(Path.GetTempPath()),
             cache,
+            new RecordingTicketNotifier(),
             NullLogger<TicketsController>.Instance,
             new SanitizationService(db),
             new NoOpNotificationEnqueuer(), new NoOpNotificationWorkerSignal())

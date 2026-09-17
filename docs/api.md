@@ -202,7 +202,7 @@ Domyślnie każdy endpoint wymaga tokena, wyjątki wylicza sekcja `Uwierzytelnia
 | Endpoint | Stan | Opis |
 |---|---|---|
 | `POST /tickets` | działa | zgłoszenie z widgetu, zwraca `uploadToken`, patrz niżej |
-| `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtr po statusie, szukanie, paginacja |
+| `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtr po statusie, szukanie, paginacja kursorowa |
 | `GET /projects/{projectId}/analytics` | działa | analityka projektu w zakresie 7d, 30d, 90d albo all |
 | `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
 | `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken`, tombstone daje 409 |
@@ -360,6 +360,50 @@ Kasowanie idzie wyłącznie przez `DELETE /tickets/{id}`, więc `Deleted` w ciel
 
 Sprawdzenie wersji leci dwa razy. Najpierw porównanie `If-Match` z odczytanym `rowVersion`, potem `row_version` w warunku `UPDATE`, bo jest tokenem współbieżności EF. Drugie łapie zapis, który wszedł między odczytem a zapisem, i też kończy się `409`.
 
+### Paginacja listy
+
+Lista chodzi kursorem, nie numerem strony. Odpowiedź ma tylko pozycje i kursor do następnej strony:
+
+```json
+{
+  "items": [],
+  "nextCursor": "cmVjZWl2ZWRBdDpkZXNjfDYzOTI0NTgyODQ0Mzk4MDc4MHwwMWEwODdlMGFmZWQ3MWMzYWNmZWM2NjFhMjJiZDg2Yw"
+}
+```
+
+Pierwsze żądanie idzie bez `cursor`, każde kolejne przekazuje wartość z poprzedniej odpowiedzi. `nextCursor` równy `null` oznacza koniec listy. `limit` domyślnie 20 i jest przycinany do 100.
+
+Odpowiedź niesie jeszcze `total`, ale wypełnia się ono tylko na żądanie i tylko przy wejściu w listę:
+
+| Żądanie | `total` |
+|---|---|
+| bez `withTotal` | `null` |
+| `withTotal=true` bez `cursor` | liczba wszystkich pasujących do filtra |
+| `withTotal=true` z `cursor` | `null` |
+
+Podział jest celowy. Licznik przydaje się przy filtrze, żeby wiedzieć, ile w ogóle jest trafień, ale przy doładowaniu kolejnej strony nie mówi nic nowego, a `COUNT` to dokładnie ten koszt, który kursor ma zdejmować. Panel prosi o niego przy każdej zmianie filtra i nie prosi przy doładowaniu.
+
+Licznik jest zdjęciem stanu z chwili odpowiedzi. Panel podnosi go i obniża razem ze zdarzeniami z kanału live, które sam widzi, więc zgłoszenie zmienione poza załadowanym kawałkiem listy może go rozstroić do najbliższej zmiany filtra. Zamiast tego można było odpytywać o licznik przy każdym zdarzeniu, ale to zamienia jeden `COUNT` na filtr w `COUNT` na każde nowe zgłoszenie.
+
+Kursor jest nieprzezroczysty. Niesie w sobie klucz sortowania ostatniego wiersza i jego identyfikator, więc zapytanie zamiast `OFFSET` dostaje warunek `WHERE` po tej parze. Dwie rzeczy z tego wynikają dla klienta:
+
+- dopisanie zgłoszenia między pobraniem jednej strony a drugiej niczego nie przesuwa. Przy `OFFSET` ten sam ticket potrafił wyjść na dwóch stronach albo nie wyjść wcale
+- nie da się skoczyć na stronę numer pięć. Lista doładowuje się w dół, a numer strony przy liście, która żyje, i tak wskazywałby co chwilę na co innego
+
+Kursor należy do sortowania, z którym powstał, i sortowanie siedzi w jego treści. Podany przy innym `sort` kończy się `400`, bo warunek `WHERE` liczony w innej skali cicho oddałby złe wyniki. Zepsuty albo obcy kursor też kończy się `400`. Filtry są poza kursorem: `status` i `search` tylko zawężają zbiór, więc kursor działa na nich dalej poprawnie.
+
+### Zachowania listy
+
+Rzeczy, których nie widać z sygnatury endpointu:
+
+- bez podanego `status` lista pomija tickety skasowane, bo tombstone nie ma czego pokazać. Jawne `status=Deleted` je zwróci
+- `search` szuka po opisie i po adresie strony, bez rozróżniania wielkości liter
+- `sort` przyjmuje `receivedAt:desc`, `receivedAt:asc`, `reportedAt:desc` i `reportedAt:asc`. Nierozpoznana wartość wpada w domyślne `receivedAt:desc`
+- sortowanie po `reportedAt` schodzi na `receivedAt` tam gdzie `reportedAt` jest puste. Bez tego zgłoszenia bez czasu z przeglądarki lądowały na końcu listy przy `asc` i na początku przy `desc`, niezależnie od daty pokazanej w tabeli. Kursor porównuje się z tą samą wartością, po której idzie `ORDER BY`, więc zgłoszenia bez `reportedAt` nie wypadają z paginacji
+- każde sortowanie domyka się identyfikatorem ticketu. Bez tego zgłoszenia o równych znacznikach czasu mają dowolną kolejność i potrafią powtórzyć się na dwóch stronach albo nie trafić na żadną
+
+Paginacja komentarzy została przy numerach stron. Lista komentarzy jednego zgłoszenia jest krótka i nie ma nad nią kanału live, więc kursor niczego by tam nie kupił.
+
 ### GET /projects/{projectId}/analytics
 
 Analityka projektu dla panelu, dostępna dla każdego zalogowanego tak samo jak lista zgłoszeń.
@@ -385,16 +429,27 @@ Definicje, które nie wynikają z nazw:
 
 Metryki liczą się zapytaniami SQL na indeksie `tickets(project_id, received_at)` i indeksach historii, komentarzy i załączników. Kolumna `page` nie ma indeksu, bo adres do 2048 znaków może nie zmieścić się w limicie wiersza indeksu btree.
 
-### Zachowania listy
+## Kanał live
 
-Rzeczy, których nie widać z sygnatury endpointu:
+Panel trzyma otwarty kanał na `/api/v1/hubs/tickets` (SignalR) i dostaje zmiany bez odpytywania API. Adres siedzi pod tym samym prefiksem wersji co reszta API, bo kanał niesie te same kontrakty co `v1`. Przy okazji proxy przed API ma jedną regułę do przepuszczenia, a nie dwie.
 
-- `pageSize` jest przycinany do 100, `page` do minimum 1
-- bez podanego `status` lista pomija tickety skasowane, bo tombstone nie ma czego pokazać. Jawne `status=Deleted` je zwróci
-- `search` szuka po opisie i po adresie strony, bez rozróżniania wielkości liter
-- `sort` przyjmuje `receivedAt:desc`, `receivedAt:asc`, `reportedAt:desc` i `reportedAt:asc`. Nierozpoznana wartość wpada w domyślne `receivedAt:desc`
-- sortowanie po `reportedAt` schodzi na `receivedAt` tam gdzie `reportedAt` jest puste. Bez tego zgłoszenia bez czasu z przeglądarki lądowały na końcu listy przy `asc` i na początku przy `desc`, niezależnie od daty pokazanej w tabeli
-- każde sortowanie domyka się identyfikatorem ticketu. Bez tego zgłoszenia o równych znacznikach czasu mają dowolną kolejność i potrafią powtórzyć się na dwóch stronach albo nie trafić na żadną
+Klient subskrybuje projekt wywołaniem `Subscribe` z jego identyfikatorem, a wypisuje się przez `Unsubscribe`. Zdarzenia idą wyłącznie do grupy tego projektu. Grupa odcina ruch, a nie dostęp: każde zalogowane konto i tak widzi wszystkie projekty tej instancji.
+
+| Zdarzenie | Ładunek | Kiedy |
+|---|---|---|
+| `TicketCreated` | pozycja listy | widget przysłał nowe zgłoszenie |
+| `TicketChanged` | pozycja listy | `PATCH /tickets/{id}/status` faktycznie zmienił status |
+| `TicketDeleted` | identyfikator | `DELETE /tickets/{id}` zrobił tombstone |
+
+Ładunek dwóch pierwszych ma dokładnie ten sam kształt co wiersz listy, więc panel podmienia go u siebie bez dodatkowego `GET`. Hub serializuje po swojemu, niezależnie od ustawień kontrolerów, więc konwerter enumów jest mu podany osobno. Bez tego ten sam status wychodziłby stringiem z REST i liczbą z kanału.
+
+Zdarzenia lecą po zatwierdzeniu zapisu i tylko wtedy, gdy zapis coś zmienił: powtórka `Idempotency-Key`, ustawienie tego samego statusu i drugie kasowanie tombstone nie nadają nic. Nieudana wysyłka zostawia ostrzeżenie w logu i nie wywraca żądania, bo dane są już w bazie.
+
+Hub wymaga tokena panelu. WebSocket w przeglądarce nie ustawia nagłówków, więc klient dokleja `access_token` do adresu. API czyta ten parametr wyłącznie dla ścieżek pod `/api/v1/hubs`, reszta tras zostaje przy `Authorization: Bearer`. Żądanie bez tokena dostaje `401` już na negocjacji.
+
+Zerwane połączenie klient wznawia sam, z opóźnieniami 0, 2, 10 i 30 sekund. Po wznowieniu subskrypcja idzie jeszcze raz, bo grupy nie przeżywają rozłączenia, a panel pobiera listę od nowa, bo zdarzenia z czasu przerwy przepadły.
+
+Dziś API chodzi w jednym egzemplarzu i hub trzyma grupy w pamięci procesu. Przy dwóch instancjach dojdzie do tego backplane, na przykład Redis, bo inaczej zdarzenie z jednej instancji nie dotrze do klientów wiszących na drugiej.
 
 ## Uwierzytelnianie
 
@@ -404,6 +459,8 @@ Bez tokena działa dokładnie pięć tras:
 
 - `POST /tickets` i `POST /tickets/{id}/attachments`, bo woła je widget z cudzej domeny i nie ma skąd wziąć konta. Chroni je `projectKey`, `Origin` i jednorazowy `uploadToken`
 - `/auth/login`, `/auth/refresh` i `/auth/logout`, bo to jest właśnie zakładanie i zamykanie sesji. Wylogowanie jest anonimowe celowo, żeby działało też z wygasłym access tokenem
+
+Kanał live pod `/api/v1/hubs/tickets` też wymaga tokena, tylko przyjmuje go z query stringa, patrz sekcja `Kanał live`.
 
 Poza tą listą otwarte są jeszcze `/openapi/v1.json` i `/swagger`, ale wyłącznie w środowisku `Development`. Poza nim rządzi się tym, co niżej.
 

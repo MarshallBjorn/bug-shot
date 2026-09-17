@@ -1,155 +1,251 @@
-import { renderHook, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import { getTickets } from '../api/tickets'
-import type { TicketQuery } from '../ticketQuery'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TicketEvent } from '../live/ticketEvents'
+import { defaultLimit, type TicketQuery } from '../ticketQuery'
+import type { CursorPage, TicketListItem } from '../types'
 import { useTickets } from './useTickets'
-
-vi.mock('../api/tickets', () => ({
-  getTickets: vi.fn(),
-}))
 
 const query: TicketQuery = {
   status: null,
   search: '',
   sort: 'receivedAt:desc',
-  page: 1,
-  pageSize: 20,
+  limit: defaultLimit,
 }
 
-const result = {
-  items: [],
-  total: 0,
-  page: 1,
-  pageSize: 20,
+function ticket(id: string, patch: Partial<TicketListItem> = {}): TicketListItem {
+  return {
+    id,
+    description: `Zgloszenie ${id}`,
+    pageUrl: 'https://acme.example/cart',
+    status: 'New',
+    reportedAt: null,
+    receivedAt: '2026-09-09T10:00:00+00:00',
+    updatedAt: '2026-09-09T10:00:00+00:00',
+    ...patch,
+  }
 }
 
-describe('useTickets', () => {
-  it('startuje w stanie loading', () => {
-    vi.mocked(getTickets).mockImplementation(
-      () => new Promise(() => undefined),
-    )
+function page(
+  ids: string[],
+  nextCursor: string | null,
+  total: number | null = null,
+): CursorPage<TicketListItem> {
+  return { items: ids.map((id) => ticket(id)), nextCursor, total }
+}
 
-    const { result: hook } = renderHook(() => useTickets('p1', query))
+function respond(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
 
-    expect(hook.current).toEqual({
-      result: null,
-      error: null,
-      loading: true,
-    })
+const zdarzenie: TicketEvent = { type: 'created', ticket: ticket('nowe') }
+const zmiana: TicketEvent = { type: 'changed', ticket: ticket('a', { status: 'Resolved' }) }
+
+function Probe({ projectId = 'p1', filter = query }: { projectId?: string; filter?: TicketQuery }) {
+  const tickets = useTickets(projectId, filter)
+
+  return (
+    <div>
+      <p>{tickets.loading ? 'ladowanie' : 'gotowe'}</p>
+      <p>{tickets.items.map((item) => item.id).join(',') || 'pusto'}</p>
+      <p>{tickets.items.map((item) => `${item.id}:${item.status}`).join(',') || 'brak statusow'}</p>
+      <p>{tickets.hasMore ? 'jest wiecej' : 'koniec'}</p>
+      <button type="button" onClick={tickets.loadMore}>
+        wiecej
+      </button>
+      <button type="button" onClick={() => tickets.apply(zdarzenie)}>
+        event
+      </button>
+      <button type="button" onClick={() => tickets.apply(zmiana)}>
+        zmiana
+      </button>
+      <button type="button" onClick={tickets.reload}>
+        odswiez
+      </button>
+    </div>
+  )
+}
+
+function addresses(mock: ReturnType<typeof vi.fn>) {
+  return mock.mock.calls.map((call) => String(call[0]))
+}
+
+let fetched: ReturnType<typeof vi.fn>
+
+beforeEach(() => {
+  fetched = vi.fn()
+  vi.stubGlobal('fetch', fetched)
+})
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+describe('lista zgloszen na kursorze', () => {
+  it('pierwsza strona idzie bez kursora', async () => {
+    fetched.mockResolvedValue(respond(page(['a', 'b'], null)))
+
+    render(<Probe />)
+
+    await waitFor(() => expect(screen.getByText('a,b')).toBeDefined())
+
+    expect(addresses(fetched)).toEqual([
+      'http://localhost:8080/api/v1/projects/p1/tickets?withTotal=true',
+    ])
+    expect(screen.getByText('koniec')).toBeDefined()
   })
 
-  it('zwraca wynik po udanym pobraniu', async () => {
-    vi.mocked(getTickets).mockResolvedValue(result)
+  it('doladowanie dokleja kolejna strone z kursorem', async () => {
+    fetched
+      .mockResolvedValueOnce(respond(page(['a', 'b'], 'kursor-1')))
+      .mockResolvedValueOnce(respond(page(['c'], null)))
 
-    const { result: hook } = renderHook(() => useTickets('p1', query))
+    render(<Probe />)
 
-    await waitFor(() => {
-      expect(hook.current.loading).toBe(false)
-    })
+    await waitFor(() => expect(screen.getByText('jest wiecej')).toBeDefined())
 
-    expect(hook.current).toEqual({
-      result,
-      error: null,
-      loading: false,
-    })
+    screen.getByRole('button', { name: 'wiecej' }).click()
 
-    expect(getTickets).toHaveBeenCalledWith(
-      'p1',
-      query,
-      expect.any(AbortSignal),
+    await waitFor(() => expect(screen.getByText('a,b,c')).toBeDefined())
+
+    // licznik liczy sie tylko przy wejsciu w liste wiec doladowanie o niego nie prosi
+    expect(addresses(fetched)[1]).toBe(
+      'http://localhost:8080/api/v1/projects/p1/tickets?cursor=kursor-1',
+    )
+    expect(screen.getByText('koniec')).toBeDefined()
+  })
+
+  // przycisk bez kursora nie ma czego doladowac
+  it('doladowanie na koncu listy nie wysyla zadania', async () => {
+    fetched.mockResolvedValue(respond(page(['a'], null)))
+
+    render(<Probe />)
+
+    await waitFor(() => expect(screen.getByText('koniec')).toBeDefined())
+
+    screen.getByRole('button', { name: 'wiecej' }).click()
+
+    expect(fetched).toHaveBeenCalledTimes(1)
+  })
+
+  it('zmiana filtra zaczyna liste od poczatku i zostawia wiersze na ekranie', async () => {
+    fetched
+      .mockResolvedValueOnce(respond(page(['a'], 'kursor-1')))
+      .mockResolvedValueOnce(respond(page(['b'], null)))
+
+    const view = render(<Probe />)
+
+    await waitFor(() => expect(screen.getByText('a')).toBeDefined())
+
+    view.rerender(<Probe filter={{ ...query, status: 'Resolved' }} />)
+
+    // stara lista zostaje dopoki nie przyjdzie nowa
+    expect(screen.getByText('a')).toBeDefined()
+    expect(screen.getByText('ladowanie')).toBeDefined()
+
+    await waitFor(() => expect(screen.getByText('b')).toBeDefined())
+
+    expect(addresses(fetched)[1]).toBe(
+      'http://localhost:8080/api/v1/projects/p1/tickets?status=Resolved&withTotal=true',
     )
   })
 
-  it('zwraca komunikat bledu po nieudanym pobraniu', async () => {
-    vi.mocked(getTickets).mockRejectedValue(
-      new Error('Nie mozna pobrac ticketow'),
-    )
+  it('zmiana projektu czysci liste', async () => {
+    fetched
+      .mockResolvedValueOnce(respond(page(['a'], null)))
+      .mockResolvedValueOnce(respond(page(['z'], null)))
 
-    const { result: hook } = renderHook(() => useTickets('p1', query))
+    const view = render(<Probe />)
 
-    await waitFor(() => {
-      expect(hook.current.loading).toBe(false)
-    })
+    await waitFor(() => expect(screen.getByText('a')).toBeDefined())
 
-    expect(hook.current).toEqual({
-      result: null,
-      error: 'Nie mozna pobrac ticketow',
-      loading: false,
-    })
+    view.rerender(<Probe projectId="p2" />)
+
+    expect(screen.getByText('pusto')).toBeDefined()
+
+    await waitFor(() => expect(screen.getByText('z')).toBeDefined())
   })
 
-  it('nie ustawia bledu po abort', () => {
-    vi.mocked(getTickets).mockImplementation(
-      (_projectId, _query, signal) =>
-        new Promise<never>((_resolve, reject) => {
-          signal?.addEventListener('abort', () => {
-            reject(new Error('aborted'))
-          })
+  it('blad zapytania konczy ladowanie', async () => {
+    fetched.mockResolvedValue(new Response(null, { status: 500 }))
+
+    render(<Probe />)
+
+    await waitFor(() => expect(screen.getByText('gotowe')).toBeDefined())
+    expect(screen.getByText('pusto')).toBeDefined()
+  })
+
+  it('odpowiedz na poprzedni filtr nie dopisuje sie do nowej listy', async () => {
+    const spozniona = respond(page(['stare'], null))
+    let wypusc: () => void = () => {}
+
+    fetched
+      .mockImplementationOnce(
+        () => new Promise((resolve) => {
+          wypusc = () => resolve(spozniona)
         }),
-    )
+      )
+      .mockResolvedValueOnce(respond(page(['nowe'], null)))
 
-    const { result: hook, unmount } = renderHook(
-      () => useTickets('p1', query),
-    )
+    const view = render(<Probe />)
 
-    expect(hook.current.loading).toBe(true)
+    view.rerender(<Probe filter={{ ...query, search: 'koszyk' }} />)
 
-    unmount()
+    await waitFor(() => expect(screen.getByText('nowe')).toBeDefined())
 
-    expect(hook.current.loading).toBe(true)
-    expect(hook.current.error).toBe(null)
+    wypusc()
+
+    await waitFor(() => expect(screen.getByText('nowe')).toBeDefined())
+    expect(screen.queryByText('stare')).toBeNull()
   })
 
-  it('podczas zmiany projektu nie pokazuje poprzedniego wyniku', async () => {
-    vi.mocked(getTickets).mockResolvedValue(result)
+  it('event ktory przyszedl w trakcie pierwszego ladowania nie ginie pod odpowiedzia GET-a', async () => {
+    let wypusc: () => void = () => {}
 
-    const { result: hook, rerender } = renderHook(
-      ({ projectId }) => useTickets(projectId, query),
-      {
-        initialProps: { projectId: 'p1' },
-      },
+    fetched.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        wypusc = () => resolve(respond(page(['a'], null)))
+      }),
     )
 
-    await waitFor(() => {
-      expect(hook.current.loading).toBe(false)
-    })
+    render(<Probe />)
 
-    rerender({ projectId: 'p2' })
+    await waitFor(() => expect(fetched).toHaveBeenCalledTimes(1))
 
-    expect(hook.current.loading).toBe(true)
-    expect(hook.current.result).toBe(null)
-    expect(hook.current.error).toBe(null)
+    // event SignalR przychodzi zanim GET zdazyl wrocic
+    screen.getByRole('button', { name: 'event' }).click()
+
+    wypusc()
+
+    await waitFor(() => expect(screen.getByText('nowe,a')).toBeDefined())
   })
 
-  it('podczas zmiany filtra pozostawia poprzedni wynik projektu', async () => {
-    vi.mocked(getTickets).mockResolvedValue(result)
+  it('event ktory przyszedl w trakcie odswiezania nie ginie pod odpowiedzia GET-a', async () => {
+    let wypusc: () => void = () => {}
 
-    const firstQuery = query
-
-    const secondQuery: TicketQuery = {
-      ...query,
-      search: 'login',
-    }
-
-    const { result: hook, rerender } = renderHook(
-      ({ currentQuery }) => useTickets('p1', currentQuery),
-      {
-        initialProps: {
-          currentQuery: firstQuery,
-        },
-      },
+    fetched.mockResolvedValueOnce(respond(page(['a'], null)))
+    fetched.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        wypusc = () => resolve(respond(page(['a'], null)))
+      }),
     )
 
-    await waitFor(() => {
-      expect(hook.current.loading).toBe(false)
-    })
+    render(<Probe />)
 
-    rerender({
-      currentQuery: secondQuery,
-    })
+    await waitFor(() => expect(screen.getByText('a')).toBeDefined())
 
-    expect(hook.current.loading).toBe(true)
-    expect(hook.current.result).toBe(result)
-    expect(hook.current.error).toBe(null)
+    screen.getByRole('button', { name: 'odswiez' }).click()
+
+    await waitFor(() => expect(fetched).toHaveBeenCalledTimes(2))
+
+    // zmiana statusu przychodzi kanalem live w trakcie odswiezania listy
+    screen.getByRole('button', { name: 'zmiana' }).click()
+
+    wypusc()
+
+    await waitFor(() => expect(screen.getByText('a:Resolved')).toBeDefined())
   })
 })

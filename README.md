@@ -52,6 +52,8 @@ make dev
 
 Panel wstaje na `http://localhost:5173`, API na `http://localhost:8080`, Swagger na `http://localhost:8080/swagger`.
 
+`node_modules` panelu siedzi w anonimowym wolumenie, który przeżywa przebudowę obrazu. Po zmianie zależności frontendu kontener trzeba więc postawić z `docker compose -f docker-compose.dev.yml up -d --build --renew-anon-volumes frontend`, inaczej vite nie znajdzie nowej paczki.
+
 Swagger stoi otworem tylko w środowisku `Development`. Poza nim trzeba go włączyć zmienną `SWAGGER_ENABLED` i podać `SWAGGER_USER` z `SWAGGER_PASSWORD`, bo dokument opisuje całe API razem z trasami za tokenem. Bez tej pary API nie wstanie, żeby włączony dokument nigdy nie wyszedł bez hasła.
 
 `.env.example` ma komplet zmiennych potrzebnych do startu. Bez `JWT_SIGNING_KEY` API nie wstanie, bo klucz podpisu tokenów nie jest ustawieniem opcjonalnym. Konto do panelu powstaje przy pierwszym starcie z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, wyłącznie wtedy gdy tabela `users` jest pusta. Do środowisk innych niż lokalne klucz generuje się osobno, na przykład `openssl rand -base64 48`.
@@ -65,7 +67,7 @@ make e2e
 
 `make test` uruchamia backend i frontend i potrzebuje bazy z `make dev`. `make e2e` stawia własne API i własny panel na osobnych portach, więc nie koliduje z działającym środowiskiem, ale bazy z compose też potrzebuje. Zależności obu zestawów instalują się same przy pierwszym uruchomieniu.
 
-Testy backendu czyszczą tabele `tickets` i `users` w bazie deweloperskiej. Po ich uruchomieniu konto z `.env` wraca dopiero po wyczyszczeniu tabeli `users` i restarcie API.
+Każdy zestaw testów ma własną bazę na tym samym Postgresie z compose: backend `bugshot_test`, end to end `bugshot_e2e`. Obie zakładają się same przy pierwszym uruchomieniu. Testy czyszczą tabele, więc nie mogą sięgać po `bugshot_dev`: konto z `.env` i dane deweloperskie zostają nietknięte.
 
 Dane do sprawdzania panelu i analityki:
 
@@ -141,7 +143,7 @@ flowchart LR
 
     admin -- "CRUD projektów<br/>rotacja klucza<br/>reguły sanityzacji" --> dashboard
     dev -- "przegląd ticketów<br/>komentarze, statusy" --> dashboard
-    dashboard -- "REST<br/>Authorization: Bearer" --> api
+    dashboard -- "REST + kanał live<br/>Authorization: Bearer" --> api
 
     gh -- "test + build + scan" --> ghcr
     gh -- "publish tag widget-v*" --> npm

@@ -1,47 +1,109 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { getTickets } from '../api/tickets'
+import type { TicketEvent } from '../live/ticketEvents'
 import type { TicketQuery } from '../ticketQuery'
-import type { PagedResult, TicketListItem } from '../types'
+import {
+  initialTicketListState,
+  ticketListReducer,
+  type TicketListState,
+} from './ticketListState'
 
-interface TicketsState {
-  result: PagedResult<TicketListItem> | null
-  error: string | null
-  loading: boolean
+export interface Tickets extends TicketListState {
+  hasMore: boolean
+  loadMore: () => void
+  reload: () => void
+  apply: (event: TicketEvent) => void
 }
 
-interface Answer {
-  projectId: string
-  query: TicketQuery | null
-  result: PagedResult<TicketListItem> | null
-  error: string | null
-}
+export function useTickets(projectId: string, query: TicketQuery): Tickets {
+  const [state, dispatch] = useReducer(ticketListReducer, initialTicketListState)
 
-// puste zapytanie nie zgadza się z żadnym więc pierwszy render wychodzi jako ładowanie
-const noAnswer: Answer = { projectId: '', query: null, result: null, error: null }
+  // odpowiedź zapytania z poprzedniego filtra nie ma prawa dopisać się do nowej listy
+  const attempt = useRef(0)
+  const inFlight = useRef<AbortController | null>(null)
+  const shown = useRef(projectId)
 
-export function useTickets(projectId: string, query: TicketQuery): TicketsState {
-  const [answer, setAnswer] = useState<Answer>(noAnswer)
+  // strona bez kursora podmienia liste w calosci, wiec event ktory przyszedl
+  // w trakcie GET-a trzeba odtworzyc dopiero na swiezych danych
+  const pendingLiveEvents = useRef<TicketEvent[]>([])
+  const awaitingFreshLoad = useRef(false)
 
+  const fetchPage = useCallback(
+    (cursor: string | null) => {
+      const started = attempt.current
+      const controller = new AbortController()
+      inFlight.current = controller
+
+      if (cursor === null) {
+        awaitingFreshLoad.current = true
+        pendingLiveEvents.current = []
+      }
+
+      getTickets(projectId, query, cursor, controller.signal)
+        .then((page) => {
+          if (started !== attempt.current) return
+
+          if (cursor === null) {
+            const toReplay = pendingLiveEvents.current
+            pendingLiveEvents.current = []
+            awaitingFreshLoad.current = false
+
+            dispatch({ type: 'loaded', page, append: false })
+            toReplay.forEach((event) => dispatch({ type: 'live', event, query }))
+          } else {
+            dispatch({ type: 'loaded', page, append: true })
+          }
+        })
+        .catch((cause: Error) => {
+          if (started !== attempt.current || controller.signal.aborted) return
+
+          if (cursor === null) {
+            pendingLiveEvents.current = []
+            awaitingFreshLoad.current = false
+          }
+
+          dispatch({ type: 'failed', message: cause.message })
+        })
+    },
+    [projectId, query],
+  )
+
+  const reload = useCallback(() => {
+    attempt.current += 1
+    inFlight.current?.abort()
+    dispatch({ type: 'restart', keepItems: true })
+    fetchPage(null)
+  }, [fetchPage])
+
+  // zmiana projektu albo filtra zaczyna listę od początku
   useEffect(() => {
-    const controller = new AbortController()
+    attempt.current += 1
+    dispatch({ type: 'restart', keepItems: shown.current === projectId })
+    shown.current = projectId
+    fetchPage(null)
 
-    getTickets(projectId, query, controller.signal)
-      .then((result) => setAnswer({ projectId, query, result, error: null }))
-      .catch((cause: Error) => {
-        if (controller.signal.aborted) return
-        setAnswer({ projectId, query, result: null, error: cause.message })
-      })
+    return () => inFlight.current?.abort()
+  }, [fetchPage, projectId])
 
-    return () => controller.abort()
-  }, [projectId, query])
+  const { nextCursor, loading, loadingMore } = state
 
-  const loading = answer.projectId !== projectId || answer.query !== query
+  const loadMore = useCallback(() => {
+    if (!nextCursor || loading || loadingMore) return
 
-  return {
-    // wyniki poprzedniego filtra zostają na ekranie żeby tabela nie mrugała
-    // ale wyniki innego projektu już nie
-    result: answer.projectId === projectId ? answer.result : null,
-    error: loading ? null : answer.error,
-    loading,
-  }
+    dispatch({ type: 'loadingMore' })
+    fetchPage(nextCursor)
+  }, [fetchPage, nextCursor, loading, loadingMore])
+
+  const apply = useCallback(
+    (event: TicketEvent) => {
+      if (awaitingFreshLoad.current) {
+        pendingLiveEvents.current.push(event)
+      }
+
+      dispatch({ type: 'live', event, query })
+    },
+    [query],
+  )
+
+  return { ...state, hasMore: state.nextCursor !== null, loadMore, reload, apply }
 }
