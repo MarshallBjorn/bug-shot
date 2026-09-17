@@ -19,6 +19,23 @@ const routerState = vi.hoisted(() => ({
   locationState: { listSearch: 'status=New&page=2' } as unknown,
 }))
 
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    status: 'authenticated',
+    user: { id: 'u1', email: 'bartek@bug-shot.local', isAdmin: true, isActive: true },
+    logIn: vi.fn(),
+    logOut: vi.fn(),
+  }),
+}))
+
+vi.mock('../hooks/useAttachmentText', () => ({
+  useAttachmentText: () => ({ text: null, error: null, loading: false }),
+}))
+
+vi.mock('../hooks/useAttachment', () => ({
+  useAttachment: () => ({ url: 'blob:x', failed: false }),
+}))
+
 vi.mock('../hooks/useTicket', () => ({
   useTicket: vi.fn(),
 }))
@@ -45,7 +62,10 @@ vi.mock('../api/client', () => ({
 
 vi.mock('../format', () => ({
   formatDateTime: (value: string | null) => value ?? '-',
+  formatRelativeTime: (value: string | null) => value ?? '-',
   formatStatus: (value: string) => value,
+  formatAttachmentKind: (value: string) => value,
+  formatFileSize: (value: number) => `${value} B`,
 }))
 
 vi.mock('react-router', () => ({
@@ -235,13 +255,12 @@ describe('TicketDetailsPage', () => {
   it('pokazuje szczegoly i laduje komentarze', async () => {
     render(<TicketDetailsPage />)
 
-    expect(screen.getByText('Koszyk gubi produkty')).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'Koszyk gubi produkty' })).toBeDefined()
     expect(screen.getByText('Mozilla/Test')).toBeDefined()
-    expect(await screen.findByText('Brak komentarzy.')).toBeDefined()
-    expect(screen.getByTestId('attachment-gallery')).toBeDefined()
     expect(
-      screen.getByRole('button', { name: 'Pobierz log konsoli' }),
+      await screen.findByText('Nic się jeszcze nie stało z tym zgłoszeniem.'),
     ).toBeDefined()
+    expect(screen.getByTestId('attachment-gallery')).toBeDefined()
 
     await vi.waitFor(() => {
       expect(mockedComments).toHaveBeenCalledWith(
@@ -256,11 +275,8 @@ describe('TicketDetailsPage', () => {
   it('dodaje komentarz', async () => {
     render(<TicketDetailsPage />)
 
-    fireEvent.change(screen.getByLabelText('Autor'), {
-      target: { value: 'Radek' },
-    })
-
-    fireEvent.change(screen.getByLabelText('Komentarz'), {
+    // autor nie jest wpisywany, idzie z zalogowanego konta
+    fireEvent.change(screen.getByLabelText('Komentarz jako bartek@bug-shot.local'), {
       target: { value: 'Nowy komentarz' },
     })
 
@@ -271,7 +287,7 @@ describe('TicketDetailsPage', () => {
     await vi.waitFor(() => {
       expect(mockedAddComment).toHaveBeenCalledWith(
         't1',
-        'Radek',
+        'bartek@bug-shot.local',
         'Nowy komentarz',
       )
     })
@@ -282,17 +298,14 @@ describe('TicketDetailsPage', () => {
   it('zmienia status i przeładowuje ticket', async () => {
     render(<TicketDetailsPage />)
 
-    fireEvent.change(
-      screen.getByRole('combobox'),
-      { target: { value: 'Resolved' } },
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'InProgress' }))
 
     await vi.waitFor(() => {
       expect(mockedStatus).toHaveBeenCalledWith(
         't1',
-        'Resolved',
+        'InProgress',
         'rv1',
-        'dashboard',
+        'bartek@bug-shot.local',
       )
       expect(reload).toHaveBeenCalled()
     })
@@ -305,10 +318,7 @@ describe('TicketDetailsPage', () => {
 
     render(<TicketDetailsPage />)
 
-    fireEvent.change(
-      screen.getByRole('combobox'),
-      { target: { value: 'Resolved' } },
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'InProgress' }))
 
     expect(
       await screen.findByRole('status'),
@@ -324,10 +334,7 @@ describe('TicketDetailsPage', () => {
 
     render(<TicketDetailsPage />)
 
-    fireEvent.change(
-      screen.getByRole('combobox'),
-      { target: { value: 'Resolved' } },
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'InProgress' }))
 
     expect(
       await screen.findByRole('alert'),
@@ -335,14 +342,16 @@ describe('TicketDetailsPage', () => {
   })
 
   it('usuwa ticket po potwierdzeniu i zgodnym ID', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
-    vi.spyOn(window, 'prompt').mockReturnValue('t1')
-
     render(<TicketDetailsPage />)
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Usuń zgłoszenie' }),
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń zgłoszenie' }))
+
+    fireEvent.change(
+      screen.getByLabelText('Przepisz identyfikator zgłoszenia, aby potwierdzić'),
+      { target: { value: 't1' } },
     )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń na zawsze' }))
 
     await vi.waitFor(() => {
       expect(mockedDelete).toHaveBeenCalledWith('t1')
@@ -350,14 +359,26 @@ describe('TicketDetailsPage', () => {
     })
   })
 
-  it('nie usuwa ticketu po anulowaniu', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
-
+  // niezgodny identyfikator nie moze przepuscic kasowania
+  it('nie usuwa ticketu przy niezgodnym identyfikatorze', () => {
     render(<TicketDetailsPage />)
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Usuń zgłoszenie' }),
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń zgłoszenie' }))
+
+    fireEvent.change(
+      screen.getByLabelText('Przepisz identyfikator zgłoszenia, aby potwierdzić'),
+      { target: { value: 'nie-to-id' } },
     )
+
+    expect(screen.getByRole('button', { name: 'Usuń na zawsze' })).toHaveProperty('disabled', true)
+    expect(mockedDelete).not.toHaveBeenCalled()
+  })
+
+  it('anulowanie zamyka dialog bez kasowania', () => {
+    render(<TicketDetailsPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń zgłoszenie' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Anuluj' }))
 
     expect(mockedDelete).not.toHaveBeenCalled()
   })

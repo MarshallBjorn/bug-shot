@@ -1,25 +1,43 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
+import { ArrowLeft } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import { addTicketComment, deleteTicket, getTicketComments, updateTicketStatus } from '../api/tickets'
 import { ApiError } from '../api/client'
-import AttachmentDownload from '../components/AttachmentDownload'
 import AttachmentGallery from '../components/AttachmentGallery'
-import { formatDateTime, formatStatus } from '../format'
+import AttachmentLightbox from '../components/AttachmentLightbox'
+import CommentForm from '../components/CommentForm'
+import ConsoleLogViewer from '../components/ConsoleLogViewer'
+import DeleteTicketDialog from '../components/DeleteTicketDialog'
+import TicketEnvironment from '../components/TicketEnvironment'
+import TicketStatusControl from '../components/TicketStatusControl'
+import TicketTimeline from '../components/TicketTimeline'
+import OverviewLogs from '../components/overview/OverviewLogs'
+import OverviewProject from '../components/overview/OverviewProject'
+import OverviewScreenshot from '../components/overview/OverviewScreenshot'
+import OverviewTimestamp from '../components/overview/OverviewTimestamp'
+import OverviewUrl from '../components/overview/OverviewUrl'
+import OverviewUserAgent from '../components/overview/OverviewUserAgent'
+import { useAuth } from '../auth/AuthContext'
+import type { LogLevel } from '../consoleLog'
+import { useAttachmentText } from '../hooks/useAttachmentText'
 import { useTicket } from '../hooks/useTicket'
+import { isImage } from '../media'
 import { readListSearch } from '../navigation'
+import { ticketQueryToParams, emptyQuery } from '../ticketQuery'
 import type { TicketComment, TicketStatus } from '../types'
 
 function TicketDetailsPage() {
   const { projectId = '', ticketId = '' } = useParams()
   const { state } = useLocation()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const { ticket, missing, error, loading, reload } = useTicket(ticketId)
 
   const [comments, setComments] = useState<TicketComment[]>([])
   const [commentsTicketId, setCommentsTicketId] = useState('')
   const [commentsError, setCommentsError] = useState<string | null>(null)
-  const [commentAuthor, setCommentAuthor] = useState('')
-  const [commentBody, setCommentBody] = useState('')
   const [addingComment, setAddingComment] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -27,23 +45,18 @@ function TicketDetailsPage() {
   const [statusError, setStatusError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
-  const statusOptions: TicketStatus[] = [
-    'New',
-    'InProgress',
-    'Resolved',
-    'Rejected',
-  ]
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const [logLevel, setLogLevel] = useState<LogLevel | null>(null)
+  const [logOpen, setLogOpen] = useState(false)
 
-  const statusChangedBy = 'dashboard'
+  const author = user?.email ?? 'dashboard'
 
   useEffect(() => {
     if (!toast) {
       return
     }
 
-    const timeout = window.setTimeout(() => {
-      setToast(null)
-    }, 4000)
+    const timeout = window.setTimeout(() => setToast(null), 4000)
 
     return () => window.clearTimeout(timeout)
   }, [toast])
@@ -76,19 +89,26 @@ function TicketDetailsPage() {
 
   const commentsLoading = commentsTicketId !== ticketId
 
-  const backLink = (
-    <Link to={{ pathname: `/projects/${projectId}/tickets`, search: readListSearch(state) }}>
-      Wróć do listy
-    </Link>
+  const consoleLog = useAttachmentText(ticket?.consoleLog?.id ?? null)
+
+  const images = useMemo(
+    () => (ticket?.attachments ?? []).filter((attachment) => isImage(attachment.contentType)),
+    [ticket?.attachments],
   )
 
-  async function handleAddComment(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  const listSearch = readListSearch(state)
 
-    const author = commentAuthor.trim()
-    const body = commentBody.trim()
+  const openList = useCallback(
+    (patch: Partial<typeof emptyQuery>) => {
+      const params = ticketQueryToParams({ ...emptyQuery, ...patch })
 
-    if (!author || !body || !ticket) {
+      navigate({ pathname: `/projects/${projectId}/tickets`, search: params.toString() })
+    },
+    [navigate, projectId],
+  )
+
+  async function addComment(body: string) {
+    if (!ticket) {
       return
     }
 
@@ -100,7 +120,6 @@ function TicketDetailsPage() {
 
       setComments((current) => [...current, comment])
       setCommentsTicketId(ticket.id)
-      setCommentBody('')
     } catch (cause) {
       setCommentsError((cause as Error).message)
     } finally {
@@ -117,12 +136,7 @@ function TicketDetailsPage() {
     setStatusError(null)
 
     try {
-      await updateTicketStatus(
-        ticket.id,
-        status,
-        ticket.rowVersion,
-        statusChangedBy,
-      )
+      await updateTicketStatus(ticket.id, status, ticket.rowVersion, author)
 
       reload()
     } catch (cause) {
@@ -142,18 +156,6 @@ function TicketDetailsPage() {
       return
     }
 
-    const confirmed = window.confirm('Czy na pewno chcesz usunąć to zgłoszenie?')
-
-    if (!confirmed) {
-      return
-    }
-
-    const enteredId = window.prompt('Aby potwierdzić usunięcie, wpisz ID ticketu.')
-
-    if (enteredId !== ticket.id) {
-      return
-    }
-
     setDeleting(true)
     setCommentsError(null)
 
@@ -166,188 +168,184 @@ function TicketDetailsPage() {
     }
   }
 
+  const backLink = (
+    <Link
+      to={{ pathname: `/projects/${projectId}/tickets`, search: listSearch }}
+      className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+    >
+      <ArrowLeft aria-hidden="true" className="size-3.5" />
+      Wróć do listy
+    </Link>
+  )
+
   if (loading) {
-    return <p>Ładowanie...</p>
+    return <p className="text-sm text-muted-foreground">Ładowanie...</p>
   }
 
   if (missing) {
     return (
-      <>
-        <h2>Nie ma takiego zgłoszenia</h2>
-        <p>Zgłoszenie zostało skasowane albo link jest nieprawidłowy.</p>
+      <div className="space-y-2">
+        <h2 className="text-xl font-semibold">Nie ma takiego zgłoszenia</h2>
+        <p className="text-sm text-muted-foreground">
+          Zgłoszenie zostało skasowane albo link jest nieprawidłowy.
+        </p>
         {backLink}
-      </>
+      </div>
     )
   }
 
   if (error || !ticket) {
     return (
-      <>
-        <p role="alert">Nie udało się pobrać zgłoszenia. {error}</p>
+      <div className="space-y-2">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          Nie udało się pobrać zgłoszenia. {error}
+        </p>
         {backLink}
-      </>
+      </div>
     )
   }
 
+  const screenshot = ticket.attachments.find((attachment) => attachment.kind === 'Screenshot') ?? null
+
   return (
-    <>
+    <div className="space-y-4">
       {toast && (
-        <div className="ticket-toast" role="status">
+        <div role="status" className="rounded-md border bg-card px-3 py-2 text-sm">
           {toast}
         </div>
       )}
 
-      <div className="ticket-details-layout">
-        <main>
-          <h2>{ticket.description}</h2>
-          {backLink}
+      <div className="space-y-2">
+        {backLink}
+        <h2 className="text-xl font-semibold tracking-tight break-words">{ticket.description}</h2>
+      </div>
 
-          <dl className="ticket-meta">
-            <dt>Status</dt>
-            <dd>
-              <select
-                aria-label="Status zgłoszenia"
-                value={ticket.status}
-                onChange={(event) => handleStatusChange(event.target.value as TicketStatus)}
-                disabled={updatingStatus || ticket.status === 'Deleted'}
-              >
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {formatStatus(status)}
-                  </option>
-                ))}
-              </select>
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-6">
+        <div className="min-w-0 space-y-5">
+          <section aria-label="Przegląd zgłoszenia" className="space-y-3">
+            <div className="grid grid-cols-1 divide-y overflow-hidden rounded-lg border bg-card sm:grid-cols-2 sm:divide-x lg:grid-cols-4 lg:divide-y-0">
+              <OverviewUrl
+                pageUrl={ticket.pageUrl}
+                page={ticket.page}
+                onFilterByPage={(page) => openList({ page })}
+              />
+              <OverviewUserAgent
+                userAgent={ticket.userAgent}
+                environment={ticket.environment}
+                onFilterByBrowser={(browser) => openList({ browser })}
+              />
+              <OverviewTimestamp
+                reportedAt={ticket.reportedAt}
+                receivedAt={ticket.receivedAt}
+              />
+              <OverviewProject projectKey={ticket.projectKey} onOpenProject={() => openList({})} />
+            </div>
 
-              {statusError && <span role="alert">{statusError}</span>}
-            </dd>
-
-            <dt>Adres strony</dt>
-            <dd>
-              <a href={ticket.pageUrl} rel="noreferrer noopener" target="_blank">
-                {ticket.pageUrl}
-              </a>
-            </dd>
-
-            <dt>Przeglądarka</dt>
-            <dd>{ticket.userAgent}</dd>
-
-            <dt>Zgłoszono</dt>
-            <dd>{formatDateTime(ticket.reportedAt)}</dd>
-
-            <dt>Przyjęto</dt>
-            <dd>{formatDateTime(ticket.receivedAt)}</dd>
-
-            <dt>Projekt</dt>
-            <dd>{ticket.projectKey}</dd>
-
-            <dt>Komentarze</dt>
-            <dd>{ticket.commentCount}</dd>
-          </dl>
-
-          <section>
-            <h3>Komentarze</h3>
-
-            {commentsError && <p role="alert">{commentsError}</p>}
-
-            {commentsLoading ? (
-              <p>Ładowanie komentarzy...</p>
-            ) : comments.length === 0 ? (
-              <p>Brak komentarzy.</p>
-            ) : (
-              <ul className="ticket-comments">
-                {comments.map((comment) => (
-                  <li key={comment.id}>
-                    <div className="ticket-comment-header">
-                      <strong>{comment.author}</strong>
-                      <time dateTime={comment.createdAt}>
-                        {formatDateTime(comment.createdAt)}
-                      </time>
-                    </div>
-                    <p>{comment.body}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <form className="comment-form" onSubmit={handleAddComment}>
-              <label>
-                Autor
-                <input
-                  value={commentAuthor}
-                  onChange={(event) => setCommentAuthor(event.target.value)}
-                  disabled={addingComment}
-                  required
-                />
-              </label>
-
-              <label>
-                Komentarz
-                <textarea
-                  value={commentBody}
-                  onChange={(event) => setCommentBody(event.target.value)}
-                  disabled={addingComment}
-                  required
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={addingComment || !commentAuthor.trim() || !commentBody.trim()}
-              >
-                {addingComment ? 'Dodawanie...' : 'Dodaj komentarz'}
-              </button>
-            </form>
+            <div className="grid gap-3 md:grid-cols-2">
+              <OverviewScreenshot
+                screenshot={screenshot}
+                onOpen={() => setLightboxIndex(screenshot ? images.indexOf(screenshot) : null)}
+              />
+              <OverviewLogs
+                text={ticket.consoleLog ? consoleLog.text : null}
+                loading={consoleLog.loading}
+                onOpen={(level) => {
+                  setLogLevel(level)
+                  setLogOpen(true)
+                }}
+              />
+            </div>
           </section>
 
-          <h3>Załączniki</h3>
-          <AttachmentGallery attachments={ticket.attachments} />
-
-          <h3>Log konsoli</h3>
-          {ticket.consoleLog ? (
-            <p>
-              <AttachmentDownload
-                attachment={ticket.consoleLog}
-                label="Pobierz log konsoli"
-              />
-            </p>
-          ) : (
-            <p>Zgłoszenie nie ma logu konsoli.</p>
+          {logOpen && ticket.consoleLog && consoleLog.text !== null && (
+            <section aria-label="Log konsoli" className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Log konsoli</h3>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setLogOpen(false)}>
+                  Zwiń
+                </Button>
+              </div>
+              <ConsoleLogViewer text={consoleLog.text} initialLevel={logLevel} />
+            </section>
           )}
 
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleting || ticket.status === 'Deleted'}
-          >
-            {deleting ? 'Usuwanie...' : 'Usuń zgłoszenie'}
-          </button>
-        </main>
+          {consoleLog.error && (
+            <p role="alert" className="text-sm text-destructive">
+              Nie udało się pobrać logu konsoli. {consoleLog.error}
+            </p>
+          )}
 
-        <aside className="ticket-history">
-          <h3>Historia statusów</h3>
+          <section aria-label="Załączniki" className="space-y-2">
+            <h3 className="text-sm font-semibold">Załączniki</h3>
+            <AttachmentGallery attachments={ticket.attachments} />
+          </section>
 
-          {ticket.statusHistory.length === 0 ? (
-            <p>Brak zmian statusu.</p>
-          ) : (
-            <ul>
-              {ticket.statusHistory.map((change) => (
-                <li
-                  key={`${change.changedAt}-${change.fromStatus}-${change.toStatus}`}
-                >
-                  <strong>
-                    {formatStatus(change.fromStatus)} → {formatStatus(change.toStatus)}
-                  </strong>
-                  <span>{change.changedBy}</span>
-                  <time dateTime={change.changedAt}>
-                    {formatDateTime(change.changedAt)}
-                  </time>
-                </li>
-              ))}
-            </ul>
+          <Separator />
+
+          <section aria-label="Historia i komentarze" className="space-y-4">
+            <h3 className="text-sm font-semibold">Historia</h3>
+
+            {commentsError && (
+              <p role="alert" className="text-sm text-destructive">
+                {commentsError}
+              </p>
+            )}
+
+            <TicketTimeline
+              statusHistory={ticket.statusHistory}
+              comments={comments}
+              loading={commentsLoading}
+            />
+
+            {ticket.status !== 'Deleted' && (
+              <CommentForm author={author} busy={addingComment} onSubmit={addComment} />
+            )}
+          </section>
+        </div>
+
+        <aside className="mt-5 space-y-5 lg:mt-0">
+          <section aria-label="Status" className="space-y-2">
+            <h3 className="text-xs font-medium text-muted-foreground">Status</h3>
+            <TicketStatusControl
+              status={ticket.status}
+              allowed={ticket.allowedStatuses}
+              busy={updatingStatus}
+              onChange={handleStatusChange}
+            />
+            {statusError && (
+              <p role="alert" className="text-sm text-destructive">
+                {statusError}
+              </p>
+            )}
+          </section>
+
+          <section aria-label="Środowisko" className="space-y-2">
+            <h3 className="text-xs font-medium text-muted-foreground">Środowisko</h3>
+            <TicketEnvironment environment={ticket.environment} userAgent={ticket.userAgent} />
+          </section>
+
+          {ticket.status !== 'Deleted' && (
+            <section aria-label="Kasowanie" className="space-y-2">
+              <h3 className="text-xs font-medium text-muted-foreground">Nieodwracalne</h3>
+              <DeleteTicketDialog
+                ticketId={ticket.id}
+                busy={deleting}
+                onConfirm={handleDelete}
+              />
+            </section>
           )}
         </aside>
       </div>
-    </>
+
+      <AttachmentLightbox
+        attachments={images}
+        openIndex={lightboxIndex}
+        onOpenChange={setLightboxIndex}
+      />
+    </div>
   )
 }
 
