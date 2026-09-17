@@ -345,11 +345,26 @@ Nagłówek `If-Match` jest wymagany i niesie `rowVersion` z ostatniego `GET /tic
 
 Każda zmiana dopisuje wpis w `ticket_status_changes` z `from_status`, `to_status`, `changed_by` i `changed_at`. Wysłanie statusu, który ticket już ma, nie jest zmianą: kończy się `200` z niezmienionym `rowVersion` i nie zostawia śladu w historii.
 
+Status idzie mapą przejść, nie dowolnym skokiem:
+
+| Z | W |
+|---|---|
+| `New` | `InProgress`, `Rejected` |
+| `InProgress` | `Resolved`, `Rejected` |
+| `Resolved` | `InProgress` |
+| `Rejected` | `InProgress` |
+
+Mapa jest jawna, bo kolejność statusów nie wynika z ich wartości. Powód jest jeden: historia ma opisywać pracę nad zgłoszeniem, a `New` prosto na `Resolved` mówi tylko, że ktoś kliknął w niewłaściwe miejsce. Ponowne otwarcie wraca do `InProgress`, a nie do `New`, bo zgłoszenie już raz przeszło przez triaż. Przesuwa to przy okazji czas do rozwiązania, co opisuje sekcja analityki.
+
+Przejście poza mapą kończy się `400` z `ProblemDetails`, którego `errors.Status` wylicza dozwolone cele, na przykład `Ticket in status New can only change to InProgress, Rejected.` Walidacja leci po sprawdzeniu `If-Match` i po tombstone, więc nieaktualna wersja dalej wygrywa z niedozwolonym przejściem.
+
+`Deleted` nie jest celem żadnego przejścia i nie ma z niego wyjścia. Kasowanie wchodzi wyłącznie przez `DELETE /tickets/{id}`, a `GET /tickets/{id}` oddaje w `allowedStatuses` tę samą mapę przyłożoną do aktualnego stanu na serwerze, więc panel nie musi jej zgadywać ani trzymać własnej kopii.
+
 Kody błędów:
 
 | Kod | Kiedy |
 |---|---|
-| 400 | brak `status` albo `changedBy`, nieznana wartość statusu, `status` równy `Deleted` |
+| 400 | brak `status` albo `changedBy`, nieznana wartość statusu, `status` równy `Deleted`, przejście poza mapą |
 | 404 | nie ma takiego zgłoszenia |
 | 409 | `If-Match` nie zgadza się z aktualnym `rowVersion`, albo ticket jest tombstone |
 | 428 | brak nagłówka `If-Match` |
@@ -593,5 +608,4 @@ W środowisku `Development` migracje wykonują się przy starcie API. Poza nim s
 - rate limit na `/auth/login`. Idzie razem z rate limitem na `POST /tickets`, bo to jeden mechanizm
 - systemowe logowanie i audyt poza `sanitization_logs`. Miejsca wpięcia zostawiamy w kodzie, żeby dało się to dopiąć bez przepisywania warstwy
 - odesłanie do sanityzacji i walidacji plików w głównym `README`
-- twarda maszyna stanów przejść między statusami
 - Redis jako cache przed Postgresem

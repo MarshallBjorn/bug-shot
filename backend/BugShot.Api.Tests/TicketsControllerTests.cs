@@ -2202,4 +2202,101 @@ public class TicketsControllerTests
         Assert.Equal("pl-PL", details.Environment.Language);
         Assert.Equal("Europe/Warsaw", details.Environment.TimeZone);
     }
+
+    [Fact]
+    public async Task PrzejscieePozaMapaDaje400IZostawiaStatus()
+    {
+        using var db = NewContext();
+
+        var ticket = await NewTicket(db);
+        var controller = NewController(db);
+
+        // New idzie tylko w InProgress albo Rejected wiec skok na Resolved omija prace nad zgloszeniem
+        var result = await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.Resolved),
+            RowVersion(ticket),
+            CancellationToken.None);
+
+        var problem = Assert.IsType<ValidationProblemDetails>(
+            Assert.IsType<ObjectResult>(result.Result).Value);
+
+        Assert.Contains(
+            nameof(UpdateTicketStatusRequest.Status),
+            problem.Errors.Keys);
+
+        var saved = await db.Tickets
+            .AsNoTracking()
+            .SingleAsync(t => t.Id == ticket.Id);
+
+        Assert.Equal(TicketStatus.New, saved.Status);
+
+        Assert.Empty(
+            await db.TicketStatusChanges
+                .Where(h => h.TicketId == ticket.Id)
+                .ToListAsync());
+    }
+
+    [Fact]
+    public async Task RozwiazaneZgloszenieWracaDoInProgress()
+    {
+        using var db = NewContext();
+
+        var ticket = await NewTicket(db);
+        var controller = NewController(db);
+
+        await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.InProgress),
+            RowVersion(ticket),
+            CancellationToken.None);
+
+        await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.Resolved),
+            RowVersion(ticket),
+            CancellationToken.None);
+
+        var result = await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.InProgress),
+            RowVersion(ticket),
+            CancellationToken.None);
+
+        var payload = Assert.IsType<TicketStatusResponse>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Equal(TicketStatus.InProgress, payload.Status);
+    }
+
+    [Fact]
+    public async Task SzczegolyNiosaDozwolonePrzejsciaZAktualnegoStanu()
+    {
+        using var db = NewContext();
+
+        var ticket = await NewTicket(db);
+        var controller = NewController(db);
+
+        var nowe = Assert.IsType<TicketDetails>(
+            Assert.IsType<OkObjectResult>(
+                (await controller.GetById(ticket.Id, CancellationToken.None)).Result).Value);
+
+        Assert.Equal(
+            [TicketStatus.InProgress, TicketStatus.Rejected],
+            nowe.AllowedStatuses);
+
+        await controller.UpdateStatus(
+            ticket.Id,
+            StatusRequest(TicketStatus.InProgress),
+            RowVersion(ticket),
+            CancellationToken.None);
+
+        var wTrakcie = Assert.IsType<TicketDetails>(
+            Assert.IsType<OkObjectResult>(
+                (await controller.GetById(ticket.Id, CancellationToken.None)).Result).Value);
+
+        Assert.Equal(
+            [TicketStatus.Resolved, TicketStatus.Rejected],
+            wTrakcie.AllowedStatuses);
+    }
 }

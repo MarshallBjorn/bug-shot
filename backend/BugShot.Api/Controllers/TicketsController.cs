@@ -11,6 +11,7 @@ using BugShot.Api.Idempotency;
 using BugShot.Api.Live;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
+using BugShot.Api.Tickets;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
@@ -242,7 +243,9 @@ public class TicketsController(
                     .ToList()))
             .SingleOrDefaultAsync(cancellationToken);
 
-        return ticket is null ? NotFound() : Ok(ticket);
+        return ticket is null
+            ? NotFound()
+            : Ok(ticket with { AllowedStatuses = TicketStatusTransitions.From(ticket.Status) });
     }
 
     /// <summary>Dopisuje komentarz do zgloszenia.</summary>
@@ -449,6 +452,9 @@ public class TicketsController(
     /// Wymaga naglowka If-Match z rowVersion z ostatniego odczytu. Brak naglowka konczy sie na 428.
     /// Nieaktualna wersja konczy sie na 409 i niczego nie zapisuje.
     /// Kazda zmiana zostawia wpis w historii statusow.
+    /// Status idzie mapa przejsc. New przechodzi w InProgress albo Rejected InProgress w Resolved albo Rejected
+    /// a Resolved i Rejected wracaja do InProgress. Przejscie poza mapa konczy sie na 400.
+    /// Wyslanie statusu ktory ticket juz ma nie jest zmiana i nie zostawia sladu w historii.
     /// </remarks>
     [HttpPatch("{id:guid}/status")]
     [EnableCors(CorsPolicies.Dashboard)]
@@ -504,6 +510,20 @@ public class TicketsController(
         if (ticket.Status == newStatus)
         {
             return Ok(StatusResponse(ticket));
+        }
+
+        // stan idzie mapa przejsc a nie dowolnym skokiem bo historia ma opisywac prace nad zgloszeniem
+        if (!TicketStatusTransitions.IsAllowed(ticket.Status, newStatus))
+        {
+            var allowed = TicketStatusTransitions.From(ticket.Status);
+
+            ModelState.AddModelError(
+                nameof(request.Status),
+                allowed.Count == 0
+                    ? $"Ticket in status {ticket.Status} cannot change status."
+                    : $"Ticket in status {ticket.Status} can only change to {string.Join(", ", allowed)}.");
+
+            return ValidationProblem(ModelState);
         }
 
         var fromStatus = ticket.Status;

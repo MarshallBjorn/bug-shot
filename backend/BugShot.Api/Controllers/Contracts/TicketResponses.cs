@@ -62,7 +62,12 @@ public record TicketDetails(
     IReadOnlyList<TicketAttachmentResponse> Attachments,
     TicketAttachmentResponse? ConsoleLog,
     int CommentCount,
-    IReadOnlyList<TicketStatusChangeResponse> StatusHistory);
+    IReadOnlyList<TicketStatusChangeResponse> StatusHistory)
+{
+    // mapa przejsc przylozona do aktualnego stanu na serwerze wiec panel nie zgaduje czym moze ruszyc
+    // poza projekcja bo statyczne wyliczenie nie przechodzi przez tlumaczenie zapytania
+    public IReadOnlyList<TicketStatus> AllowedStatuses { get; init; } = [];
+}
 
 // dane rozpoznane z user agenta i metadanych widgetu. Kasowanie zgloszenia zeruje je razem z adresem
 public record TicketClientEnvironment(
