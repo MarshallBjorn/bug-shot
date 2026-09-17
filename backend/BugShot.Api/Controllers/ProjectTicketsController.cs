@@ -97,7 +97,18 @@ public class ProjectTicketsController(BugShotDbContext db) : ControllerBase
         // o jeden wiecej niz strona zeby wiedziec czy jest co doladowac
         var items = await Seek(query, order, position)
             .Take(limit + 1)
-            .Select(t => new TicketListItem(t.Id, t.Description, t.PageUrl, t.Status, t.ReportedAt, t.ReceivedAt, t.UpdatedAt))
+            .Select(t => new TicketListItem(
+                t.Id,
+                t.Description,
+                t.PageUrl,
+                t.Page,
+                t.BrowserName,
+                t.Status,
+                t.ReportedAt,
+                t.ReceivedAt,
+                t.UpdatedAt,
+                t.Comments.Count,
+                t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot)))
             .ToListAsync(cancellationToken);
 
         if (items.Count <= limit)

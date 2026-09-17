@@ -2168,4 +2168,38 @@ public class TicketsControllerTests
                 .ExecuteDeleteAsync();
         }
     }
+
+    [Fact]
+    public async Task SzczegolyNiosaStroneIDaneSrodowiska()
+    {
+        using var db = NewContext();
+
+        var controller = NewController(db, idempotencyKey: null);
+
+        var created = Assert.IsType<CreatedTicketResponse>(
+            Assert.IsType<CreatedAtActionResult>(
+                (await controller.Create(
+                    new CreateTicketRequest
+                    {
+                        ProjectKey = "demo",
+                        Description = "Koszyk gubi produkty",
+                        PageUrl = "https://Acme.example/Cart?utm_source=mail#top",
+                        UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        Viewport = new TicketViewport { Width = 1536, Height = 730, DevicePixelRatio = 1.25 },
+                        Language = "pl-PL",
+                        TimeZone = "Europe/Warsaw"
+                    },
+                    CancellationToken.None)).Result).Value);
+
+        var details = Assert.IsType<TicketDetails>(
+            Assert.IsType<OkObjectResult>(
+                (await controller.GetById(created.Id, CancellationToken.None)).Result).Value);
+
+        Assert.Equal("acme.example/cart", details.Page);
+        Assert.Equal("Chrome", details.Environment.BrowserName);
+        Assert.Equal("Windows", details.Environment.OsName);
+        Assert.Equal(1536, details.Environment.ViewportWidth);
+        Assert.Equal("pl-PL", details.Environment.Language);
+        Assert.Equal("Europe/Warsaw", details.Environment.TimeZone);
+    }
 }

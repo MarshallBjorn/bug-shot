@@ -4,14 +4,19 @@ namespace BugShot.Api.Contracts;
 
 public record CreatedTicketResponse(Guid Id, string UploadToken, DateTimeOffset UploadTokenExpiresAt);
 
+// page jest znormalizowanym adresem po ktorym idzie grupowanie a pageUrl zostaje do pokazania
 public record TicketListItem(
     Guid Id,
     string Description,
     string PageUrl,
+    string Page,
+    string BrowserName,
     TicketStatus Status,
     DateTimeOffset? ReportedAt,
     DateTimeOffset ReceivedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int CommentCount,
+    bool HasScreenshot);
 
 // bez uri bo plik wychodzi wylacznie przez GET /attachments/{id}/download
 public record TicketAttachmentResponse(
@@ -45,7 +50,9 @@ public record TicketDetails(
     string ProjectKey,
     string Description,
     string PageUrl,
+    string Page,
     string UserAgent,
+    TicketClientEnvironment Environment,
     TicketStatus Status,
     DateTimeOffset? ReportedAt,
     DateTimeOffset ReceivedAt,
@@ -56,6 +63,17 @@ public record TicketDetails(
     TicketAttachmentResponse? ConsoleLog,
     int CommentCount,
     IReadOnlyList<TicketStatusChangeResponse> StatusHistory);
+
+// dane rozpoznane z user agenta i metadanych widgetu. Kasowanie zgloszenia zeruje je razem z adresem
+public record TicketClientEnvironment(
+    string BrowserName,
+    string OsName,
+    string DeviceType,
+    int? ViewportWidth,
+    int? ViewportHeight,
+    double? DevicePixelRatio,
+    string? Language,
+    string? TimeZone);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 

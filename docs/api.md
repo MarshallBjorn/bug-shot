@@ -398,6 +398,8 @@ Rzeczy, których nie widać z sygnatury endpointu:
 
 - bez podanego `status` lista pomija tickety skasowane, bo tombstone nie ma czego pokazać. Jawne `status=Deleted` je zwróci
 - `search` szuka po opisie i po adresie strony, bez rozróżniania wielkości liter
+- wiersz listy niesie `page`, `browserName`, `commentCount` i `hasScreenshot`. Liczniki idą podzapytaniami na stronę wyniku, więc koszt trzyma się rozmiaru strony, a nie całej listy
+- `GET /tickets/{id}` dokłada do tego `page` oraz `environment` z rozpoznaną przeglądarką, systemem, urządzeniem, viewportem, językiem i strefą. Kolumny były w bazie od migracji `AddTicketClientDetails`, ale nie wychodziły nigdzie poza analitykę
 - `sort` przyjmuje `receivedAt:desc`, `receivedAt:asc`, `reportedAt:desc` i `reportedAt:asc`. Nierozpoznana wartość wpada w domyślne `receivedAt:desc`
 - sortowanie po `reportedAt` schodzi na `receivedAt` tam gdzie `reportedAt` jest puste. Bez tego zgłoszenia bez czasu z przeglądarki lądowały na końcu listy przy `asc` i na początku przy `desc`, niezależnie od daty pokazanej w tabeli. Kursor porównuje się z tą samą wartością, po której idzie `ORDER BY`, więc zgłoszenia bez `reportedAt` nie wypadają z paginacji
 - każde sortowanie domyka się identyfikatorem ticketu. Bez tego zgłoszenia o równych znacznikach czasu mają dowolną kolejność i potrafią powtórzyć się na dwóch stronach albo nie trafić na żadną

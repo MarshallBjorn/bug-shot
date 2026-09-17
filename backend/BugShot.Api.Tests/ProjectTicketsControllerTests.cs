@@ -427,4 +427,79 @@ public class ProjectTicketsControllerTests
         Assert.Equal(["rowne 3", "rowne 4"], druga.Items.Select(i => i.Description));
         Assert.Null(druga.NextCursor);
     }
+
+    // osobny seed bo filtry potrzebuja adresu przegladarki zalacznika i komentarza a nie tylko czasu
+    private static async Task<(BugShotDbContext Db, Guid ProjectId)> SeedFiltersAsync()
+    {
+        var db = NewContext();
+        var project = await db.Projects.SingleAsync(p => p.Key == "demo");
+        var baseTime = new DateTimeOffset(2026, 9, 10, 8, 0, 0, TimeSpan.Zero);
+
+        Ticket Build(string description, string page, string browser, string os, string device, TicketStatus status) => new()
+        {
+            ProjectId = project.Id,
+            Description = description,
+            PageUrl = $"https://{page}?utm_source=mail",
+            Page = page,
+            UserAgent = "Mozilla/5.0",
+            BrowserName = browser,
+            OsName = os,
+            DeviceType = device,
+            Status = status
+        };
+
+        var koszyk = Build("koszyk gubi produkty", "acme.example/cart", "Chrome", "Windows", "desktop", TicketStatus.New);
+        var kasa = Build("blad na kasie", "acme.example/checkout", "Firefox", "Linux", "desktop", TicketStatus.InProgress);
+        var stopka = Build("literowka w stopce", "acme.example/cart", "Safari", "iOS", "mobile", TicketStatus.Resolved);
+
+        db.Tickets.AddRange(koszyk, kasa, stopka);
+        await db.SaveChangesAsync();
+
+        koszyk.ReceivedAt = baseTime;
+        kasa.ReceivedAt = baseTime.AddDays(1);
+        stopka.ReceivedAt = baseTime.AddDays(2);
+
+        db.TicketAttachments.Add(new TicketAttachment
+        {
+            TicketId = koszyk.Id,
+            Kind = AttachmentKind.Screenshot,
+            Uri = "/attachments/zrzut.png",
+            FileName = "zrzut.png",
+            ContentType = "image/png",
+            SizeBytes = 128
+        });
+
+        db.TicketComments.Add(new TicketComment
+        {
+            TicketId = kasa.Id,
+            Author = "bartek",
+            Body = "sprawdzam"
+        });
+
+        await db.SaveChangesAsync();
+
+        return (db, project.Id);
+    }
+
+    [Fact]
+    public async Task WierszListyNiesieStroneLicznikiIZrzut()
+    {
+        var (db, projectId) = await SeedFiltersAsync();
+        using var _ = db;
+
+        var controller = new ProjectTicketsController(db);
+
+        var page = Page(await controller.GetList(projectId, CancellationToken.None));
+
+        var koszyk = Assert.Single(page.Items, i => i.Description == "koszyk gubi produkty");
+        var kasa = Assert.Single(page.Items, i => i.Description == "blad na kasie");
+
+        Assert.Equal("acme.example/cart", koszyk.Page);
+        Assert.Equal("Chrome", koszyk.BrowserName);
+        Assert.True(koszyk.HasScreenshot);
+        Assert.Equal(0, koszyk.CommentCount);
+
+        Assert.False(kasa.HasScreenshot);
+        Assert.Equal(1, kasa.CommentCount);
+    }
 }

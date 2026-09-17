@@ -196,7 +196,17 @@ public class TicketsController(
                 t.Project.Key,
                 t.Description,
                 t.PageUrl,
+                t.Page,
                 t.UserAgent,
+                new TicketClientEnvironment(
+                    t.BrowserName,
+                    t.OsName,
+                    t.DeviceType,
+                    t.ViewportWidth,
+                    t.ViewportHeight,
+                    t.DevicePixelRatio,
+                    t.Language,
+                    t.TimeZone),
                 t.Status,
                 t.ReportedAt,
                 t.ReceivedAt,
@@ -526,7 +536,18 @@ public class TicketsController(
             return entry.State == EntityState.Detached ? NotFound() : VersionConflict(ticket);
         }
 
-        await notifier.Changed(ticket.ProjectId, ListItem(ticket));
+        // wiersz na liscie niesie liczniki wiec zmiana statusu musi je odczytac zeby panel ich nie wyzerowal
+        var counters = await db.Tickets
+            .AsNoTracking()
+            .Where(t => t.Id == ticket.Id)
+            .Select(t => new
+            {
+                Comments = t.Comments.Count,
+                Screenshot = t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot)
+            })
+            .SingleAsync(cancellationToken);
+
+        await notifier.Changed(ticket.ProjectId, ListItem(ticket, counters.Comments, counters.Screenshot));
 
         return Ok(StatusResponse(ticket));
     }
@@ -542,14 +563,20 @@ public class TicketsController(
     }
 
     // kanal live niesie ten sam ksztalt co lista wiec panel podmienia wiersz bez dodatkowego GET
-    private static TicketListItem ListItem(Ticket ticket) => new(
+    // licznikow nie ma w encji wiec wolajacy podaje je jawnie
+    // swieze zgloszenie nie ma jeszcze ani komentarza ani zalacznika bo te wchodza osobnym zadaniem
+    private static TicketListItem ListItem(Ticket ticket, int commentCount = 0, bool hasScreenshot = false) => new(
         ticket.Id,
         ticket.Description,
         ticket.PageUrl,
+        ticket.Page,
+        ticket.BrowserName,
         ticket.Status,
         ticket.ReportedAt,
         ticket.ReceivedAt,
-        ticket.UpdatedAt);
+        ticket.UpdatedAt,
+        commentCount,
+        hasScreenshot);
 
     private static TicketStatusResponse StatusResponse(Ticket ticket) => new(
         ticket.Id,
