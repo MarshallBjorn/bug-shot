@@ -655,7 +655,7 @@ public class NotificationDispatcherTests
             string url,
             string? secret,
             Guid deliveryId,
-            NotificationEventType eventType,
+            string eventType,
             string payload,
             CancellationToken cancellationToken)
         {

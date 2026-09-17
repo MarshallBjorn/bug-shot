@@ -4,5 +4,7 @@ public interface INotificationWorkerSignal
 {
     void Signal();
 
-    Task WaitAsync(CancellationToken cancellationToken);
+    Task<bool> WaitAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
 }

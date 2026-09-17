@@ -15,6 +15,8 @@ public sealed class NotificationWorkerSignal : INotificationWorkerSignal
         }
     }
 
-    public Task WaitAsync(CancellationToken cancellationToken) =>
-        signal.WaitAsync(cancellationToken);
+    public Task<bool> WaitAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken) =>
+        signal.WaitAsync(timeout, cancellationToken);
 }

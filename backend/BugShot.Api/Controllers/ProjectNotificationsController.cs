@@ -265,7 +265,7 @@ public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender 
             channel.WebhookUrl,
             channel.WebhookSecret,
             deliveryId,
-            NotificationEventType.TicketCreated,
+            "test",
             payload,
             cancellationToken);
 

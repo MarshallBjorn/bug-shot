@@ -11,7 +11,7 @@ public interface IWebhookSender
         string url,
         string? secret,
         Guid deliveryId,
-        NotificationEventType eventType,
+        string eventType,
         string payloadBody,
         CancellationToken cancellationToken);
 }
@@ -22,7 +22,7 @@ public sealed class WebhookSender(IHttpClientFactory httpClientFactory) : IWebho
         string url,
         string? secret,
         Guid deliveryId,
-        NotificationEventType eventType,
+        string eventType,
         string payloadBody,
         CancellationToken cancellationToken)
     {
@@ -45,9 +45,7 @@ public sealed class WebhookSender(IHttpClientFactory httpClientFactory) : IWebho
             "X-Bugshot-Delivery-Id",
             deliveryId.ToString());
 
-        request.Headers.Add(
-            "X-Bugshot-Event",
-            eventType.ToString());
+        request.Headers.Add("X-Bugshot-Event", eventType);
 
         if (!string.IsNullOrEmpty(secret))
         {

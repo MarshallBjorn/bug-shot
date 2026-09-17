@@ -8,8 +8,8 @@ public sealed class NoOpNotificationWorkerSignal : INotificationWorkerSignal
     {
     }
 
-    public Task WaitAsync(CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
+    public Task<bool> WaitAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(true);
 }

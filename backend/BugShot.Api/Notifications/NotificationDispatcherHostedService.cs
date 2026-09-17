@@ -45,9 +45,7 @@ public sealed class NotificationDispatcherHostedService(
 
             try
             {
-                await workerSignal.WaitAsync(
-                    stoppingToken)
-                    .WaitAsync(PollInterval, stoppingToken);
+                await workerSignal.WaitAsync(PollInterval, stoppingToken);
             }
             catch (TimeoutException)
             {
@@ -237,7 +235,7 @@ public sealed class NotificationDispatcherHostedService(
                     delivery.Channel.WebhookUrl,
                     delivery.Channel.WebhookSecret,
                     delivery.Id,
-                    delivery.EventType,
+                    delivery.EventType.ToString(),
                     JsonSerializer.Serialize(payload),
                     cancellationToken);
             }

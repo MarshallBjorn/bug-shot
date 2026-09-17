@@ -62,6 +62,7 @@ public class SmtpOptions
         }
 
         var fromAddress = configuration["Smtp:FromAddress"]
+                          ?? configuration["SMTP_FROM_ADDRESS"]
                           ?? configuration["SMTP_FROM"]
                           ?? configuration["Smtp__FromAddress"];
 
