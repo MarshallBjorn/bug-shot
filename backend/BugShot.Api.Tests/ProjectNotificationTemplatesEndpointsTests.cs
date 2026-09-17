@@ -28,6 +28,11 @@ public class ProjectNotificationTemplatesEndpointsTests : IDisposable
 
     public ProjectNotificationTemplatesEndpointsTests()
     {
+        using (var db = OpenContext())
+        {
+            db.Users.ExecuteDelete();
+        }
+
         Directory.CreateDirectory(attachmentsPath);
         factory = new ApiFactory(attachmentsPath);
         client = factory.CreateClient();
