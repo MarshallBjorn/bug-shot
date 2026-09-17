@@ -131,6 +131,8 @@ public class ProjectTicketsController(BugShotDbContext db) : ControllerBase
                 t.PageUrl,
                 t.Page,
                 t.BrowserName,
+                t.OsName,
+                t.DeviceType,
                 t.Status,
                 t.ReportedAt,
                 t.ReceivedAt,

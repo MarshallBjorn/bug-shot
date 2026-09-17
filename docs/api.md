@@ -436,7 +436,7 @@ Rzeczy, których nie widać z sygnatury endpointu:
 
 - bez podanego `status` lista pomija tickety skasowane, bo tombstone nie ma czego pokazać. Jawne `status=Deleted` je zwróci
 - `search` szuka po opisie i po adresie strony, bez rozróżniania wielkości liter
-- wiersz listy niesie `page`, `browserName`, `commentCount` i `hasScreenshot`. Liczniki idą podzapytaniami na stronę wyniku, więc koszt trzyma się rozmiaru strony, a nie całej listy
+- wiersz listy niesie `page`, `browserName`, `osName`, `deviceType`, `commentCount` i `hasScreenshot`. Liczniki idą podzapytaniami na stronę wyniku, więc koszt trzyma się rozmiaru strony, a nie całej listy. Rozpoznane nazwy są w wierszu dlatego, że panel musi umieć sprawdzić każdy filtr na zgłoszeniu przysłanym kanałem live
 - ten sam kształt wiersza leci kanałem live, więc każdy nowy filtr musi mieć odpowiednik po stronie panelu. Bez tego zgłoszenie z kanału wpadłoby na listę, na której filtr nie daje mu prawa się znaleźć
 - wskaźnik `hasScreenshot` przy świeżym zgłoszeniu jest chwilę nieprawdziwy. Załącznik wchodzi osobnym żądaniem po `POST /tickets`, więc zdarzenie `TicketCreated` zna zgłoszenie jeszcze bez pliku. Zapis zrzutu nadaje `TicketChanged` i koryguje wiersz
 - `GET /tickets/{id}` dokłada do tego `page` oraz `environment` z rozpoznaną przeglądarką, systemem, urządzeniem, viewportem, językiem i strefą. Kolumny były w bazie od migracji `AddTicketClientDetails`, ale nie wychodziły nigdzie poza analitykę

@@ -591,6 +591,8 @@ public class TicketsController(
         ticket.PageUrl,
         ticket.Page,
         ticket.BrowserName,
+        ticket.OsName,
+        ticket.DeviceType,
         ticket.Status,
         ticket.ReportedAt,
         ticket.ReceivedAt,

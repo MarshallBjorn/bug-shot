@@ -11,6 +11,8 @@ public record TicketListItem(
     string PageUrl,
     string Page,
     string BrowserName,
+    string OsName,
+    string DeviceType,
     TicketStatus Status,
     DateTimeOffset? ReportedAt,
     DateTimeOffset ReceivedAt,

@@ -642,6 +642,8 @@ public class ProjectTicketsControllerTests
 
         Assert.Equal("acme.example/cart", koszyk.Page);
         Assert.Equal("Chrome", koszyk.BrowserName);
+        Assert.Equal("Windows", koszyk.OsName);
+        Assert.Equal("desktop", koszyk.DeviceType);
         Assert.True(koszyk.HasScreenshot);
         Assert.Equal(0, koszyk.CommentCount);
 
