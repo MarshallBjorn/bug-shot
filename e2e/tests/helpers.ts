@@ -1,9 +1,22 @@
-import { expect, type APIRequestContext, type Page } from '@playwright/test'
+import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test'
 import { crc32, deflateSync } from 'node:zlib'
 import { admin, apiBaseUrl, demoProjectId, widgetOrigin } from '../e2e.config'
 
 export function ticketsPath() {
   return `/projects/${demoProjectId}/tickets`
+}
+
+// lista i galeria maja nazwy dostepnosciowe wiec testy nie zaczepiaja sie o klasy CSS
+export function ticketTable(page: Page): Locator {
+  return page.getByRole('table', { name: 'Lista zgłoszeń' })
+}
+
+export function ticketRows(page: Page): Locator {
+  return ticketTable(page).locator('tbody tr')
+}
+
+export function screenshotImage(page: Page): Locator {
+  return page.getByRole('list', { name: 'Załączniki' }).getByRole('img')
 }
 
 // samo wypelnienie formularza bo przy zlym hasle nie ma na co czekac

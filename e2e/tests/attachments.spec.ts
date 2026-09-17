@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { demoProjectId } from '../e2e.config'
-import { openSignedIn, reportFromWidget, signIn, ticketsPath } from './helpers'
+import { openSignedIn, reportFromWidget, screenshotImage, signIn, ticketsPath } from './helpers'
 
 test.describe('zalaczniki za tokenem', () => {
   test('zalogowany widzi zrzut w szczegolach zgloszenia', async ({ page, request }) => {
@@ -11,7 +11,7 @@ test.describe('zalaczniki za tokenem', () => {
 
     await expect(page.getByRole('heading', { name: 'Zgloszenie ze zrzutem' })).toBeVisible()
 
-    const screenshot = page.locator('.attachments img')
+    const screenshot = screenshotImage(page)
 
     await expect(screenshot).toBeVisible()
 
@@ -36,7 +36,7 @@ test.describe('zalaczniki za tokenem', () => {
     await openSignedIn(page, `${ticketsPath()}/${ticketId}`)
 
     // zrzut musi wejsc na strone od razu wiec czekamy az sie ustoi
-    await expect(page.locator('.attachments img')).toBeVisible()
+    await expect(screenshotImage(page)).toBeVisible()
 
     expect(pobrania).toHaveLength(0)
 

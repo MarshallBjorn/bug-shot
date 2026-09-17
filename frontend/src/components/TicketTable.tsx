@@ -13,7 +13,7 @@ function TicketTable({ projectId, items, listSearch }: TicketTableProps) {
   const state: TicketListState = { listSearch }
 
   return (
-    <table className="ticket-table">
+    <table aria-label="Lista zgłoszeń" className="ticket-table">
       <thead>
         <tr>
           <th>Opis</th>

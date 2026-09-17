@@ -174,7 +174,7 @@ describe('AdminProjectsPage', () => {
     render(<AdminProjectsPage />)
     await screen.findByText('Acme')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Zmień nazwę' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zmień nazwę projektu Acme' }))
 
     await vi.waitFor(() => {
       expect(mockedRenameProject).toHaveBeenCalledWith(
@@ -191,7 +191,7 @@ describe('AdminProjectsPage', () => {
     render(<AdminProjectsPage />)
     await screen.findByText('Acme')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Dodaj origin' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj origin do projektu Acme' }))
 
     await vi.waitFor(() => {
       expect(mockedAddProjectOrigin).toHaveBeenCalledWith(
@@ -203,10 +203,7 @@ describe('AdminProjectsPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     fireEvent.click(
-      screen
-        .getByText('https://acme.example')
-        .closest('li')!
-        .querySelector('button')!,
+      screen.getByRole('button', { name: 'Usuń origin https://acme.example' }),
     )
 
     await vi.waitFor(() => {
@@ -221,10 +218,7 @@ describe('AdminProjectsPage', () => {
     await screen.findByText('Acme')
 
     fireEvent.click(
-      screen
-        .getByText('Acme')
-        .closest('.admin-project-header')!
-        .querySelectorAll('button')[1],
+      screen.getByRole('button', { name: 'Usuń projekt Acme' }),
     )
 
     await vi.waitFor(() => {

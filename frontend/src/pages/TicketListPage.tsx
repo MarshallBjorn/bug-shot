@@ -54,7 +54,7 @@ function TicketListPage() {
       )}
 
       {!empty && (
-        <div className={tickets.loading ? 'is-stale' : undefined}>
+        <div aria-busy={tickets.loading} className={tickets.loading ? 'is-stale' : undefined}>
           <TicketTable
             projectId={projectId}
             items={tickets.items}

@@ -276,7 +276,7 @@ describe('TicketListPage', () => {
     const { container } = render(<TicketListPage />)
 
     expect(
-      container.querySelector('.is-stale'),
+      container.querySelector('[aria-busy="true"]'),
     ).not.toBeNull()
   })
 

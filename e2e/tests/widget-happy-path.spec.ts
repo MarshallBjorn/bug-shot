@@ -1,6 +1,6 @@
 ﻿import { expect, test } from '@playwright/test'
 import { apiBaseUrl, widgetOrigin } from '../e2e.config'
-import { openSignedIn, ticketsPath } from './helpers'
+import { openSignedIn, screenshotImage, ticketsPath } from './helpers'
 
 test('widget init -> submit ze screenshotem -> backend -> dashboard -> filtr -> detail', async ({
   page,
@@ -59,7 +59,7 @@ test('widget init -> submit ze screenshotem -> backend -> dashboard -> filtr -> 
 
   await expect(page.getByRole('heading', { name: description })).toBeVisible()
 
-  const screenshot = page.locator('.attachments img')
+  const screenshot = screenshotImage(page)
   await expect(screenshot).toBeVisible()
   await expect(screenshot).toHaveAttribute('src', /^blob:/)
 
@@ -77,5 +77,5 @@ test('widget init -> submit ze screenshotem -> backend -> dashboard -> filtr -> 
   await ticketLink.click()
 
   await expect(page.getByRole('heading', { name: description })).toBeVisible()
-  await expect(page.locator('.attachments img')).toBeVisible()
+  await expect(screenshotImage(page)).toBeVisible()
 })

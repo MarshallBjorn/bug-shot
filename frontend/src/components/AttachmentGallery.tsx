@@ -46,7 +46,7 @@ function AttachmentGallery({ attachments }: AttachmentGalleryProps) {
   }
 
   return (
-    <ul className="attachments">
+    <ul aria-label="Załączniki" className="attachments">
       {attachments.map((attachment) => (
         <AttachmentItem attachment={attachment} key={attachment.id} />
       ))}

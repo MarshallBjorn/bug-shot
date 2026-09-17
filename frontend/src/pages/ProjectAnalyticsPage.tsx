@@ -74,7 +74,12 @@ function AnalyticsTable({ title, fileName, header, rows }: AnalyticsTableProps) 
     <section className="analytics-section">
       <div className="list-heading">
         <h3>{title}</h3>
-        <button type="button" disabled={rows.length === 0} onClick={() => downloadCsv(fileName, toCsv(header, rows))}>
+        <button
+          type="button"
+          aria-label={`Pobierz CSV: ${title}`}
+          disabled={rows.length === 0}
+          onClick={() => downloadCsv(fileName, toCsv(header, rows))}
+        >
           Pobierz CSV
         </button>
       </div>

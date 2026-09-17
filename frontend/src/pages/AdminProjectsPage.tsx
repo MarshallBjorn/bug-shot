@@ -169,10 +169,18 @@ function AdminProjectsPage() {
                 <strong>{project.name}</strong>
                 <code>{project.key}</code>
                 <Link to={`/projects/${project.id}/tickets`}>Zgłoszenia</Link>
-                <button type="button" onClick={() => handleRename(project)}>
+                <button
+                  type="button"
+                  aria-label={`Zmień nazwę projektu ${project.name}`}
+                  onClick={() => handleRename(project)}
+                >
                   Zmień nazwę
                 </button>
-                <button type="button" onClick={() => handleDelete(project)}>
+                <button
+                  type="button"
+                  aria-label={`Usuń projekt ${project.name}`}
+                  onClick={() => handleDelete(project)}
+                >
                   Usuń
                 </button>
               </div>
@@ -183,13 +191,21 @@ function AdminProjectsPage() {
                   {project.origins.map((origin) => (
                     <li key={origin.id}>
                       {origin.origin}
-                      <button type="button" onClick={() => handleRemoveOrigin(project, origin.id)}>
+                      <button
+                        type="button"
+                        aria-label={`Usuń origin ${origin.origin}`}
+                        onClick={() => handleRemoveOrigin(project, origin.id)}
+                      >
                         Usuń
                       </button>
                     </li>
                   ))}
                 </ul>
-                <button type="button" onClick={() => handleAddOrigin(project)}>
+                <button
+                  type="button"
+                  aria-label={`Dodaj origin do projektu ${project.name}`}
+                  onClick={() => handleAddOrigin(project)}
+                >
                   Dodaj origin
                 </button>
               </div>

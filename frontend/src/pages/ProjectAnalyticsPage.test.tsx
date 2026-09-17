@@ -146,8 +146,9 @@ describe('ProjectAnalyticsPage', () => {
     renderPage()
     await screen.findByText('259')
 
-    const section = screen.getByRole('heading', { name: 'Najczęstsze strony' }).parentElement!
-    fireEvent.click(section.querySelector('button')!)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Pobierz CSV: Najczęstsze strony' }),
+    )
 
     expect(clicked).toHaveBeenCalledOnce()
     expect(await created.mock.calls[0][0].text()).toContain('Strona,Zgłoszenia\r\nsklep.example/koszyk,61')

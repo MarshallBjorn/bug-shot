@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { apiBaseUrl } from '../e2e.config'
-import { openSignedIn, reportTicket, signInApi, ticketsPath } from './helpers'
+import { openSignedIn, reportTicket, signInApi, ticketRows, ticketsPath, ticketTable } from './helpers'
 
 test.describe('paginacja i kanal live', () => {
   test('zgloszenie z widgetu wchodzi na liste bez ponownego pobrania listy', async ({
@@ -18,9 +18,9 @@ test.describe('paginacja i kanal live', () => {
     await openSignedIn(page, ticketsPath())
 
     await expect(page.getByText('Kanał live aktywny')).toBeVisible()
-    await expect(page.locator('.ticket-table')).toBeVisible()
+    await expect(ticketTable(page)).toBeVisible()
 
-    const wierszy = await page.locator('.ticket-table tbody tr').count()
+    const wierszy = await ticketRows(page).count()
 
     // vite w trybie deweloperskim montuje efekt dwa razy wiec liczy sie przyrost a nie sama liczba
     const przedZdarzeniem = pobrania.length
@@ -43,7 +43,7 @@ test.describe('paginacja i kanal live', () => {
 
     await openSignedIn(page, `${ticketsPath()}?search=${encodeURIComponent(opis)}`)
 
-    const wiersz = page.locator('.ticket-table tbody tr', { hasText: opis })
+    const wiersz = ticketRows(page).filter({ hasText: opis })
 
     await expect(wiersz).toContainText('Nowe')
 
@@ -74,7 +74,7 @@ test.describe('paginacja i kanal live', () => {
 
     await openSignedIn(page, `${ticketsPath()}?limit=2&search=Paginacja+kursorowa`)
 
-    const wiersze = page.locator('.ticket-table tbody tr')
+    const wiersze = ticketRows(page)
 
     await expect(wiersze).toHaveCount(2)
     await expect(page.getByText('Pokazano 2 z 3')).toBeVisible()
