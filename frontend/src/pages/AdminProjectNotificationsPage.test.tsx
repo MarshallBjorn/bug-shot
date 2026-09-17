@@ -1,5 +1,5 @@
-﻿import React from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import React from 'react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AdminProjectNotificationsPage from './AdminProjectNotificationsPage'
 import { getProjects } from '../api/projects'
@@ -84,7 +84,7 @@ const template = {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   mockedGetProjects.mockResolvedValue([project])
   mockedGetChannels.mockResolvedValue([emailChannel, webhookChannel])
   mockedGetTemplates.mockResolvedValue([template])
@@ -241,6 +241,125 @@ describe('AdminProjectNotificationsPage', () => {
     expect(mockedUpsertTemplate).not.toHaveBeenCalled()
     expect(screen.queryByLabelText('Tresc')).toBeNull()
   })
+  it('pokazuje blad pobierania szablonow', async () => {
+    mockedGetTemplates.mockRejectedValueOnce(new Error('Template load failed'))
+
+    render(<AdminProjectNotificationsPage />)
+
+    expect(
+      await screen.findByText(/Nie udalo sie pobrac szablonow\. Template load failed/),
+    ).toBeTruthy()
+  })
+
+  it('pokazuje blad tworzenia kanalu', async () => {
+    mockedCreateChannel.mockRejectedValueOnce(new Error('Create failed'))
+
+    render(<AdminProjectNotificationsPage />)
+    await screen.findByText('team@acme.example')
+
+    fireEvent.change(screen.getByLabelText('Adres email'), {
+      target: { value: 'new@acme.example' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj kanal' }))
+
+    expect(await screen.findByText('Create failed')).toBeTruthy()
+  })
+
+  it('edytuje kanal email', async () => {
+    mockedUpdateChannel.mockResolvedValueOnce({
+      ...emailChannel,
+      emailAddress: 'edited@acme.example',
+    })
+
+    render(<AdminProjectNotificationsPage />)
+
+    const emailText = await screen.findByText('team@acme.example')
+    const emailItem = emailText.closest('li')!
+
+    fireEvent.click(within(emailItem).getByRole('button', { name: 'Edytuj' }))
+
+    fireEvent.change(within(emailItem).getByLabelText('Adres email'), {
+      target: { value: 'edited@acme.example' },
+    })
+
+    fireEvent.click(within(emailItem).getByRole('button', { name: /Zapisz/ }))
+
+    await vi.waitFor(() => {
+      expect(mockedUpdateChannel).toHaveBeenCalledWith(
+        'p1',
+        'c1',
+        expect.objectContaining({
+          emailAddress: 'edited@acme.example',
+        }),
+      )
+    })
+
+    expect(await screen.findByText('edited@acme.example')).toBeTruthy()
+  })
+
+  it('anuluje edycje kanalu bez requestu', async () => {
+    render(<AdminProjectNotificationsPage />)
+    await screen.findByText('team@acme.example')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edytuj' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Anuluj' }))
+
+    expect(mockedUpdateChannel).not.toHaveBeenCalled()
+  })
+
+  it('pokazuje blad zmiany statusu kanalu', async () => {
+    mockedUpdateChannel.mockRejectedValueOnce(new Error('Toggle failed'))
+
+    render(<AdminProjectNotificationsPage />)
+
+    const emailText = await screen.findByText('team@acme.example')
+    const emailItem = emailText.closest('li')!
+    const checkbox = within(emailItem).getByRole('checkbox')
+
+    fireEvent.click(checkbox)
+
+    expect(
+      await screen.findByText(/Toggle failed/),
+    ).toBeTruthy()
+  })
+
+  it('pokazuje blad usuwania kanalu', async () => {
+    mockedDeleteChannel.mockRejectedValueOnce(new Error('Delete failed'))
+    const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {})
+
+    render(<AdminProjectNotificationsPage />)
+    await screen.findByText('team@acme.example')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Usun' })[0])
+
+    await vi.waitFor(() => {
+      expect(alertMock).toHaveBeenCalledWith('Delete failed')
+    })
+  })
+
+  it('pokazuje blad testowego webhooka', async () => {
+    mockedSendTest.mockRejectedValueOnce(new Error('Webhook failed'))
+
+    render(<AdminProjectNotificationsPage />)
+    await screen.findByText('https://hooks.acme.example/bugshot')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wyslij testowe zdarzenie' }))
+
+    expect(await screen.findByText('Webhook failed')).toBeTruthy()
+  })
+
+  it('pokazuje blad zapisu szablonu', async () => {
+    mockedUpsertTemplate.mockRejectedValueOnce(new Error('Template save failed'))
+
+    render(<AdminProjectNotificationsPage />)
+    await screen.findByText('Nowe zgloszenie')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edytuj szablon TicketCreated Email' }))
+    fireEvent.change(screen.getByLabelText('Tresc'), {
+      target: { value: 'Nowa tresc' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz szablon' }))
+
+    expect(await screen.findByText('Template save failed')).toBeTruthy()
+  })
 })
-
-
