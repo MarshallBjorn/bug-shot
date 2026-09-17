@@ -45,7 +45,7 @@ function PageRow({
           onClick={() => setOpen((previous) => !previous)}
           aria-expanded={open}
           aria-label={`Rozwiń statusy dla ${page.page}`}
-          className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         >
           <ChevronRight
             aria-hidden="true"

@@ -30,7 +30,6 @@ function OverviewCard({ label, action, onClick, className, children }: OverviewC
     <button
       type="button"
       onClick={onClick}
-      aria-label={action}
       className={cn(
         'group flex min-w-0 flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-accent',
         className,
@@ -44,6 +43,7 @@ function OverviewCard({ label, action, onClick, className, children }: OverviewC
         />
       </span>
       <span className="min-w-0 text-sm">{children}</span>
+      {action && <span className="sr-only">{action}</span>}
     </button>
   )
 }

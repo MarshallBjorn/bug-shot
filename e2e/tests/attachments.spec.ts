@@ -41,13 +41,13 @@ test.describe('zalaczniki za tokenem', () => {
     await openSignedIn(page, `${ticketsPath()}/${ticketId}`)
 
     await expect(screenshotImage(page)).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Otwórz pełny log konsoli' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Otwórz pełny log konsoli/ })).toBeVisible()
 
     const poWejsciu = pobrania.length
 
     expect(poWejsciu).toBeGreaterThan(0)
 
-    await page.getByRole('button', { name: 'Otwórz pełny log konsoli' }).click()
+    await page.getByRole('button', { name: /Otwórz pełny log konsoli/ }).click()
 
     await expect(page.getByRole('list', { name: 'Wpisy logu konsoli' })).toBeVisible()
 

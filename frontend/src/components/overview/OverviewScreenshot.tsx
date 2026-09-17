@@ -44,7 +44,6 @@ function OverviewScreenshot({ screenshot, onOpen }: OverviewScreenshotProps) {
     <button
       type="button"
       onClick={onOpen}
-      aria-label="Otwórz zrzut ekranu w podglądzie"
       className="group relative block h-48 w-full overflow-hidden rounded-lg border bg-card"
     >
       <Thumbnail screenshot={screenshot} />

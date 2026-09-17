@@ -44,7 +44,7 @@ function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center px-4 py-12">
+    <main className="flex min-h-svh items-center justify-center px-4 py-12">
       <form
         className="w-full max-w-sm space-y-4 rounded-lg border bg-card p-6"
         onSubmit={submit}
@@ -92,7 +92,7 @@ function LoginPage() {
           {sending ? 'Logowanie...' : 'Zaloguj'}
         </Button>
       </form>
-    </div>
+    </main>
   )
 }
 

@@ -64,13 +64,13 @@ function OverviewLogs({ text, loading, onOpen }: OverviewLogsProps) {
                 key={level}
                 type="button"
                 onClick={() => onOpen(level)}
-                aria-label={`Pokaż wpisy ${level} w logu konsoli`}
                 className={cn(
-                  'rounded border px-1.5 font-mono text-xs transition-colors hover:bg-accent',
+                  'flex min-h-6 items-center rounded border px-1.5 font-mono text-xs transition-colors hover:bg-accent',
                   levelText[level],
                 )}
               >
                 {level} {counts[level]}
+                <span className="sr-only">, pokaż te wpisy w logu konsoli</span>
               </button>
             ))}
         </span>
@@ -79,9 +79,9 @@ function OverviewLogs({ text, loading, onOpen }: OverviewLogsProps) {
       <button
         type="button"
         onClick={() => onOpen(null)}
-        aria-label="Otwórz pełny log konsoli"
         className="flex min-h-0 flex-1 flex-col items-start justify-start gap-0.5 overflow-hidden px-3 py-2 text-left font-mono text-xs transition-colors hover:bg-accent/40"
       >
+        <span className="sr-only">Otwórz pełny log konsoli</span>
         {shown.map((entry) => (
           <span key={entry.index} className="block max-w-full truncate">
             <span className={levelText[entry.level]}>{entry.level}</span> {entry.message}

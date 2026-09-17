@@ -54,7 +54,7 @@ test.describe('dashboard accessibility', () => {
     const { ticketId } = await reportFromWidget(request, `Axe log ${Date.now()}`)
 
     await openSignedIn(page, `${ticketsPath()}/${ticketId}`)
-    await page.getByRole('button', { name: 'Otwórz pełny log konsoli' }).click()
+    await page.getByRole('button', { name: /Otwórz pełny log konsoli/ }).click()
 
     await expect(page.getByRole('list', { name: 'Wpisy logu konsoli' })).toBeVisible()
 
@@ -65,7 +65,7 @@ test.describe('dashboard accessibility', () => {
     const { ticketId } = await reportFromWidget(request, `Axe lightbox ${Date.now()}`)
 
     await openSignedIn(page, `${ticketsPath()}/${ticketId}`)
-    await page.getByRole('button', { name: 'Otwórz zrzut ekranu w podglądzie' }).click()
+    await page.getByRole('button', { name: /Zrzut ekranu, kliknij aby powiększyć/ }).click()
 
     await expect(page.getByRole('dialog')).toBeVisible()
 

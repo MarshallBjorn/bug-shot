@@ -159,7 +159,7 @@ describe('blok zrzutu', () => {
 
     render(<OverviewScreenshot screenshot={screenshot} onOpen={onOpen} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Otwórz zrzut ekranu w podglądzie' }))
+    fireEvent.click(screen.getByRole('button', { name: /Zrzut ekranu, kliknij aby powiększyć/ }))
 
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
@@ -192,7 +192,7 @@ describe('blok logu konsoli', () => {
 
     render(<OverviewLogs text={log} loading={false} onOpen={onOpen} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Otwórz pełny log konsoli' }))
+    fireEvent.click(screen.getByRole('button', { name: /Otwórz pełny log konsoli/ }))
 
     expect(onOpen).toHaveBeenCalledWith(null)
   })
@@ -202,7 +202,7 @@ describe('blok logu konsoli', () => {
 
     render(<OverviewLogs text={log} loading={false} onOpen={onOpen} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pokaż wpisy ERROR w logu konsoli' }))
+    fireEvent.click(screen.getByRole('button', { name: /^ERROR 1, pokaż te wpisy/ }))
 
     expect(onOpen).toHaveBeenCalledWith('ERROR')
   })
@@ -222,7 +222,7 @@ describe('blok logu konsoli', () => {
 
     render(<OverviewLogs text={withLateError} loading={false} onOpen={vi.fn()} />)
 
-    const preview = screen.getByRole('button', { name: 'Otwórz pełny log konsoli' })
+    const preview = screen.getByRole('button', { name: /Otwórz pełny log konsoli/ })
 
     expect(preview.textContent?.indexOf('TypeError x')).toBeLessThan(
       preview.textContent?.indexOf('pierwszy') ?? -1,
