@@ -84,3 +84,15 @@ export function updateTicketStatus(
     },
   )
 }
+
+// lista nie niesie rowVersion bo token wspolbieznosci w kazdym wierszu tylko by sie starzal
+// zmiana z listy pobiera wiec swieza wersje i dopiero na niej robi zapis
+export async function changeTicketStatus(
+  ticketId: string,
+  status: TicketStatus,
+  changedBy: string,
+) {
+  const ticket = await getTicket(ticketId)
+
+  return updateTicketStatus(ticketId, status, ticket.rowVersion, changedBy)
+}

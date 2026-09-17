@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { ChevronDown, Search, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -20,6 +20,8 @@ const sortLabels: Record<TicketSort, string> = {
 interface TicketFiltersProps {
   query: TicketQuery
   onChange: (patch: Partial<TicketQuery>, replace?: boolean) => void
+  // skrot / oddaje focus temu polu
+  searchRef?: RefObject<HTMLInputElement | null>
 }
 
 // trzy stany zamiast pola wyboru bo filtr moze byc wylaczony, wlaczony albo odwrocony
@@ -31,7 +33,7 @@ function parseFlagValue(value: string): boolean | null {
   return value === '' ? null : value === 'true'
 }
 
-function TicketFilters({ query, onChange }: TicketFiltersProps) {
+function TicketFilters({ query, onChange, searchRef }: TicketFiltersProps) {
   const [search, setSearch] = useState(query.search)
   const pushed = useRef(query.search)
 
@@ -83,6 +85,7 @@ function TicketFilters({ query, onChange }: TicketFiltersProps) {
           className="pointer-events-none absolute bottom-2.5 left-2 size-4 text-muted-foreground"
         />
         <Input
+          ref={searchRef}
           type="search"
           value={search}
           placeholder="Opis albo adres strony"

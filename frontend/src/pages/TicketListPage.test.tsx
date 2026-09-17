@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TicketListPage from './TicketListPage'
 import { useTickets, type Tickets } from '../hooks/useTickets'
 import { useTicketStream } from '../hooks/useTicketStream'
+import { changeTicketStatus } from '../api/tickets'
 
-const { setSearchParams, searchParams } = vi.hoisted(() => ({
+const { setSearchParams, searchParams, navigate } = vi.hoisted(() => ({
   setSearchParams: vi.fn(),
   searchParams: new URLSearchParams(),
+  navigate: vi.fn(),
 }))
 
 vi.mock('react-router', () => ({
@@ -19,6 +21,20 @@ vi.mock('react-router', () => ({
   }) => <a href={to}>{children}</a>,
   useParams: () => ({ projectId: 'project-1' }),
   useSearchParams: () => [searchParams, setSearchParams],
+  useNavigate: () => navigate,
+}))
+
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    status: 'authenticated',
+    user: { id: 'u1', email: 'bartek@bug-shot.local', isAdmin: true, isActive: true },
+    logIn: vi.fn(),
+    logOut: vi.fn(),
+  }),
+}))
+
+vi.mock('../api/tickets', () => ({
+  changeTicketStatus: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('../hooks/useTickets', () => ({
@@ -50,13 +66,24 @@ vi.mock('../components/TicketTable', () => ({
     projectId,
     items,
     listSearch,
+    focusedIndex,
+    statusMenuId,
+    onPickStatus,
   }: {
     projectId: string
-    items: Array<{ id: string }>
+    items: Array<{ id: string; status: string }>
     listSearch: string
+    focusedIndex?: number
+    statusMenuId?: string | null
+    onPickStatus?: (ticket: { id: string }, status: string) => void
   }) => (
     <div data-testid="ticket-table">
       {projectId}:{items.length}:{listSearch}
+      <span data-testid="table-focused">{focusedIndex}</span>
+      <span data-testid="table-menu">{statusMenuId ?? ''}</span>
+      <button type="button" onClick={() => onPickStatus?.(items[0], 'InProgress')}>
+        Mock zmiana statusu
+      </button>
     </div>
   ),
 }))
@@ -296,5 +323,92 @@ describe('TicketListPage', () => {
     expect(next.get('status')).toBe('Resolved')
     expect(next.get('search')).toBe('koszyk')
     expect(next.get('limit')).toBe('50')
+  })
+
+  describe('skroty klawiszowe', () => {
+    // fireEvent owija zdarzenie w act, wiec stan zdazy sie odswiezyc przed asercja
+    function press(key: string) {
+      fireEvent.keyDown(document.body, { key })
+    }
+
+    it('j i k przesuwaja podswietlenie w granicach listy', () => {
+      tickets.mockReturnValue(result([ticket('ticket-1'), ticket('ticket-2')]))
+
+      render(<TicketListPage />)
+
+      expect(screen.getByTestId('table-focused').textContent).toBe('-1')
+
+      press('j')
+      expect(screen.getByTestId('table-focused').textContent).toBe('0')
+
+      press('j')
+      expect(screen.getByTestId('table-focused').textContent).toBe('1')
+
+      // koniec listy nie przewija sie dalej
+      press('j')
+      expect(screen.getByTestId('table-focused').textContent).toBe('1')
+
+      press('k')
+      expect(screen.getByTestId('table-focused').textContent).toBe('0')
+
+      press('k')
+      expect(screen.getByTestId('table-focused').textContent).toBe('0')
+    })
+
+    it('x otwiera menu statusu podswietlonego zgloszenia', () => {
+      tickets.mockReturnValue(result([ticket('ticket-1'), ticket('ticket-2')]))
+
+      render(<TicketListPage />)
+
+      press('x')
+      expect(screen.getByTestId('table-menu').textContent).toBe('')
+
+      press('j')
+      press('x')
+
+      expect(screen.getByTestId('table-menu').textContent).toBe('ticket-1')
+    })
+
+    it('enter otwiera podswietlone zgloszenie i niesie filtry powrotu', () => {
+      tickets.mockReturnValue(result([ticket('ticket-1')]))
+
+      render(<TicketListPage />)
+
+      press('Enter')
+      expect(navigate).not.toHaveBeenCalled()
+
+      press('j')
+      press('Enter')
+
+      expect(navigate).toHaveBeenCalledWith('/projects/project-1/tickets/ticket-1', {
+        state: { listSearch: searchParams.toString() },
+      })
+    })
+
+    it('pomoc otwiera sie pod znakiem zapytania', () => {
+      tickets.mockReturnValue(result([ticket('ticket-1')]))
+
+      render(<TicketListPage />)
+
+      press('?')
+
+      expect(screen.getByRole('heading', { name: 'Skróty klawiszowe' })).toBeDefined()
+    })
+  })
+
+  it('zmiana statusu z listy idzie z adresem zalogowanego', async () => {
+    tickets.mockReturnValue(result([ticket('ticket-1')]))
+
+    render(<TicketListPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock zmiana statusu' }))
+
+    await vi.waitFor(() => {
+      expect(changeTicketStatus).toHaveBeenCalledWith(
+        'ticket-1',
+        'InProgress',
+        'bartek@bug-shot.local',
+      )
+    })
   })
 })

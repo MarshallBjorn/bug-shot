@@ -1,5 +1,5 @@
-import { useCallback, useMemo } from 'react'
-import { useParams, useSearchParams } from 'react-router'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import ActiveFilters from '../components/ActiveFilters'
 import LiveStatus from '../components/LiveStatus'
 import LoadMore from '../components/LoadMore'
@@ -7,8 +7,12 @@ import SaveFilterDialog from '../components/SaveFilterDialog'
 import TicketFilters from '../components/TicketFilters'
 import TicketTable from '../components/TicketTable'
 import TicketsEmptyState from '../components/TicketsEmptyState'
+import ShortcutsDialog from '../components/ShortcutsDialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatResultCount } from '../format'
+import { changeTicketStatus } from '../api/tickets'
+import { useAuth } from '../auth/AuthContext'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useTickets } from '../hooks/useTickets'
 import { useTicketStream } from '../hooks/useTicketStream'
 import { isFiltered, parseTicketQuery, ticketQueryToParams, type TicketQuery } from '../ticketQuery'
@@ -16,6 +20,14 @@ import { isFiltered, parseTicketQuery, ticketQueryToParams, type TicketQuery } f
 function TicketListPage() {
   const { projectId = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const [focused, setFocused] = useState(-1)
+  const [statusMenuId, setStatusMenuId] = useState<string | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [statusError, setStatusError] = useState<string | null>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const query = useMemo(() => parseTicketQuery(searchParams), [searchParams])
   const tickets = useTickets(projectId, query)
@@ -37,6 +49,71 @@ function TicketListPage() {
 
   const empty = tickets.items.length === 0
 
+  const move = useCallback(
+    (step: number) => {
+      setFocused((previous) => {
+        const next = previous + step
+
+        if (next < 0) return 0
+        if (next > tickets.items.length - 1) return tickets.items.length - 1
+
+        return next
+      })
+    },
+    [tickets.items.length],
+  )
+
+  // autor zmiany idzie z zalogowanego konta a nie ze sztywnej etykiety panelu
+  const author = user?.email ?? 'dashboard'
+
+  const changeStatus = useCallback(
+    async (ticketId: string, status: (typeof tickets.items)[number]['status']) => {
+      setStatusError(null)
+
+      try {
+        // wiersz wroci kanalem live, wiec po zapisie nie trzeba przeladowywac listy
+        await changeTicketStatus(ticketId, status, author)
+      } catch (cause) {
+        setStatusError((cause as Error).message)
+      }
+    },
+    [author],
+  )
+
+  const shortcuts = useMemo(
+    () => [
+      { key: 'j', onPress: () => move(1) },
+      { key: 'k', onPress: () => move(-1) },
+      { key: '/', onPress: () => searchRef.current?.focus() },
+      {
+        key: 'x',
+        onPress: () => {
+          const ticket = tickets.items[focused]
+
+          if (ticket) {
+            setStatusMenuId(ticket.id)
+          }
+        },
+      },
+      { key: '?', onPress: () => setHelpOpen(true) },
+      {
+        key: 'Enter',
+        onPress: () => {
+          const ticket = tickets.items[focused]
+
+          if (ticket) {
+            navigate(`/projects/${projectId}/tickets/${ticket.id}`, {
+              state: { listSearch: searchParams.toString() },
+            })
+          }
+        },
+      },
+    ],
+    [focused, move, navigate, projectId, searchParams, tickets.items],
+  )
+
+  useKeyboardShortcuts(shortcuts)
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -49,9 +126,18 @@ function TicketListPage() {
         </div>
       </div>
 
-      <TicketFilters query={query} onChange={updateQuery} />
+      <TicketFilters query={query} onChange={updateQuery} searchRef={searchRef} />
 
       <ActiveFilters query={query} onChange={updateQuery} />
+
+      {statusError && (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          Nie udało się zmienić statusu. {statusError}
+        </p>
+      )}
 
       {tickets.error && (
         <p
@@ -89,6 +175,10 @@ function TicketListPage() {
                 projectId={projectId}
                 items={tickets.items}
                 listSearch={searchParams.toString()}
+                focusedIndex={focused}
+                statusMenuId={statusMenuId}
+                onStatusMenuChange={setStatusMenuId}
+                onPickStatus={(ticket, status) => changeStatus(ticket.id, status)}
               />
             </div>
           </div>
@@ -102,6 +192,8 @@ function TicketListPage() {
           />
         </div>
       )}
+
+      <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   )
 }

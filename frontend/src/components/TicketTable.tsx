@@ -1,18 +1,41 @@
-import { Image, MessageSquare } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { ChevronDown, Image, MessageSquare } from 'lucide-react'
 import { Link } from 'react-router'
+import { Button } from '@/components/ui/button'
 import { formatDateTime, formatRelativeTime } from '../format'
 import type { TicketListState } from '../navigation'
-import type { TicketListItem } from '../types'
+import type { TicketListItem, TicketStatus } from '../types'
 import StatusBadge from './StatusBadge'
+import TicketStatusMenu from './TicketStatusMenu'
 
 interface TicketTableProps {
   projectId: string
   items: TicketListItem[]
   listSearch: string
+  focusedIndex?: number
+  statusMenuId?: string | null
+  onStatusMenuChange?: (id: string | null) => void
+  onPickStatus?: (ticket: TicketListItem, status: TicketStatus) => void
 }
 
-function TicketTable({ projectId, items, listSearch }: TicketTableProps) {
+function TicketTable({
+  projectId,
+  items,
+  listSearch,
+  focusedIndex = -1,
+  statusMenuId = null,
+  onStatusMenuChange,
+  onPickStatus,
+}: TicketTableProps) {
   const state: TicketListState = { listSearch }
+  const links = useRef<Array<HTMLAnchorElement | null>>([])
+
+  // skrot przesuwa indeks a focus musi pojsc za nim, inaczej czytnik ekranu zostaje w miejscu
+  useEffect(() => {
+    if (focusedIndex >= 0) {
+      links.current[focusedIndex]?.focus()
+    }
+  }, [focusedIndex])
 
   return (
     <table aria-label="Lista zgłoszeń" className="w-full border-collapse text-sm">
@@ -26,10 +49,11 @@ function TicketTable({ projectId, items, listSearch }: TicketTableProps) {
           <th scope="col">Adres strony</th>
           <th scope="col">Załączniki i komentarze</th>
           <th scope="col">Zgłoszono</th>
+          <th scope="col">Akcje</th>
         </tr>
       </thead>
       <tbody>
-        {items.map((ticket) => {
+        {items.map((ticket, index) => {
           const reported = ticket.reportedAt ?? ticket.receivedAt
 
           return (
@@ -43,6 +67,9 @@ function TicketTable({ projectId, items, listSearch }: TicketTableProps) {
 
               <td className="w-[45%] py-2.5 pr-3 align-top">
                 <Link
+                  ref={(node) => {
+                    links.current[index] = node
+                  }}
                   to={`/projects/${projectId}/tickets/${ticket.id}`}
                   state={state}
                   className="font-medium text-foreground hover:text-primary hover:underline"
@@ -84,6 +111,25 @@ function TicketTable({ projectId, items, listSearch }: TicketTableProps) {
                 <time dateTime={reported} title={formatDateTime(reported)}>
                   {formatRelativeTime(reported)}
                 </time>
+              </td>
+
+              <td className="py-1.5 pr-2 align-top">
+                <TicketStatusMenu
+                  status={ticket.status}
+                  open={statusMenuId === ticket.id}
+                  onOpenChange={(open) => onStatusMenuChange?.(open ? ticket.id : null)}
+                  onPick={(status) => onPickStatus?.(ticket, status)}
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    aria-label={`Zmień status zgłoszenia ${ticket.description}`}
+                  >
+                    <ChevronDown aria-hidden="true" />
+                  </Button>
+                </TicketStatusMenu>
               </td>
             </tr>
           )
