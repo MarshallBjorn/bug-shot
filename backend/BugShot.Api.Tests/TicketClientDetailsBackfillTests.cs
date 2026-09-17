@@ -50,6 +50,9 @@ public class TicketClientDetailsBackfillTests
             {
                 npgsql.MapEnum<TicketStatus>("ticket_status");
                 npgsql.MapEnum<AttachmentKind>("attachment_kind");
+                npgsql.MapEnum<NotificationChannelType>("notification_channel_type");
+                npgsql.MapEnum<NotificationEventType>("notification_event_type");
+                npgsql.MapEnum<NotificationDeliveryStatus>("notification_delivery_status");
             })
             .UseSnakeCaseNamingConvention()
             .Options;
