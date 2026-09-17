@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./.github/actions/wg-connect
+      - uses: ./.github/actions/wg_connect
         with:
           wg_private_key:     ${{ secrets.WG_PRIVATE_KEY }}
           wg_endpoint:        ${{ secrets.WG_ENDPOINT }}

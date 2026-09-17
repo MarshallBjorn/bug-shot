@@ -4,18 +4,24 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (np. 1.2.3)'
+        description: 'Version to rollback to (e.g. 1.2.3 or abc1234)'
         required: true
         type: string
       environment:
-        description: 'Environment'
+        description: 'Target environment'
         required: true
         type: choice
-        options: [prod, staging]
+        options:
+          - staging
+          - prod
 
 concurrency:
   group: deploy-${{ inputs.environment }}
   cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
 
 jobs:
   rollback:
@@ -25,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./.github/actions/wg-connect
+      - uses: ./.github/actions/wg_connect
         with:
           wg_private_key:     ${{ secrets.WG_PRIVATE_KEY }}
           wg_endpoint:        ${{ secrets.WG_ENDPOINT }}
@@ -34,14 +40,14 @@ jobs:
           vps_address:        ${{ secrets.WG_VPS_ADDRESS }}
           deploy_ssh_key:     ${{ secrets.DEPLOY_SSH_KEY }}
 
-      - name: Validate image exists
+      - name: Verify images exist
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           VER="${{ inputs.version }}"
-          VER="${VER#v}"
 
           for svc in backend frontend; do
             IMAGE="ghcr.io/${OWNER}/bugshot-${svc}:${VER}"
+            echo "Checking $IMAGE..."
             docker manifest inspect "$IMAGE" > /dev/null 2>&1 || \
               { echo "Not found: $IMAGE"; exit 1; }
             echo "✓ $IMAGE"
@@ -51,14 +57,18 @@ jobs:
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           VER="${{ inputs.version }}"
-          VER="${VER#v}"
           ENV="${{ inputs.environment }}"
-          DIR="bugshot-${ENV}"
 
-          ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_VER="$VER" DEPLOY_DIR="$DIR" bash << 'REMOTE'
+          ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_VER="$VER" DEPLOY_ENV="$ENV" bash << 'REMOTE'
           set -euo pipefail
-          cd ~/"$DEPLOY_DIR"
-          COMPOSE="docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml"
+
+          case "$DEPLOY_ENV" in
+            staging) DIR=~/bugshot-staging ;;
+            prod)    DIR=~/bugshot-prod ;;
+            *)       echo "Unknown env: $DEPLOY_ENV"; exit 1 ;;
+          esac
+
+          cd "$DIR"
 
           export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VER}"
           export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${DEPLOY_VER}"
@@ -69,17 +79,23 @@ jobs:
           [ -f .deploy-tag ] && cp .deploy-tag .deploy-tag-prev
           echo "$DEPLOY_VER" > .deploy-tag
 
-          $COMPOSE up -d --no-build --remove-orphans
-          echo "Rollback to $DEPLOY_VER done"
+          docker compose --env-file .env \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            up -d --no-build --remove-orphans
+
+          echo "=== Rollback to $DEPLOY_VER complete ==="
           REMOTE
 
       - name: Smoke test
         run: |
           ssh vps bash << 'REMOTE'
+          set -euo pipefail
+
           for url in http://localhost:8080/healthz http://localhost:3000/healthz; do
             status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$url")
             [ "$status" = "200" ] || { echo "FAIL: $url → $status"; exit 1; }
-            echo "OK: $url"
+            echo "OK: $url → $status"
           done
           REMOTE
 
@@ -90,13 +106,18 @@ jobs:
         run: |
           STATUS="${{ job.status }}"
           VER="${{ inputs.version }}"
-          [ "$STATUS" = "success" ] && COLOR=15105570 || COLOR=15158332
+          ENV="${{ inputs.environment }}"
+          [ "$STATUS" = "success" ] && COLOR=3066993 || COLOR=15158332
+
           curl -sS -H "Content-Type: application/json" -d "{
             \"embeds\": [{
-              \"title\": \"⏪ Rollback ${{ inputs.environment }} → v${VER} — $STATUS\",
+              \"title\": \"Rollback ${ENV} → ${VER} — $STATUS\",
               \"color\": $COLOR,
               \"fields\": [
-                {\"name\": \"By\", \"value\": \"${{ github.actor }}\", \"inline\": true}
+                {\"name\": \"Version\", \"value\": \"\`$VER\`\", \"inline\": true},
+                {\"name\": \"Environment\", \"value\": \"$ENV\", \"inline\": true},
+                {\"name\": \"By\", \"value\": \"${{ github.actor }}\", \"inline\": true},
+                {\"name\": \"Logs\", \"value\": \"[Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}
               ]
             }]
           }" "$DISCORD_WEBHOOK_URL" || true
