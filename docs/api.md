@@ -203,6 +203,7 @@ Domyślnie każdy endpoint wymaga tokena, wyjątki wylicza sekcja `Uwierzytelnia
 |---|---|---|
 | `POST /tickets` | działa | zgłoszenie z widgetu, zwraca `uploadToken`, patrz niżej |
 | `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtry składane, szukanie, paginacja kursorowa |
+| `GET /projects/{projectId}/pages` | działa | strony projektu z licznikami zgłoszeń per status, do drzewa w panelu |
 | `GET /projects/{projectId}/analytics` | działa | analityka projektu w zakresie 7d, 30d, 90d albo all |
 | `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
 | `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken`, tombstone daje 409 |
@@ -444,6 +445,26 @@ Rzeczy, których nie widać z sygnatury endpointu:
 
 Paginacja komentarzy została przy numerach stron. Lista komentarzy jednego zgłoszenia jest krótka i nie ma nad nią kanału live, więc kursor niczego by tam nie kupił.
 
+### GET /projects/{projectId}/pages
+
+Strony projektu z licznikami zgłoszeń, pod drzewo w panelu. Dostępne dla każdego zalogowanego, tak samo jak lista.
+
+```json
+{
+  "items": [
+    { "page": "sklep.example/koszyk", "total": 2479, "new": 392, "inProgress": 411, "resolved": 1349, "rejected": 327 }
+  ]
+}
+```
+
+`limit` domyślnie 200 i jest przycinany do 1000. Kolejność idzie po liczbie zgłoszeń malejąco, a przy równej liczbie po adresie, żeby wynik był powtarzalny.
+
+Grupowanie nie normalizuje niczego w locie. `page` jest wyliczane przy przyjęciu zgłoszenia przez te same reguły co w analityce, więc `?utm=...` i `#fragment` są ucięte na długo przed agregacją. Filtr `page` na liście przechodzi tę samą normalizację, więc wartość z tej odpowiedzi wkleja się wprost w adres listy.
+
+Skasowane zgłoszenia nie wchodzą. Tombstone traci adres razem z opisem, więc wpadłyby wszystkie do jednej grupy z pustym `page`, a ta jest odfiltrowana.
+
+Nie ma tu paginacji kursorowej. Liczba różnych stron jednego projektu jest rzędu dziesiątek, a nie dziesiątek tysięcy, więc `limit` wystarcza.
+
 ### GET /projects/{projectId}/analytics
 
 Analityka projektu dla panelu, dostępna dla każdego zalogowanego tak samo jak lista zgłoszeń.
@@ -468,6 +489,8 @@ Definicje, które nie wynikają z nazw:
 - strona to adres bez schematu, zapytania i fragmentu, małymi literami, liczony przy przyjęciu z adresu po sanityzacji. Starsze zgłoszenia uzupełniła migracja tymi samymi regułami
 
 Metryki liczą się zapytaniami SQL na indeksie `tickets(project_id, received_at)` i indeksach historii, komentarzy i załączników. Kolumna `page` nie ma indeksu, bo adres do 2048 znaków może nie zmieścić się w limicie wiersza indeksu btree.
+
+Pomiar na 10 000 zgłoszeniach z `make seed SEED_COUNT=10000` mówi, że indeks i tak nic by nie kupił. `GET /pages` schodzi w 6 ms na ciepło i 23 ms na zimno, a plan to `Seq Scan` plus `HashAggregate` w 4 ms. Grupowanie czyta prawie wszystkie wiersze projektu, więc planista wybrałby skan sekwencyjny nawet mając indeks. Filtr `page` na liście mieści się w 14 ms. Dopiero rzędy wielkości wyżej warto wrócić do tematu, i wtedy raczej indeksem po `md5(page)` niż po samej kolumnie.
 
 ## Kanał live
 

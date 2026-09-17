@@ -85,3 +85,14 @@ public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int Pa
 // nextCursor puste oznacza koniec listy
 // total wypelnia sie tylko na zadanie i tylko na pierwszej stronie
 public record CursorPage<T>(IReadOnlyList<T> Items, string? NextCursor, int? Total = null);
+
+// liczniki per status zeby sidebar nie musial dopytywac o kazda strone osobno
+public record ProjectPageCount(
+    string Page,
+    int Total,
+    int New,
+    int InProgress,
+    int Resolved,
+    int Rejected);
+
+public record ProjectPagesResponse(IReadOnlyList<ProjectPageCount> Items);
