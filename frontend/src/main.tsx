@@ -4,8 +4,6 @@ import { BrowserRouter } from 'react-router'
 import { AuthProvider } from './auth/AuthProvider'
 import { ThemeProvider } from './theme/ThemeProvider'
 import './index.css'
-// style sprzed przebudowy, znikaja widok po widoku
-import './legacy.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(

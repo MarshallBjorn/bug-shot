@@ -1,4 +1,8 @@
 import { useState } from 'react'
+import { Bug } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import type { FormEvent } from 'react'
 import { Navigate, useLocation } from 'react-router'
 import { useAuth } from '../auth/AuthContext'
@@ -40,38 +44,55 @@ function LoginPage() {
   }
 
   return (
-    <form className="login" onSubmit={submit}>
-      <h1>Bug-shot</h1>
+    <div className="flex min-h-svh items-center justify-center px-4 py-12">
+      <form
+        className="w-full max-w-sm space-y-4 rounded-lg border bg-card p-6"
+        onSubmit={submit}
+      >
+        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <Bug aria-hidden="true" className="size-5 text-primary" />
+          Bug-shot
+        </h1>
 
-      <label>
-        <span>E-mail</span>
-        <input
-          autoComplete="username"
-          autoFocus
-          onChange={(event) => setEmail(event.target.value)}
-          required
-          type="email"
-          value={email}
-        />
-      </label>
+        <div className="space-y-1.5">
+          <Label htmlFor="login-email">E-mail</Label>
+          <Input
+            id="login-email"
+            autoComplete="username"
+            autoFocus
+            onChange={(event) => setEmail(event.target.value)}
+            required
+            type="email"
+            value={email}
+          />
+        </div>
 
-      <label>
-        <span>Hasło</span>
-        <input
-          autoComplete="current-password"
-          onChange={(event) => setPassword(event.target.value)}
-          required
-          type="password"
-          value={password}
-        />
-      </label>
+        <div className="space-y-1.5">
+          <Label htmlFor="login-password">Hasło</Label>
+          <Input
+            id="login-password"
+            autoComplete="current-password"
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            type="password"
+            value={password}
+          />
+        </div>
 
-      {error && <p role="alert">{error}</p>}
+        {error && (
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {error}
+          </p>
+        )}
 
-      <button disabled={sending} type="submit">
-        {sending ? 'Logowanie...' : 'Zaloguj'}
-      </button>
-    </form>
+        <Button className="w-full" disabled={sending} type="submit">
+          {sending ? 'Logowanie...' : 'Zaloguj'}
+        </Button>
+      </form>
+    </div>
   )
 }
 

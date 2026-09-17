@@ -169,38 +169,51 @@ describe('AdminProjectsPage', () => {
   })
 
   it('zmienia nazwe projektu', async () => {
-    vi.spyOn(window, 'prompt').mockReturnValueOnce('Acme Renamed')
-
     render(<AdminProjectsPage />)
     await screen.findByText('Acme')
 
     fireEvent.click(screen.getByRole('button', { name: 'Zmień nazwę projektu Acme' }))
 
+    // pole wchodzi z obecna nazwa, wiec zmiana jest poprawka a nie pisaniem od zera
+    const field = screen.getByLabelText('Nazwa', { selector: '#prompt-value' })
+    expect(field).toHaveProperty('value', 'Acme')
+
+    fireEvent.change(field, { target: { value: 'Acme Renamed' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Zmień nazwę' }))
+
     await vi.waitFor(() => {
-      expect(mockedRenameProject).toHaveBeenCalledWith(
-        'p1',
-        'Acme Renamed',
-      )
+      expect(mockedRenameProject).toHaveBeenCalledWith('p1', 'Acme Renamed')
     })
   })
 
-  it('dodaje i usuwa origin', async () => {
-    vi.spyOn(window, 'prompt')
-      .mockReturnValueOnce('https://new.example')
+  it('ta sama nazwa nie idzie do API', async () => {
+    render(<AdminProjectsPage />)
+    await screen.findByText('Acme')
 
+    fireEvent.click(screen.getByRole('button', { name: 'Zmień nazwę projektu Acme' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zmień nazwę' }))
+
+    await vi.waitFor(() => {
+      expect(screen.queryByLabelText('Nazwa', { selector: '#prompt-value' })).toBeNull()
+    })
+
+    expect(mockedRenameProject).not.toHaveBeenCalled()
+  })
+
+  it('dodaje i usuwa origin', async () => {
     render(<AdminProjectsPage />)
     await screen.findByText('Acme')
 
     fireEvent.click(screen.getByRole('button', { name: 'Dodaj origin do projektu Acme' }))
 
-    await vi.waitFor(() => {
-      expect(mockedAddProjectOrigin).toHaveBeenCalledWith(
-        'p1',
-        'https://new.example',
-      )
+    fireEvent.change(screen.getByLabelText('Origin'), {
+      target: { value: 'https://new.example' },
     })
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj' }))
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await vi.waitFor(() => {
+      expect(mockedAddProjectOrigin).toHaveBeenCalledWith('p1', 'https://new.example')
+    })
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Usuń origin https://acme.example' }),
@@ -212,14 +225,11 @@ describe('AdminProjectsPage', () => {
   })
 
   it('usuwa projekt po potwierdzeniu', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
-
     render(<AdminProjectsPage />)
     await screen.findByText('Acme')
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Usuń projekt Acme' }),
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń projekt Acme' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń projekt' }))
 
     await vi.waitFor(() => {
       expect(mockedDeleteProject).toHaveBeenCalledWith('p1')

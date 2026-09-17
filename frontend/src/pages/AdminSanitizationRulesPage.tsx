@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
+import ConfirmDialog from '../components/ConfirmDialog'
+import SanitizationRuleDialog from '../components/SanitizationRuleDialog'
 import { getProjects } from '../api/projects'
 import {
   createSanitizationRule,
@@ -36,6 +38,9 @@ function AdminSanitizationRulesPage() {
   const [sampleText, setSampleText] = useState('')
   const [testResult, setTestResult] = useState<SanitizationRuleTestResult | null>(null)
   const [testError, setTestError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [editing, setEditing] = useState<SanitizationRule | null>(null)
+  const [removing, setRemoving] = useState<SanitizationRule | null>(null)
   const [testing, setTesting] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -106,56 +111,69 @@ function AdminSanitizationRulesPage() {
     }
   }
 
-  async function handleToggle(rule: SanitizationRule) {
+  // bledy akcji ida do komunikatu na stronie, bo window.alert blokuje karte i mija czytnik ekranu
+  async function run(action: () => Promise<void>) {
+    setActionError(null)
+
     try {
+      await action()
+    } catch (cause) {
+      setActionError((cause as Error).message)
+    }
+  }
+
+  async function handleToggle(rule: SanitizationRule) {
+    await run(async () => {
       const updated = await setSanitizationRuleEnabled(rule.id, !rule.isEnabled)
       setAnswer((current) => ({
         ...current,
         rules: current.rules.map((r) => (r.id === rule.id ? updated : r)),
       }))
-    } catch (cause) {
-      window.alert((cause as Error).message)
-    }
+    })
   }
 
-  async function handleEdit(rule: SanitizationRule) {
-    const nextPattern = window.prompt('Wzorzec (wyrażenie regularne)', rule.pattern)
-    if (nextPattern === null || !nextPattern.trim()) return
+  async function confirmEdit(pattern: string, replacement: string) {
+    const rule = editing
 
-    const nextReplacement = window.prompt('Zamiennik', rule.replacement)
-    if (nextReplacement === null) return
+    if (!rule) return
 
-    try {
-      const updated = await updateSanitizationRule(rule.id, nextPattern, nextReplacement)
+    setEditing(null)
+
+    await run(async () => {
+      const updated = await updateSanitizationRule(rule.id, pattern, replacement)
       setAnswer((current) => ({
         ...current,
         rules: current.rules.map((r) => (r.id === rule.id ? updated : r)),
       }))
-    } catch (cause) {
-      window.alert((cause as Error).message)
-    }
+    })
   }
 
-  async function handleDelete(rule: SanitizationRule) {
-    const confirmed = window.confirm(`Czy na pewno chcesz usunąć regułę "${rule.pattern}"?`)
-    if (!confirmed) return
+  async function confirmDelete() {
+    const rule = removing
 
-    try {
+    if (!rule) return
+
+    setRemoving(null)
+
+    await run(async () => {
       await deleteSanitizationRule(rule.id)
       setAnswer((current) => ({ ...current, rules: current.rules.filter((r) => r.id !== rule.id) }))
-    } catch (cause) {
-      window.alert((cause as Error).message)
-    }
+    })
   }
 
   return (
-    <>
-      <div className="list-heading">
-        <h2>Reguły sanityzacji</h2>
-        <Link to="/admin/projects">Zarządzanie projektami</Link>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-xl font-semibold tracking-tight">Reguły sanityzacji</h2>
+        <Link
+          to="/admin/projects"
+          className="ml-auto text-sm text-muted-foreground hover:text-foreground"
+        >
+          Zarządzanie projektami
+        </Link>
       </div>
 
-      <form className="admin-form" onSubmit={handleTest}>
+      <form className="space-y-3 rounded-lg border bg-card p-4" onSubmit={handleTest}>
         <label>
           <span>Zakres</span>
           <select value={scopeProjectId} onChange={(event) => setScopeProjectId(event.target.value)}>
@@ -196,7 +214,7 @@ function AdminSanitizationRulesPage() {
           />
         </label>
 
-        <div className="admin-form-actions">
+        <div className="flex flex-wrap items-center gap-2">
           <button type="submit" disabled={testing || creating || !pattern.trim()}>
             {testing ? 'Testowanie...' : 'Testuj na tekście'}
           </button>
@@ -214,14 +232,14 @@ function AdminSanitizationRulesPage() {
         {createError && <span role="alert">{createError}</span>}
 
         {testResult && (
-          <p className="admin-test-result">
+          <p className="rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all">
             Wynik: <strong>{testResult.result || '(pusty tekst)'}</strong>, dopasowań:{' '}
             {testResult.matchCount}
           </p>
         )}
       </form>
 
-      <label className="admin-filter">
+      <label className="flex flex-wrap items-center gap-2 text-sm">
         <span>Pokaż reguły dla projektu</span>
         <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
           <option value="">Wszystkie</option>
@@ -233,14 +251,30 @@ function AdminSanitizationRulesPage() {
         </select>
       </label>
 
-      {error && <p role="alert">Nie udało się pobrać reguł. {error}</p>}
+      {error && (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          Nie udało się pobrać reguł. {error}
+        </p>
+      )}
+
+      {actionError && (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {actionError}
+        </p>
+      )}
 
       {loading ? (
         <p>Ładowanie...</p>
       ) : rules.length === 0 ? (
         <p>Brak reguł.</p>
       ) : (
-        <table className="admin-rule-table">
+        <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
               <th>Zakres</th>
@@ -267,10 +301,10 @@ function AdminSanitizationRulesPage() {
                   />
                 </td>
                 <td>
-                  <button type="button" onClick={() => handleEdit(rule)}>
+                  <button type="button" onClick={() => setEditing(rule)}>
                     Edytuj
                   </button>
-                  <button type="button" onClick={() => handleDelete(rule)}>
+                  <button type="button" onClick={() => setRemoving(rule)}>
                     Usuń
                   </button>
                 </td>
@@ -279,7 +313,27 @@ function AdminSanitizationRulesPage() {
           </tbody>
         </table>
       )}
-    </>
+      <SanitizationRuleDialog
+        rule={editing}
+        onCancel={() => setEditing(null)}
+        onConfirm={confirmEdit}
+      />
+
+      <ConfirmDialog
+        request={
+          removing
+            ? {
+                title: 'Usunąć tę regułę?',
+                description: `Wzorzec ${removing.pattern} przestanie maskować dane w nowych zgłoszeniach. Już zapisane zgłoszenia zostają bez zmian.`,
+                confirmLabel: 'Usuń regułę',
+                destructive: true,
+              }
+            : null
+        }
+        onCancel={() => setRemoving(null)}
+        onConfirm={confirmDelete}
+      />
+    </div>
   )
 }
 

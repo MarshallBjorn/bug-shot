@@ -44,19 +44,31 @@ function HomePage() {
   }
 
   return (
-    <>
-      <div className="list-heading">
-        <h2>Projekty</h2>
-        {user?.isAdmin && <Link to="/admin/projects">Zarządzaj projektami</Link>}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-xl font-semibold tracking-tight">Projekty</h2>
+        {user?.isAdmin && (
+          <Link
+            to="/admin/projects"
+            className="ml-auto text-sm text-muted-foreground hover:text-foreground"
+          >
+            Zarządzaj projektami
+          </Link>
+        )}
       </div>
-      <ul className="admin-project-list">
+      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {projects.map((project) => (
           <li key={project.id}>
-            <Link to={`/projects/${project.id}/tickets`}>{project.name}</Link>
+            <Link
+              to={`/projects/${project.id}/tickets`}
+              className="block rounded-lg border bg-card px-4 py-3 font-medium transition-colors hover:bg-accent"
+            >
+              {project.name}
+            </Link>
           </li>
         ))}
       </ul>
-    </>
+    </div>
   )
 }
 

@@ -28,10 +28,19 @@ function AttachmentDownload({ attachment, label }: AttachmentDownloadProps) {
 
   return (
     <>
-      <button className="attachment-download" disabled={pending} onClick={save} type="button">
+      <button
+        className="break-all text-primary underline-offset-2 hover:underline disabled:opacity-60"
+        disabled={pending}
+        onClick={save}
+        type="button"
+      >
         {pending ? 'Pobieranie...' : label}
       </button>
-      {failed && <span role="alert">Nie udało się pobrać.</span>}
+      {failed && (
+        <span role="alert" className="text-destructive">
+          Nie udało się pobrać.
+        </span>
+      )}
     </>
   )
 }
