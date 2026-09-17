@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { addTicketComment, deleteTicket, getTicketComments, updateTicketStatus } from '../api/tickets'
@@ -48,6 +48,7 @@ function TicketDetailsPage() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [logLevel, setLogLevel] = useState<LogLevel | null>(null)
   const [logOpen, setLogOpen] = useState(false)
+  const [railOpen, setRailOpen] = useState(true)
 
   const author = user?.email ?? 'dashboard'
 
@@ -220,10 +221,36 @@ function TicketDetailsPage() {
 
       <div className="space-y-2">
         {backLink}
-        <h2 className="text-xl font-semibold tracking-tight break-words">{ticket.description}</h2>
+        <div className="flex items-start gap-3">
+          <h2 className="min-w-0 flex-1 text-xl font-semibold tracking-tight break-words">
+            {ticket.description}
+          </h2>
+          {/* szpalta meta zwija sie, bo przy czytaniu logu liczy sie szerokosc glownej kolumny */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-expanded={railOpen}
+            className="hidden shrink-0 lg:inline-flex"
+            onClick={() => setRailOpen((previous) => !previous)}
+          >
+            {railOpen ? (
+              <PanelRightClose aria-hidden="true" />
+            ) : (
+              <PanelRightOpen aria-hidden="true" />
+            )}
+            {railOpen ? 'Zwiń szczegóły' : 'Rozwiń szczegóły'}
+          </Button>
+        </div>
       </div>
 
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-6">
+      <div
+        className={
+          railOpen
+            ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-6'
+            : 'lg:grid lg:grid-cols-[minmax(0,1fr)] lg:gap-6'
+        }
+      >
         <div className="min-w-0 space-y-5">
           <section aria-label="Przegląd zgłoszenia" className="space-y-3">
             <div className="grid grid-cols-1 divide-y overflow-hidden rounded-lg border bg-card sm:grid-cols-2 sm:divide-x lg:grid-cols-4 lg:divide-y-0">
@@ -306,7 +333,7 @@ function TicketDetailsPage() {
           </section>
         </div>
 
-        <aside className="mt-5 space-y-5 lg:mt-0">
+        <aside className={railOpen ? 'mt-5 space-y-5 lg:mt-0' : 'mt-5 space-y-5 lg:hidden'}>
           <section aria-label="Status" className="space-y-2">
             <h3 className="text-xs font-medium text-muted-foreground">Status</h3>
             <TicketStatusControl

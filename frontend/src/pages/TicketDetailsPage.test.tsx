@@ -382,6 +382,26 @@ describe('TicketDetailsPage', () => {
 
     expect(mockedDelete).not.toHaveBeenCalled()
   })
+
+  // AC mowi o rozsuwanej szpalcie, wiec zwijanie jest czescia kontraktu widoku
+  it('szpalta szczegolow zwija sie i wraca', () => {
+    render(<TicketDetailsPage />)
+
+    const toggle = screen.getByRole('button', { name: 'Zwiń szczegóły' })
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('region', { name: 'Status' })).toBeDefined()
+
+    fireEvent.click(toggle)
+
+    const back = screen.getByRole('button', { name: 'Rozwiń szczegóły' })
+
+    expect(back.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(back)
+
+    expect(screen.getByRole('button', { name: 'Zwiń szczegóły' })).toBeDefined()
+  })
 })
 
 
