@@ -1,7 +1,9 @@
 name: deploy-staging
 
 on:
-  push:
+  workflow_run:
+    workflows: [backend, frontend]
+    types: [completed]
     branches: [main]
 
 concurrency:
@@ -15,12 +17,20 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
     timeout-minutes: 10
     environment: staging
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./.github/actions/wg-connect
+      - name: Resolve image tag
+        id: tag
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "tag=${SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "Image tag: ${SHA::7}"
+
+      - uses: ./.github/actions/wg_connect
         with:
           wg_private_key:     ${{ secrets.WG_PRIVATE_KEY }}
           wg_endpoint:        ${{ secrets.WG_ENDPOINT }}
@@ -29,26 +39,23 @@ jobs:
           vps_address:        ${{ secrets.WG_VPS_ADDRESS }}
           deploy_ssh_key:     ${{ secrets.DEPLOY_SSH_KEY }}
 
-      - name: Wait for images in GHCR
+      - name: Verify images exist
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          TAG="${GITHUB_SHA::7}"
+          TAG="${{ steps.tag.outputs.tag }}"
 
           for svc in backend frontend; do
             IMAGE="ghcr.io/${OWNER}/bugshot-${svc}:${TAG}"
-            echo "Waiting for $IMAGE..."
-            for i in $(seq 1 40); do
-              docker manifest inspect "$IMAGE" > /dev/null 2>&1 && break
-              [ "$i" -eq 40 ] && { echo "Timeout: $IMAGE"; exit 1; }
-              sleep 15
-            done
-            echo "✓ $IMAGE ready"
+            echo "Checking $IMAGE..."
+            docker manifest inspect "$IMAGE" > /dev/null 2>&1 || \
+              { echo "Not found: $IMAGE"; exit 1; }
+            echo "✓ $IMAGE"
           done
 
       - name: Deploy
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          TAG="${GITHUB_SHA::7}"
+          TAG="${{ steps.tag.outputs.tag }}"
 
           ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_TAG="$TAG" bash << 'REMOTE'
           set -euo pipefail
@@ -103,7 +110,7 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           STATUS="${{ job.status }}"
-          TAG="${GITHUB_SHA::7}"
+          TAG="${{ steps.tag.outputs.tag }}"
           [ "$STATUS" = "success" ] && COLOR=3066993 || COLOR=15158332
 
           curl -sS -H "Content-Type: application/json" -d "{
