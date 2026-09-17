@@ -65,7 +65,7 @@ function TicketTable({
                 <StatusBadge status={ticket.status} />
               </td>
 
-              <td className="w-[45%] py-2.5 pr-3 align-top">
+              <td className="w-full py-2.5 pr-3 align-top sm:w-[45%]">
                 <Link
                   ref={(node) => {
                     links.current[index] = node
@@ -76,9 +76,14 @@ function TicketTable({
                 >
                   {ticket.description}
                 </Link>
+
+                <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground sm:hidden">
+                  <span className="font-mono">{ticket.page || ticket.pageUrl}</span>
+                  <time dateTime={reported}>{formatRelativeTime(reported)}</time>
+                </span>
               </td>
 
-              <td className="w-[30%] max-w-0 py-2.5 pr-3 align-top">
+              <td className="hidden w-[30%] max-w-0 py-2.5 pr-3 align-top sm:table-cell">
                 <span
                   title={ticket.pageUrl}
                   className="block truncate font-mono text-xs text-muted-foreground"
@@ -107,7 +112,7 @@ function TicketTable({
                 </span>
               </td>
 
-              <td className="py-2.5 pr-3 align-top text-xs whitespace-nowrap text-muted-foreground">
+              <td className="hidden py-2.5 pr-3 align-top text-xs whitespace-nowrap text-muted-foreground sm:table-cell">
                 <time dateTime={reported} title={formatDateTime(reported)}>
                   {formatRelativeTime(reported)}
                 </time>

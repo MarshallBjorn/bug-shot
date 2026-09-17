@@ -39,14 +39,18 @@ function AppLayout() {
           </SheetContent>
         </Sheet>
 
-        <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
+        <Link
+          to="/"
+          className="flex shrink-0 items-center gap-2 font-semibold tracking-tight whitespace-nowrap"
+        >
           <Bug aria-hidden="true" className="size-4 text-primary" />
           Bug-shot
         </Link>
 
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
-          <span className="max-w-[14ch] truncate text-sm text-muted-foreground sm:max-w-none">
+          {/* na waskim ekranie adres konta ustepuje miejsca przyciskowi wylogowania */}
+          <span className="hidden truncate text-sm text-muted-foreground sm:inline">
             {user?.email}
           </span>
           <Button type="button" variant="outline" size="sm" onClick={leave}>
