@@ -252,4 +252,11 @@ describe('blok logu konsoli', () => {
 
     expect(screen.getByText('Pobieranie logu konsoli...')).toBeDefined()
   })
+
+  // plik moze byc, a i tak nie miec ani jednego wpisu w formacie widgetu
+  it('log nie do sparsowania mowi o tym zamiast pustego kadru', () => {
+    render(<OverviewLogs text="cokolwiek bez naglowka" loading={false} onOpen={vi.fn()} />)
+
+    expect(screen.getByText(/Log konsoli ma nieznany format/)).toBeDefined()
+  })
 })

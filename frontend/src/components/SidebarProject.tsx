@@ -58,7 +58,7 @@ function SidebarProject({ projectId, onNavigate }: SidebarProjectProps) {
       {saved.length > 0 && (
         <div className="space-y-1">
           <p className="px-2 text-xs font-medium text-muted-foreground">Zapisane filtry</p>
-          <ul className="space-y-0.5">
+          <ul aria-label="Zapisane filtry" className="space-y-0.5">
             {saved.map((filter) => (
               <li key={filter.name} className="flex items-center gap-0.5">
                 <button

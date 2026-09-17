@@ -35,6 +35,17 @@ function OverviewLogs({ text, loading, onOpen }: OverviewLogsProps) {
   }
 
   const entries = parseConsoleLog(text)
+
+  // plik jest, ale nie ma w nim ani jednego wpisu w formacie widgetu
+  if (entries.length === 0) {
+    return (
+      <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-card px-4 text-center text-sm text-muted-foreground">
+        <Terminal aria-hidden="true" className="size-5" />
+        Log konsoli ma nieznany format i nie da się go rozłożyć na wpisy.
+      </div>
+    )
+  }
+
   const counts = countByLevel(entries)
   // bledy ida pierwsze bo po nie sie tu wchodzi, ale kadr dopelniamy reszta zeby nie zostawal pusty
   const errors = entries.filter((entry) => entry.level === 'ERROR')

@@ -27,9 +27,10 @@ export async function fillLoginForm(page: Page, password: string = admin.passwor
 }
 
 // czekanie na naglowek jest konieczne bo bez niego kolejna nawigacja moze wyprzedzic ustawienie cookie
+// adres konta szukamy w topbarze, bo na detalu pojawia sie tez w etykiecie formularza komentarza
 export async function signIn(page: Page) {
   await fillLoginForm(page)
-  await expect(page.getByText(admin.email)).toBeVisible()
+  await expect(page.getByRole('banner').getByText(admin.email)).toBeVisible()
 }
 
 export async function openSignedIn(page: Page, path: string) {
@@ -95,7 +96,14 @@ export async function reportFromWidget(request: APIRequestContext, description: 
       consoleLog: {
         name: 'konsola.txt',
         mimeType: 'text/plain',
-        buffer: Buffer.from('[error] koszyk nie przelicza rabatu\n'),
+        // ten sam format co formatDiagnosticEntry w widget/widget.js, inaczej panel nie ma czego sparsowac
+        buffer: Buffer.from(
+          [
+            '[2026-09-17T10:00:00.000Z] ERROR console.error: koszyk nie przelicza rabatu',
+            '[2026-09-17T10:00:05.000Z] WARN console.warn: brak ceny w odpowiedzi /api/cart',
+            '',
+          ].join('\n'),
+        ),
       },
     },
   })
