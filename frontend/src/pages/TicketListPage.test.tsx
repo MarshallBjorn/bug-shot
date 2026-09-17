@@ -38,7 +38,7 @@ vi.mock('../components/TicketFilters', () => ({
   }) => (
     <button
       type="button"
-      onClick={() => onChange({ status: 'Resolved' })}
+      onClick={() => onChange({ statuses: ['Resolved'] })}
     >
       Mock filtr
     </button>
@@ -108,10 +108,16 @@ function ticket(id: string) {
     id,
     description: `Ticket ${id}`,
     pageUrl: 'https://example.test',
+    page: 'example.test',
+    browserName: 'Chrome',
+    osName: 'Windows',
+    deviceType: 'desktop',
     status: 'New' as const,
     reportedAt: null,
     receivedAt: '2026-09-14T10:00:00+00:00',
     updatedAt: '2026-09-14T10:00:00+00:00',
+    commentCount: 0,
+    hasScreenshot: false,
   }
 }
 
@@ -153,7 +159,7 @@ describe('TicketListPage', () => {
 
     render(<TicketListPage />)
 
-    expect(screen.getByText('Ładowanie...')).toBeDefined()
+    expect(screen.getByText('Ładowanie zgłoszeń')).toBeDefined()
     expect(screen.queryByTestId('ticket-table')).toBeNull()
   })
 
@@ -251,16 +257,6 @@ describe('TicketListPage', () => {
     })
 
     expect(screen.getByRole('status').textContent).toBe('Kanał live aktywny')
-  })
-
-  it('prowadzi do analityki projektu', () => {
-    tickets.mockReturnValue(result())
-
-    render(<TicketListPage />)
-
-    expect(
-      screen.getByRole('link', { name: 'Analityka' }).getAttribute('href'),
-    ).toBe('/projects/project-1/analytics')
   })
 
   it('oznacza tabele jako stale podczas odswiezania wyniku', () => {

@@ -4,10 +4,17 @@ export interface TicketListItem {
   id: string
   description: string
   pageUrl: string
+  // page to adres znormalizowany po ktorym idzie grupowanie a pageUrl zostaje do pokazania
+  page: string
+  browserName: string
+  osName: string
+  deviceType: string
   status: TicketStatus
   reportedAt: string | null
   receivedAt: string
   updatedAt: string
+  commentCount: number
+  hasScreenshot: boolean
 }
 
 export type AttachmentKind = 'Screenshot' | 'UserUpload' | 'ConsoleLog'
@@ -27,13 +34,26 @@ export interface TicketStatusChange {
   changedAt: string
 }
 
+export interface TicketClientEnvironment {
+  browserName: string
+  osName: string
+  deviceType: string
+  viewportWidth: number | null
+  viewportHeight: number | null
+  devicePixelRatio: number | null
+  language: string | null
+  timeZone: string | null
+}
+
 export interface TicketDetails {
   id: string
   projectId: string
   projectKey: string
   description: string
   pageUrl: string
+  page: string
   userAgent: string
+  environment: TicketClientEnvironment
   status: TicketStatus
   reportedAt: string | null
   receivedAt: string
@@ -44,6 +64,8 @@ export interface TicketDetails {
   consoleLog: TicketAttachment | null
   commentCount: number
   statusHistory: TicketStatusChange[]
+  // mapa przejsc przylozona do stanu na serwerze, wiec panel nie zgaduje czym moze ruszyc
+  allowedStatuses: TicketStatus[]
 }
 
 export interface TicketComment {
@@ -51,6 +73,15 @@ export interface TicketComment {
   author: string
   body: string
   createdAt: string
+}
+
+export interface ProjectPageCount {
+  page: string
+  total: number
+  new: number
+  inProgress: number
+  resolved: number
+  rejected: number
 }
 
 export interface PagedResult<T> {

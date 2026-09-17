@@ -3,6 +3,13 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import AppSidebar from './AppSidebar'
 
+// sekcja stron chodzi po API i po adresie wiec w testach powloki jest zamockowana
+vi.mock('./SidebarProject', () => ({
+  default: ({ projectId }: { projectId: string }) => (
+    <div data-testid="sidebar-project">{projectId}</div>
+  ),
+}))
+
 vi.mock('react-router', () => ({
   NavLink: ({
     to,

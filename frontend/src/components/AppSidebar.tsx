@@ -1,6 +1,7 @@
 import { ChartColumn, Inbox, ShieldCheck, SlidersHorizontal } from 'lucide-react'
 import { NavLink } from 'react-router'
 import type { ReactNode } from 'react'
+import SidebarProject from './SidebarProject'
 
 interface AppSidebarProps {
   projectId: string
@@ -63,6 +64,8 @@ function AppSidebar({ projectId, isAdmin, onNavigate }: AppSidebarProps) {
           </Item>
         </Section>
       )}
+
+      {projectId && <SidebarProject projectId={projectId} onNavigate={onNavigate} />}
 
       {isAdmin && (
         <Section label="Administracja">

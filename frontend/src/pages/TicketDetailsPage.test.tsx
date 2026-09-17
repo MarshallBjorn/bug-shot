@@ -10,6 +10,7 @@ import {
   updateTicketStatus,
 } from '../api/tickets'
 import { ApiError } from '../api/client'
+import type { TicketStatus } from '../types'
 
 const navigate = vi.fn()
 const reload = vi.fn()
@@ -103,7 +104,19 @@ const ticket = {
   projectKey: 'ACME',
   description: 'Koszyk gubi produkty',
   pageUrl: 'https://acme.example/cart',
+  page: 'acme.example/cart',
   userAgent: 'Mozilla/Test',
+  environment: {
+    browserName: 'Chrome',
+    osName: 'Windows',
+    deviceType: 'desktop',
+    viewportWidth: 1536,
+    viewportHeight: 730,
+    devicePixelRatio: 1.25,
+    language: 'pl-PL',
+    timeZone: 'Europe/Warsaw',
+  },
+  allowedStatuses: ['InProgress', 'Rejected'] as TicketStatus[],
   status: 'New' as const,
   reportedAt: '2026-09-14T10:00:00Z',
   receivedAt: '2026-09-14T10:01:00Z',

@@ -7,11 +7,12 @@ import {
   parseTicketQuery,
   ticketQueryToParams,
   type TicketQuery,
+  emptyQuery,
 } from './ticketQuery'
 import type { TicketListItem } from './types'
 
 const base: TicketQuery = {
-  status: null,
+  ...emptyQuery,
   search: '',
   sort: 'receivedAt:desc',
   limit: defaultLimit,
@@ -22,10 +23,16 @@ function ticket(patch: Partial<TicketListItem> = {}): TicketListItem {
     id: 't1',
     description: 'Koszyk gubi produkty',
     pageUrl: 'https://acme.example/cart',
+    page: 'acme.example/cart',
+    browserName: 'Chrome',
+    osName: 'Windows',
+    deviceType: 'desktop',
     status: 'New',
     reportedAt: null,
     receivedAt: '2026-09-09T10:00:00+00:00',
     updatedAt: '2026-09-09T10:00:00+00:00',
+    commentCount: 0,
+    hasScreenshot: false,
     ...patch,
   }
 }
@@ -37,7 +44,8 @@ describe('parametry listy', () => {
     )
 
     expect(query).toEqual({
-      status: 'Resolved',
+      ...emptyQuery,
+      statuses: ['Resolved'],
       search: 'koszyk',
       sort: 'reportedAt:asc',
       limit: 50,
@@ -63,7 +71,7 @@ describe('parametry listy', () => {
   it('nieznany status i sortowanie wracaja do domyslnych', () => {
     const query = parseTicketQuery(new URLSearchParams('status=Nieznany&sort=cokolwiek'))
 
-    expect(query.status).toBeNull()
+    expect(query.statuses).toEqual([])
     expect(query.sort).toBe('receivedAt:desc')
   })
 
@@ -75,7 +83,8 @@ describe('parametry listy', () => {
   it('serializuje wszystkie niestandardowe wartosci', () => {
     expect(
       ticketQueryToParams({
-        status: 'Resolved',
+        ...emptyQuery,
+        statuses: ['Resolved'],
         search: 'login bug',
         sort: 'reportedAt:asc',
         limit: 50,
@@ -96,7 +105,7 @@ describe('dopasowanie zgloszenia do filtra', () => {
   })
 
   it('filtr statusu przepuszcza tylko swoj status', () => {
-    const query = { ...base, status: 'Resolved' as const }
+    const query = { ...base, statuses: ['Resolved' as const] }
 
     expect(matchesQuery(ticket({ status: 'Resolved' }), query)).toBe(true)
     expect(matchesQuery(ticket({ status: 'New' }), query)).toBe(false)
@@ -111,7 +120,7 @@ describe('dopasowanie zgloszenia do filtra', () => {
 
 describe('isFiltered', () => {
   it('rozpoznaje filtr statusu i wyszukiwania', () => {
-    expect(isFiltered({ ...base, status: 'Resolved' })).toBe(true)
+    expect(isFiltered({ ...base, statuses: ['Resolved'] })).toBe(true)
     expect(isFiltered({ ...base, search: 'bug' })).toBe(true)
   })
 

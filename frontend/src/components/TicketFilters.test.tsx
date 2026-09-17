@@ -1,10 +1,10 @@
 ﻿import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import TicketFilters from './TicketFilters'
-import type { TicketQuery } from '../ticketQuery'
+import { emptyQuery, type TicketQuery } from '../ticketQuery'
 
 const query: TicketQuery = {
-  status: null,
+  ...emptyQuery,
   search: '',
   sort: 'receivedAt:desc',
   limit: 20,
@@ -25,7 +25,8 @@ describe('TicketFilters', () => {
     )
 
     expect(screen.getByRole('searchbox', { name: 'Szukaj' })).toBeDefined()
-    expect(screen.getByRole('combobox', { name: 'Status' })).toBeDefined()
+    expect(screen.getByRole('button', { name: /Status/ })).toBeDefined()
+    expect(screen.getByRole('button', { name: /Więcej filtrów/ })).toBeDefined()
     expect(screen.getByRole('combobox', { name: 'Sortowanie' })).toBeDefined()
   })
 
@@ -60,25 +61,47 @@ describe('TicketFilters', () => {
     )
   })
 
-  it('wysyla zmiane statusu', () => {
+  // status jest wielokrotny wiec zaznaczenie dokłada wartosc a nie podmienia calego filtra
+  it('zaznaczenie statusu dokłada go do listy', () => {
     const onChange = vi.fn()
 
     render(
       <TicketFilters
-        query={query}
+        query={{ ...query, statuses: ['New'] }}
         onChange={onChange}
       />,
     )
 
-    fireEvent.change(
-      screen.getByRole('combobox', { name: 'Status' }),
-      {
-        target: { value: 'Resolved' },
-      },
+    fireEvent.click(screen.getByRole('button', { name: /Status/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Rozwiązane' }))
+
+    expect(onChange).toHaveBeenCalledWith({ statuses: ['New', 'Resolved'] })
+  })
+
+  it('odznaczenie statusu zdejmuje go z listy', () => {
+    const onChange = vi.fn()
+
+    render(
+      <TicketFilters
+        query={{ ...query, statuses: ['New', 'Resolved'] }}
+        onChange={onChange}
+      />,
     )
 
-    expect(onChange).toHaveBeenCalledWith({
-      status: 'Resolved',
-    })
+    fireEvent.click(screen.getByRole('button', { name: /Status/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Nowe' }))
+
+    expect(onChange).toHaveBeenCalledWith({ statuses: ['Resolved'] })
+  })
+
+  it('licznik na przycisku pokazuje ile statusow jest wybranych', () => {
+    render(
+      <TicketFilters
+        query={{ ...query, statuses: ['New', 'Resolved'] }}
+        onChange={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /Status\s*2/ })).toBeDefined()
   })
 })

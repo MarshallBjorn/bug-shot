@@ -1,4 +1,4 @@
-import { ticketQueryToParams, type TicketQuery } from '../ticketQuery'
+import { ticketQueryToApiParams, type TicketQuery } from '../ticketQuery'
 import type {
   CursorPage,
   PagedResult,
@@ -15,7 +15,7 @@ export function getTickets(
   cursor: string | null,
   signal?: AbortSignal,
 ) {
-  const params = ticketQueryToParams(query)
+  const params = ticketQueryToApiParams(query)
 
   if (cursor) {
     params.set('cursor', cursor)

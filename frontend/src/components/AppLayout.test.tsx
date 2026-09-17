@@ -12,6 +12,10 @@ vi.mock('../auth/AuthContext', () => ({
   useAuth: vi.fn(),
 }))
 
+vi.mock('./SidebarProject', () => ({
+  default: () => <div data-testid="sidebar-project" />,
+}))
+
 vi.mock('react-router', () => ({
   Link: ({ to, children }: { to: string; children: React.ReactNode }) => (
     <a href={to}>{children}</a>

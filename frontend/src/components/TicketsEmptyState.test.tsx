@@ -1,10 +1,10 @@
 ﻿import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import TicketsEmptyState from './TicketsEmptyState'
-import type { TicketQuery } from '../ticketQuery'
+import { clearedFilters, emptyQuery, type TicketQuery } from '../ticketQuery'
 
 const base: TicketQuery = {
-  status: null,
+  ...emptyQuery,
   search: '',
   sort: 'receivedAt:desc',
   limit: 20,
@@ -37,7 +37,7 @@ describe('TicketsEmptyState', () => {
 
     render(
       <TicketsEmptyState
-        query={{ ...base, status: 'Resolved', sort: 'reportedAt:asc' }}
+        query={{ ...base, statuses: ['Resolved'], sort: 'reportedAt:asc' }}
         onChange={onChange}
       />,
     )
@@ -46,7 +46,7 @@ describe('TicketsEmptyState', () => {
       screen.getByRole('button', { name: 'Wyczyść filtry' }),
     )
 
-    expect(onChange).toHaveBeenCalledWith({ status: null, search: '' })
+    expect(onChange).toHaveBeenCalledWith(clearedFilters)
   })
 
   it('pokazuje pusty projekt bez filtrow', () => {

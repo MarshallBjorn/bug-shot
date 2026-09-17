@@ -11,10 +11,16 @@ function ticket(
     id: 'ticket-1',
     description: 'Koszyk gubi produkty',
     pageUrl: 'https://acme.example/cart',
+    page: 'acme.example/cart',
+    browserName: 'Chrome',
+    osName: 'Windows',
+    deviceType: 'desktop',
     status: 'New',
     reportedAt: null,
     receivedAt: '2026-09-14T10:00:00+00:00',
     updatedAt: '2026-09-14T10:00:00+00:00',
+    commentCount: 0,
+    hasScreenshot: false,
     ...patch,
   }
 }
