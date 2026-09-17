@@ -202,7 +202,7 @@ Domyślnie każdy endpoint wymaga tokena, wyjątki wylicza sekcja `Uwierzytelnia
 | Endpoint | Stan | Opis |
 |---|---|---|
 | `POST /tickets` | działa | zgłoszenie z widgetu, zwraca `uploadToken`, patrz niżej |
-| `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtr po statusie, szukanie, paginacja kursorowa |
+| `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtry składane, szukanie, paginacja kursorowa |
 | `GET /projects/{projectId}/analytics` | działa | analityka projektu w zakresie 7d, 30d, 90d albo all |
 | `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
 | `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken`, tombstone daje 409 |
@@ -407,6 +407,28 @@ Kursor jest nieprzezroczysty. Niesie w sobie klucz sortowania ostatniego wiersza
 
 Kursor należy do sortowania, z którym powstał, i sortowanie siedzi w jego treści. Podany przy innym `sort` kończy się `400`, bo warunek `WHERE` liczony w innej skali cicho oddałby złe wyniki. Zepsuty albo obcy kursor też kończy się `400`. Filtry są poza kursorem: `status` i `search` tylko zawężają zbiór, więc kursor działa na nich dalej poprawnie.
 
+### Filtry listy
+
+Filtry są składane i wszystkie zawężają ten sam zbiór:
+
+| Parametr | Znaczenie |
+|---|---|
+| `status` | lista po przecinku, `status=New,InProgress`. Pojedyncza wartość działa jak wcześniej. Nieznana kończy się `400` |
+| `page` | znormalizowany adres strony, na przykład `page=acme.example/cart` |
+| `browser`, `os`, `device` | rozpoznane nazwy, na przykład `browser=Chrome`, `os=Windows`, `device=mobile` |
+| `hasScreenshot` | `true` zawęża do zgłoszeń ze zrzutem, `false` do tych bez |
+| `hasComments` | `true` zawęża do skomentowanych, `false` do nieskomentowanych |
+| `dateFrom`, `dateTo` | przedział po `received_at`, domknięty z lewej i otwarty z prawej |
+| `search` | fraza w opisie i adresie strony |
+
+Kursor tego nie dotyka. Filtry tylko zawężają zbiór, więc `nextCursor` policzony przy jednym zestawie działa dalej przy innym i format kursora nie zmienia się wraz z nimi.
+
+Trzy rzeczy warte odnotowania:
+
+- `page` przechodzi tę samą normalizację co przy przyjęciu zgłoszenia, więc do filtra da się wkleić pełny link razem z `?utm=...` i `#fragment`. `page=https://Acme.example/Cart?utm_source=mail` trafi w te same zgłoszenia co `page=acme.example/cart`
+- `browser`, `os` i `device` porównują się bez rozróżniania wielkości liter, choć zapisane wartości są kanoniczne. Te parametry częściej powstają z ręcznie edytowanego adresu niż z kliknięcia w panelu
+- `dateFrom` równe albo późniejsze od `dateTo` kończy się `400`. Granice są instantami, a nie datami: dni kalendarzowe wylicza panel w strefie użytkownika, bo serwer nie zna jego strefy, a lista nie ma parametru `tz` jak analityka
+
 ### Zachowania listy
 
 Rzeczy, których nie widać z sygnatury endpointu:
@@ -414,6 +436,7 @@ Rzeczy, których nie widać z sygnatury endpointu:
 - bez podanego `status` lista pomija tickety skasowane, bo tombstone nie ma czego pokazać. Jawne `status=Deleted` je zwróci
 - `search` szuka po opisie i po adresie strony, bez rozróżniania wielkości liter
 - wiersz listy niesie `page`, `browserName`, `commentCount` i `hasScreenshot`. Liczniki idą podzapytaniami na stronę wyniku, więc koszt trzyma się rozmiaru strony, a nie całej listy
+- ten sam kształt wiersza leci kanałem live, więc każdy nowy filtr musi mieć odpowiednik po stronie panelu. Bez tego zgłoszenie z kanału wpadłoby na listę, na której filtr nie daje mu prawa się znaleźć
 - `GET /tickets/{id}` dokłada do tego `page` oraz `environment` z rozpoznaną przeglądarką, systemem, urządzeniem, viewportem, językiem i strefą. Kolumny były w bazie od migracji `AddTicketClientDetails`, ale nie wychodziły nigdzie poza analitykę
 - `sort` przyjmuje `receivedAt:desc`, `receivedAt:asc`, `reportedAt:desc` i `reportedAt:asc`. Nierozpoznana wartość wpada w domyślne `receivedAt:desc`
 - sortowanie po `reportedAt` schodzi na `receivedAt` tam gdzie `reportedAt` jest puste. Bez tego zgłoszenia bez czasu z przeglądarki lądowały na końcu listy przy `asc` i na początku przy `desc`, niezależnie od daty pokazanej w tabeli. Kursor porównuje się z tą samą wartością, po której idzie `ORDER BY`, więc zgłoszenia bez `reportedAt` nie wypadają z paginacji
