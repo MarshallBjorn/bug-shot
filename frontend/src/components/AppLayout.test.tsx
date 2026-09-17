@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AppLayout from './AppLayout'
+import { ThemeProvider } from '../theme/ThemeProvider'
 import { useAuth } from '../auth/AuthContext'
 
 const navigate = vi.fn()
@@ -15,11 +16,33 @@ vi.mock('react-router', () => ({
   Link: ({ to, children }: { to: string; children: React.ReactNode }) => (
     <a href={to}>{children}</a>
   ),
+  NavLink: ({
+    to,
+    children,
+    onClick,
+  }: {
+    to: string
+    children: React.ReactNode
+    onClick?: () => void
+  }) => (
+    <a href={to} onClick={onClick}>
+      {children}
+    </a>
+  ),
   Outlet: () => <div data-testid="outlet">Outlet</div>,
   useNavigate: () => navigate,
+  useParams: () => ({ projectId: 'p1' }),
 }))
 
 const mockedUseAuth = vi.mocked(useAuth)
+
+function renderLayout() {
+  return render(
+    <ThemeProvider>
+      <AppLayout />
+    </ThemeProvider>,
+  )
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -44,7 +67,7 @@ describe('AppLayout', () => {
       logOut,
     })
 
-    render(<AppLayout />)
+    renderLayout()
 
     expect(screen.getByText('Bug-shot')).toBeDefined()
     expect(screen.getByText('admin@test.local')).toBeDefined()
@@ -66,7 +89,7 @@ describe('AppLayout', () => {
       logOut,
     })
 
-    render(<AppLayout />)
+    renderLayout()
 
     expect(screen.getByText('user@test.local')).toBeDefined()
     expect(screen.queryByRole('link', { name: 'Zarządzanie projektami' })).toBeNull()
@@ -86,7 +109,7 @@ describe('AppLayout', () => {
       logOut,
     })
 
-    render(<AppLayout />)
+    renderLayout()
 
     fireEvent.click(screen.getByRole('button', { name: 'Wyloguj' }))
 
