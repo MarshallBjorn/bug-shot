@@ -38,6 +38,16 @@
   --input: #8793a5;
   --ring: #2454d6;
 
+  /*
+    Kolory wykresow sa osobne od akcentow UI, bo znacznik na wykresie ma inne wymagania
+    niz przycisk. Obie pary przeszly walidator palety ze skilla dataviz: pasmo jasnosci,
+    prog nasycenia, rozroznialnosc przy daltonizmie i kontrast wzgledem tla karty.
+    Tritan wypada nisko, dlatego linie maja jeszcze etykiety przy koncach a nie sam kolor.
+  */
+  --chart-1: #2454d6;
+  --chart-2: #067647;
+  --chart-grid: #e8ecf2;
+
   --radius: 0.5rem;
 }
 
@@ -68,6 +78,11 @@
   --border: #2a3547;
   --input: #64748b;
   --ring: #7c9dfb;
+
+  /* akcenty UI sa tu za jasne na znacznik wykresu, walidator odrzucil je na pasmie jasnosci */
+  --chart-1: #5a86f5;
+  --chart-2: #2fae72;
+  --chart-grid: #222c3c;
 }
 
 @theme inline {
@@ -94,6 +109,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-grid: var(--chart-grid);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
