@@ -1,6 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { useEffect, useId, useState, type FormEvent } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import ConfirmDialog from '../components/ConfirmDialog'
+import FilterSelect from '../components/FilterSelect'
 import SanitizationRuleDialog from '../components/SanitizationRuleDialog'
 import { getProjects } from '../api/projects'
 import {
@@ -24,6 +27,7 @@ interface RulesAnswer {
 const noAnswer: RulesAnswer = { filter: null, rules: [], error: null }
 
 function AdminSanitizationRulesPage() {
+  const fieldId = useId()
   const [projects, setProjects] = useState<Project[]>([])
   const [projectFilter, setProjectFilter] = useState('')
 
@@ -163,73 +167,81 @@ function AdminSanitizationRulesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-semibold tracking-tight">Reguły sanityzacji</h2>
-        <Link
-          to="/admin/projects"
-          className="ml-auto text-sm text-muted-foreground hover:text-foreground"
-        >
-          Zarządzanie projektami
-        </Link>
-      </div>
+      <h2 className="text-xl font-semibold tracking-tight">Reguły sanityzacji</h2>
 
       <form className="space-y-3 rounded-lg border bg-card p-4" onSubmit={handleTest}>
-        <label>
-          <span>Zakres</span>
-          <select value={scopeProjectId} onChange={(event) => setScopeProjectId(event.target.value)}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FilterSelect label="Zakres" value={scopeProjectId} onChange={setScopeProjectId}>
             <option value="">Globalna</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name}
               </option>
             ))}
-          </select>
-        </label>
+          </FilterSelect>
 
-        <label>
-          <span>Wzorzec (wyrażenie regularne)</span>
-          <input
-            value={pattern}
-            onChange={(event) => setPattern(event.target.value)}
-            disabled={testing || creating}
-            required
-          />
-        </label>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${fieldId}-pattern`}>Wzorzec (wyrażenie regularne)</Label>
+            <Input
+              id={`${fieldId}-pattern`}
+              value={pattern}
+              onChange={(event) => setPattern(event.target.value)}
+              className="font-mono"
+              autoComplete="off"
+              disabled={testing || creating}
+              required
+            />
+          </div>
 
-        <label>
-          <span>Zamiennik</span>
-          <input
-            value={replacement}
-            onChange={(event) => setReplacement(event.target.value)}
-            disabled={testing || creating}
-          />
-        </label>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${fieldId}-replacement`}>Zamiennik</Label>
+            <Input
+              id={`${fieldId}-replacement`}
+              value={replacement}
+              onChange={(event) => setReplacement(event.target.value)}
+              className="font-mono"
+              autoComplete="off"
+              disabled={testing || creating}
+            />
+          </div>
 
-        <label>
-          <span>Przykładowy tekst</span>
-          <textarea
-            value={sampleText}
-            onChange={(event) => setSampleText(event.target.value)}
-            disabled={testing || creating}
-          />
-        </label>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${fieldId}-sample`}>Przykładowy tekst</Label>
+            <textarea
+              id={`${fieldId}-sample`}
+              value={sampleText}
+              onChange={(event) => setSampleText(event.target.value)}
+              disabled={testing || creating}
+              rows={3}
+              className="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+            />
+          </div>
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button type="submit" disabled={testing || creating || !pattern.trim()}>
+          <Button type="submit" variant="outline" disabled={testing || creating || !pattern.trim()}>
             {testing ? 'Testowanie...' : 'Testuj na tekście'}
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
             onClick={handleCreate}
             disabled={testing || creating || !pattern.trim()}
           >
             {creating ? 'Zapisywanie...' : 'Zapisz regułę'}
-          </button>
-        </div>
+          </Button>
 
-        {testError && <span role="alert">{testError}</span>}
-        {createError && <span role="alert">{createError}</span>}
+          {testError && (
+            <span role="alert" className="text-sm text-destructive">
+              {testError}
+            </span>
+          )}
+          {createError && (
+            <span role="alert" className="text-sm text-destructive">
+              {createError}
+            </span>
+          )}
+        </div>
 
         {testResult && (
           <p className="rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all">
@@ -239,17 +251,19 @@ function AdminSanitizationRulesPage() {
         )}
       </form>
 
-      <label className="flex flex-wrap items-center gap-2 text-sm">
-        <span>Pokaż reguły dla projektu</span>
-        <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-          <option value="">Wszystkie</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <FilterSelect
+        label="Pokaż reguły dla projektu"
+        value={projectFilter}
+        onChange={setProjectFilter}
+        className="sm:max-w-xs"
+      >
+        <option value="">Wszystkie</option>
+        {projects.map((project) => (
+          <option key={project.id} value={project.id}>
+            {project.name}
+          </option>
+        ))}
+      </FilterSelect>
 
       {error && (
         <p
@@ -270,48 +284,78 @@ function AdminSanitizationRulesPage() {
       )}
 
       {loading ? (
-        <p>Ładowanie...</p>
+        <p className="text-sm text-muted-foreground">Ładowanie...</p>
       ) : rules.length === 0 ? (
-        <p>Brak reguł.</p>
+        <p className="text-sm text-muted-foreground">Brak reguł.</p>
       ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr>
-              <th>Zakres</th>
-              <th>Wzorzec</th>
-              <th>Zamiennik</th>
-              <th>Włączona</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rules.map((rule) => (
-              <tr key={rule.id}>
-                <td>{projectName(rule.projectId)}</td>
-                <td>
-                  <code>{rule.pattern}</code>
-                </td>
-                <td>{rule.replacement}</td>
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={rule.isEnabled}
-                    onChange={() => handleToggle(rule)}
-                    aria-label={rule.isEnabled ? 'Wyłącz regułę' : 'Włącz regułę'}
-                  />
-                </td>
-                <td>
-                  <button type="button" onClick={() => setEditing(rule)}>
-                    Edytuj
-                  </button>
-                  <button type="button" onClick={() => setRemoving(rule)}>
-                    Usuń
-                  </button>
-                </td>
+        <div className="overflow-x-auto rounded-lg border bg-card">
+          {/* wzorce sa dlugie wiec na telefonie tabela przewija sie zamiast lamac na kilka znakow */}
+          <table className="w-full min-w-3xl border-collapse text-sm">
+            <thead>
+              <tr className="border-b">
+                <th scope="col" className="px-3 py-2 text-left font-medium text-muted-foreground">
+                  Zakres
+                </th>
+                <th scope="col" className="px-3 py-2 text-left font-medium text-muted-foreground">
+                  Wzorzec
+                </th>
+                <th scope="col" className="px-3 py-2 text-left font-medium text-muted-foreground">
+                  Zamiennik
+                </th>
+                <th scope="col" className="px-3 py-2 text-left font-medium text-muted-foreground">
+                  Włączona
+                </th>
+                <th scope="col" className="px-3 py-2 text-right font-medium text-muted-foreground">
+                  Akcje
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rules.map((rule) => (
+                <tr key={rule.id} className="border-b last:border-0">
+                  <td className="px-3 py-2 align-top whitespace-nowrap">
+                    {projectName(rule.projectId)}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <code className="font-mono text-xs break-all">{rule.pattern}</code>
+                  </td>
+                  <td className="px-3 py-2 align-top font-mono text-xs break-all">
+                    {rule.replacement}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-primary"
+                      checked={rule.isEnabled}
+                      onChange={() => handleToggle(rule)}
+                      aria-label={rule.isEnabled ? 'Wyłącz regułę' : 'Włącz regułę'}
+                    />
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <span className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditing(rule)}
+                      >
+                        Edytuj
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setRemoving(rule)}
+                      >
+                        Usuń
+                      </Button>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       <SanitizationRuleDialog
         rule={editing}
