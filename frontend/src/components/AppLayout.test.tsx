@@ -8,6 +8,7 @@ import { useAuth } from '../auth/AuthContext'
 const navigate = vi.fn()
 const logOut = vi.fn()
 let params: { projectId?: string } = { projectId: 'p1' }
+let match: string | null = null
 
 vi.mock('../auth/AuthContext', () => ({
   useAuth: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('react-router', () => ({
     </a>
   ),
   Outlet: () => <div data-testid="outlet">Outlet</div>,
+  useMatch: (pattern: string) => (pattern === match ? {} : null),
   useNavigate: () => navigate,
   useParams: () => params,
 }))
@@ -52,6 +54,7 @@ function renderLayout() {
 beforeEach(() => {
   vi.clearAllMocks()
   params = { projectId: 'p1' }
+  match = null
   logOut.mockResolvedValue(undefined)
 })
 
@@ -164,5 +167,34 @@ describe('AppLayout', () => {
       expect(logOut).toHaveBeenCalledTimes(1)
       expect(navigate).toHaveBeenCalledWith('/login', { replace: true })
     })
+  })
+
+  it('na liscie zgloszen pokazuje przycisk ze skrotami klawiszowymi', () => {
+    mockedUseAuth.mockReturnValue({
+      status: 'authenticated',
+      user: { id: 'user', email: 'user@test.local', isAdmin: false, isActive: true },
+      logIn: vi.fn(),
+      logOut,
+    })
+    match = '/projects/:projectId/tickets'
+
+    renderLayout()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skróty klawiszowe' }))
+
+    expect(screen.getByRole('dialog', { name: 'Skróty klawiszowe' })).toBeDefined()
+  })
+
+  it('poza lista zgloszen nie pokazuje przycisku ze skrotami', () => {
+    mockedUseAuth.mockReturnValue({
+      status: 'authenticated',
+      user: { id: 'user', email: 'user@test.local', isAdmin: false, isActive: true },
+      logIn: vi.fn(),
+      logOut,
+    })
+
+    renderLayout()
+
+    expect(screen.queryByRole('button', { name: 'Skróty klawiszowe' })).toBeNull()
   })
 })

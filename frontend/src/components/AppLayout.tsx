@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, Outlet, useNavigate, useParams } from 'react-router'
-import { Bug, PanelLeft } from 'lucide-react'
+import { Link, Outlet, useMatch, useNavigate, useParams } from 'react-router'
+import { Bug, Keyboard, PanelLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { useAuth } from '../auth/AuthContext'
 import { hasSidebarItems } from '../navigation'
 import AppSidebar from './AppSidebar'
+import ShortcutsDialog from './ShortcutsDialog'
 import ThemeToggle from './ThemeToggle'
 
 function AppLayout() {
@@ -13,6 +14,9 @@ function AppLayout() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
+  // skroty dzialaja tylko na liscie zgloszen wiec tylko tam je podpowiadamy
+  const onTicketList = useMatch('/projects/:projectId/tickets') !== null
   const isAdmin = Boolean(user?.isAdmin)
   const withSidebar = hasSidebarItems(projectId, isAdmin)
 
@@ -51,6 +55,18 @@ function AppLayout() {
         </Link>
 
         <div className="ml-auto flex items-center gap-2">
+          {onTicketList && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Skróty klawiszowe"
+              title="Skróty klawiszowe (?)"
+              onClick={() => setHelpOpen(true)}
+            >
+              <Keyboard aria-hidden="true" />
+            </Button>
+          )}
           <ThemeToggle />
           {/* na waskim ekranie adres konta ustepuje miejsca przyciskowi wylogowania */}
           <span className="hidden truncate text-sm text-muted-foreground sm:inline">
@@ -79,6 +95,8 @@ function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   )
 }
