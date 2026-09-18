@@ -164,15 +164,7 @@ function AdminProjectsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-semibold tracking-tight">Zarządzanie projektami</h2>
-        <Link
-          to="/admin/sanitization-rules"
-          className="ml-auto text-sm text-muted-foreground hover:text-foreground"
-        >
-          Reguły sanityzacji
-        </Link>
-      </div>
+      <h2 className="text-xl font-semibold tracking-tight">Zarządzanie projektami</h2>
 
       <form
         className="flex flex-wrap items-end gap-2 rounded-lg border bg-card p-4"

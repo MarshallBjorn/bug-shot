@@ -45,17 +45,8 @@ function HomePage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-semibold tracking-tight">Projekty</h2>
-        {user?.isAdmin && (
-          <Link
-            to="/admin/projects"
-            className="ml-auto text-sm text-muted-foreground hover:text-foreground"
-          >
-            Zarządzaj projektami
-          </Link>
-        )}
-      </div>
+      {/* bez skrotu do zarzadzania projektami, admin ma je w nawigacji panelu */}
+      <h2 className="text-xl font-semibold tracking-tight">Projekty</h2>
       <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {projects.map((project) => (
           <li key={project.id}>
