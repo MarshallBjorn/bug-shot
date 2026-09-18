@@ -11,14 +11,17 @@ vi.mock('react-router', () => ({
   Navigate: ({
     to,
     replace,
+    state,
   }: {
     to: string
     replace?: boolean
+    state?: { notice?: string }
   }) => (
     <div
       data-testid="navigate"
       data-to={to}
       data-replace={String(replace)}
+      data-notice={state?.notice}
     />
   ),
   Outlet: () => <div data-testid="outlet">Outlet</div>,
@@ -68,6 +71,9 @@ describe('RequireAdmin', () => {
     render(<RequireAdmin />)
 
     expect(screen.getByTestId('navigate').getAttribute('data-to')).toBe('/')
+    expect(screen.getByTestId('navigate').getAttribute('data-notice')).toBe(
+      'Ta sekcja jest dostępna tylko dla administratora.',
+    )
     expect(screen.queryByTestId('outlet')).toBeNull()
   })
 

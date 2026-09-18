@@ -75,4 +75,20 @@ describe('HomePage', () => {
 
     expect((await screen.findByRole('alert')).textContent).toContain('HTTP 500')
   })
+
+  it('mowi dlaczego wrocil ze strony administracyjnej', async () => {
+    getProjects.mockResolvedValue([])
+    useAuth.mockReturnValue({ user: { email: 'ktos@bug-shot.test', isAdmin: false } })
+
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: '/', state: { notice: 'Ta sekcja jest dostępna tylko dla administratora.' } }]}
+      >
+        <HomePage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('status')).toBeDefined()
+    expect(screen.getByText('Ta sekcja jest dostępna tylko dla administratora.')).toBeDefined()
+  })
 })
