@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext'
 
 const navigate = vi.fn()
 const logOut = vi.fn()
+let params: { projectId?: string } = { projectId: 'p1' }
 
 vi.mock('../auth/AuthContext', () => ({
   useAuth: vi.fn(),
@@ -35,7 +36,7 @@ vi.mock('react-router', () => ({
   ),
   Outlet: () => <div data-testid="outlet">Outlet</div>,
   useNavigate: () => navigate,
-  useParams: () => ({ projectId: 'p1' }),
+  useParams: () => params,
 }))
 
 const mockedUseAuth = vi.mocked(useAuth)
@@ -50,6 +51,7 @@ function renderLayout() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  params = { projectId: 'p1' }
   logOut.mockResolvedValue(undefined)
 })
 
@@ -100,6 +102,47 @@ describe('AppLayout', () => {
     expect(screen.queryByRole('link', { name: 'Sanityzacja' })).toBeNull()
   })
 
+  // zwykly uzytkownik na liscie projektow nie ma w nawigacji ani jednej pozycji
+  it('nie stawia pustej belki bocznej', () => {
+    params = {}
+    mockedUseAuth.mockReturnValue({
+      status: 'authenticated',
+      user: {
+        id: 'user',
+        email: 'user@test.local',
+        isAdmin: false,
+        isActive: true,
+      },
+      logIn: vi.fn(),
+      logOut,
+    })
+
+    renderLayout()
+
+    expect(screen.queryByRole('navigation', { name: 'Nawigacja panelu' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Otwórz nawigację' })).toBeNull()
+    expect(screen.getByTestId('outlet')).toBeDefined()
+  })
+
+  it('zostawia belke gdy jest co w niej pokazac', () => {
+    params = {}
+    mockedUseAuth.mockReturnValue({
+      status: 'authenticated',
+      user: {
+        id: 'admin',
+        email: 'admin@test.local',
+        isAdmin: true,
+        isActive: true,
+      },
+      logIn: vi.fn(),
+      logOut,
+    })
+
+    renderLayout()
+
+    expect(screen.getByRole('button', { name: 'Otwórz nawigację' })).toBeDefined()
+  })
+
   it('wylogowuje i przechodzi do logowania', async () => {
     mockedUseAuth.mockReturnValue({
       status: 'authenticated',
@@ -123,5 +166,3 @@ describe('AppLayout', () => {
     })
   })
 })
-
-

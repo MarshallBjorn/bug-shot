@@ -9,3 +9,9 @@ export function readListSearch(state: unknown) {
 
   return typeof candidate?.listSearch === 'string' ? candidate.listSearch : ''
 }
+
+// zwykly uzytkownik poza projektem nie ma w nawigacji ani jednej pozycji
+// wiec powloka musi wiedziec kiedy belka jest pusta i w ogole jej nie stawiac
+export function hasSidebarItems(projectId: string, isAdmin: boolean) {
+  return Boolean(projectId) || isAdmin
+}

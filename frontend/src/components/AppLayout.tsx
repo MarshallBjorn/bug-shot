@@ -4,6 +4,7 @@ import { Bug, PanelLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { useAuth } from '../auth/AuthContext'
+import { hasSidebarItems } from '../navigation'
 import AppSidebar from './AppSidebar'
 import ThemeToggle from './ThemeToggle'
 
@@ -12,6 +13,8 @@ function AppLayout() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const isAdmin = Boolean(user?.isAdmin)
+  const withSidebar = hasSidebarItems(projectId, isAdmin)
 
   async function leave() {
     await logOut()
@@ -19,25 +22,25 @@ function AppLayout() {
   }
 
   function sidebar(onNavigate?: () => void) {
-    return (
-      <AppSidebar projectId={projectId} isAdmin={Boolean(user?.isAdmin)} onNavigate={onNavigate} />
-    )
+    return <AppSidebar projectId={projectId} isAdmin={isAdmin} onNavigate={onNavigate} />
   }
 
   return (
     <div className="min-h-svh">
       <header className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b bg-card px-3">
-        <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-          <SheetTrigger asChild>
-            <Button type="button" variant="ghost" size="icon" className="md:hidden" aria-label="Otwórz nawigację">
-              <PanelLeft aria-hidden="true" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-60 p-0">
-            <SheetTitle className="px-3 pt-3 text-sm">Nawigacja</SheetTitle>
-            {sidebar(() => setMenuOpen(false))}
-          </SheetContent>
-        </Sheet>
+        {withSidebar && (
+          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+            <SheetTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" className="md:hidden" aria-label="Otwórz nawigację">
+                <PanelLeft aria-hidden="true" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-60 p-0">
+              <SheetTitle className="px-3 pt-3 text-sm">Nawigacja</SheetTitle>
+              {sidebar(() => setMenuOpen(false))}
+            </SheetContent>
+          </Sheet>
+        )}
 
         <Link
           to="/"
@@ -59,10 +62,19 @@ function AppLayout() {
         </div>
       </header>
 
-      <div className="md:grid md:grid-cols-[15rem_minmax(0,1fr)]">
-        <aside className="hidden border-r md:block">
-          <div className="sticky top-12">{sidebar()}</div>
-        </aside>
+      {/* wysokosc wiersza z okna a nie z tresci, inaczej kreska przy belce urywa sie w polowie ekranu */}
+      <div
+        className={
+          withSidebar
+            ? 'min-h-[calc(100svh-3rem)] md:grid md:grid-cols-[15rem_minmax(0,1fr)]'
+            : 'min-h-[calc(100svh-3rem)]'
+        }
+      >
+        {withSidebar && (
+          <aside className="hidden border-r md:block">
+            <div className="sticky top-12">{sidebar()}</div>
+          </aside>
+        )}
         <main className="min-w-0 px-4 py-5">
           <Outlet />
         </main>
