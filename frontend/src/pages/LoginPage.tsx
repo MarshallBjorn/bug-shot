@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import type { FormEvent } from 'react'
 import { Navigate, useLocation } from 'react-router'
 import { useAuth } from '../auth/AuthContext'
+import ThemeToggle from '../components/ThemeToggle'
 
 function readReturnPath(state: unknown) {
   const candidate = state as { from?: unknown } | null
@@ -44,7 +45,10 @@ function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center px-4 py-12">
+    <main className="relative flex min-h-svh items-center justify-center px-4 py-12">
+      <div className="absolute top-2 right-3">
+        <ThemeToggle />
+      </div>
       <form
         className="w-full max-w-sm space-y-4 rounded-lg border bg-card p-6"
         onSubmit={submit}

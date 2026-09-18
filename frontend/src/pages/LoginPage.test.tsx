@@ -1,6 +1,7 @@
 ﻿import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import LoginPage from './LoginPage'
+import { ThemeProvider } from '../theme/ThemeProvider'
 import { useAuth } from '../auth/AuthContext'
 
 const navigateStates = vi.hoisted(() => ({
@@ -32,6 +33,14 @@ vi.mock('react-router', () => ({
 
 const mockedUseAuth = vi.mocked(useAuth)
 
+function renderLogin() {
+  return render(
+    <ThemeProvider>
+      <LoginPage />
+    </ThemeProvider>,
+  )
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   navigateStates.state = null
@@ -50,7 +59,7 @@ describe('LoginPage', () => {
       logOut: vi.fn(),
     })
 
-    render(<LoginPage />)
+    renderLogin()
 
     expect(screen.getByText('Sprawdzanie sesji...')).toBeDefined()
   })
@@ -70,7 +79,7 @@ describe('LoginPage', () => {
       logOut: vi.fn(),
     })
 
-    render(<LoginPage />)
+    renderLogin()
 
     expect(screen.getByTestId('navigate').getAttribute('data-to')).toBe(
       '/projects/p1/tickets?page=2',
@@ -87,7 +96,7 @@ describe('LoginPage', () => {
       logOut: vi.fn(),
     })
 
-    render(<LoginPage />)
+    renderLogin()
 
     fireEvent.change(screen.getByLabelText('E-mail'), {
       target: { value: 'user@test.local' },
@@ -121,7 +130,7 @@ describe('LoginPage', () => {
       logOut: vi.fn(),
     })
 
-    render(<LoginPage />)
+    renderLogin()
 
     fireEvent.change(screen.getByLabelText('E-mail'), {
       target: { value: 'user@test.local' },
@@ -140,5 +149,18 @@ describe('LoginPage', () => {
         'Nieprawidlowe dane logowania',
       )
     })
+  })
+
+  it('pozwala zmienic motyw przed zalogowaniem', () => {
+    mockedUseAuth.mockReturnValue({
+      status: 'anonymous',
+      user: null,
+      logIn: vi.fn(),
+      logOut: vi.fn(),
+    })
+
+    renderLogin()
+
+    expect(screen.getByRole('button', { name: /^Motyw:/ })).toBeDefined()
   })
 })
