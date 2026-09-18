@@ -85,9 +85,10 @@ test.describe('dashboard accessibility', () => {
   test('ciemny motyw nie ma naruszen critical ani serious', async ({ page }) => {
     await openSignedIn(page, ticketsPath())
 
-    await page.getByRole('button', { name: 'Włącz motyw ciemny' }).click()
+    await page.getByRole('button', { name: /^Motyw: / }).click()
+    await page.getByRole('menuitemradio', { name: 'Ciemny' }).click()
 
-    await expect(page.getByRole('button', { name: 'Włącz motyw jasny' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Motyw: Ciemny' })).toBeVisible()
 
     await expectDashboardAccessibility(page, 'ciemny motyw')
   })

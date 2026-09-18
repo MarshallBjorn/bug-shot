@@ -1,21 +1,23 @@
-import type { Theme } from './ThemeContext'
+import type { Theme, ThemeMode } from './ThemeContext'
 
 export const themeStorageKey = 'bugshot-theme'
 
+export const defaultMode: ThemeMode = 'system'
+
 // prywatne okno potrafi rzucic przy samym siegnieciu po localStorage wiec kazdy dostep jest oslonięty
-export function readTheme(): Theme | null {
+export function readMode(): ThemeMode | null {
   try {
     const saved = localStorage.getItem(themeStorageKey)
 
-    return saved === 'dark' || saved === 'light' ? saved : null
+    return saved === 'dark' || saved === 'light' || saved === 'system' ? saved : null
   } catch {
     return null
   }
 }
 
-export function writeTheme(theme: Theme) {
+export function writeMode(mode: ThemeMode) {
   try {
-    localStorage.setItem(themeStorageKey, theme)
+    localStorage.setItem(themeStorageKey, mode)
   } catch {
     // brak zapisu tylko gubi preferencje miedzy wejsciami i nie psuje panelu
   }
@@ -27,9 +29,15 @@ export function systemTheme(): Theme {
     : 'light'
 }
 
-// skrypt w index.html ustawil juz atrybut wiec czytamy stan zamiast liczyc go drugi raz
-export function currentTheme(): Theme {
-  const applied = document.documentElement.dataset.theme
+export function resolveTheme(mode: ThemeMode): Theme {
+  return mode === 'system' ? systemTheme() : mode
+}
 
-  return applied === 'dark' || applied === 'light' ? applied : readTheme() ?? systemTheme()
+export function applyTheme(theme: Theme) {
+  document.documentElement.dataset.theme = theme
+}
+
+// brak zapisu znaczy ze nikt jeszcze nie wybieral wiec idziemy za systemem
+export function currentMode(): ThemeMode {
+  return readMode() ?? defaultMode
 }

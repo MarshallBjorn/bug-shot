@@ -1,22 +1,46 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
-import { ThemeContext, type Theme } from './ThemeContext'
-import { currentTheme, writeTheme } from './storage'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { ThemeContext, type ThemeMode } from './ThemeContext'
+import { applyTheme, currentMode, systemTheme, writeMode } from './storage'
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(currentTheme)
+// zapytanie medialne trzyma sie osobno od trybu, bo w trybie systemowym motyw ma zmieniac sie
+// w trakcie sesji a nie dopiero po odswiezeniu panelu
+function useSystemTheme() {
+  const [theme, setTheme] = useState(systemTheme)
 
-  const toggle = useCallback(() => {
-    setTheme((previous) => {
-      const next: Theme = previous === 'dark' ? 'light' : 'dark'
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return
 
-      document.documentElement.dataset.theme = next
-      writeTheme(next)
+    const query = matchMedia('(prefers-color-scheme: dark)')
 
-      return next
-    })
+    if (typeof query.addEventListener !== 'function') return
+
+    function update(event: MediaQueryListEvent) {
+      setTheme(event.matches ? 'dark' : 'light')
+    }
+
+    query.addEventListener('change', update)
+
+    return () => query.removeEventListener('change', update)
   }, [])
 
-  const value = useMemo(() => ({ theme, toggle }), [theme, toggle])
+  return theme
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [mode, setStoredMode] = useState<ThemeMode>(currentMode)
+  const system = useSystemTheme()
+  const theme = mode === 'system' ? system : mode
+
+  useEffect(() => {
+    applyTheme(theme)
+  }, [theme])
+
+  const setMode = useCallback((next: ThemeMode) => {
+    setStoredMode(next)
+    writeMode(next)
+  }, [])
+
+  const value = useMemo(() => ({ mode, theme, setMode }), [mode, theme, setMode])
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }

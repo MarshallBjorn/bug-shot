@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { currentTheme, readTheme, systemTheme, themeStorageKey, writeTheme } from './storage'
+import {
+  applyTheme,
+  currentMode,
+  readMode,
+  resolveTheme,
+  systemTheme,
+  themeStorageKey,
+  writeMode,
+} from './storage'
 
 function stubStorage(value: Partial<Storage>) {
   vi.stubGlobal('localStorage', value as Storage)
@@ -17,16 +25,19 @@ afterEach(() => {
 describe('odczyt preferencji', () => {
   it('przyjmuje tylko znane wartosci', () => {
     stubStorage({ getItem: () => 'dark' })
-    expect(readTheme()).toBe('dark')
+    expect(readMode()).toBe('dark')
 
     stubStorage({ getItem: () => 'light' })
-    expect(readTheme()).toBe('light')
+    expect(readMode()).toBe('light')
+
+    stubStorage({ getItem: () => 'system' })
+    expect(readMode()).toBe('system')
 
     stubStorage({ getItem: () => 'sepia' })
-    expect(readTheme()).toBeNull()
+    expect(readMode()).toBeNull()
 
     stubStorage({ getItem: () => null })
-    expect(readTheme()).toBeNull()
+    expect(readMode()).toBeNull()
   })
 
   it('prywatne okno rzuca przy siegnieciu po magazyn i nie wywraca panelu', () => {
@@ -36,7 +47,7 @@ describe('odczyt preferencji', () => {
       },
     })
 
-    expect(readTheme()).toBeNull()
+    expect(readMode()).toBeNull()
   })
 })
 
@@ -45,9 +56,9 @@ describe('zapis preferencji', () => {
     const setItem = vi.fn()
     stubStorage({ setItem })
 
-    writeTheme('dark')
+    writeMode('system')
 
-    expect(setItem).toHaveBeenCalledWith(themeStorageKey, 'dark')
+    expect(setItem).toHaveBeenCalledWith(themeStorageKey, 'system')
   })
 
   it('blad zapisu gubi tylko preferencje', () => {
@@ -57,7 +68,7 @@ describe('zapis preferencji', () => {
       },
     })
 
-    expect(() => writeTheme('light')).not.toThrow()
+    expect(() => writeMode('light')).not.toThrow()
   })
 })
 
@@ -77,25 +88,34 @@ describe('motyw systemowy', () => {
   })
 })
 
-describe('motyw biezacy', () => {
-  it('czyta atrybut ustawiony przez skrypt z index.html', () => {
-    document.documentElement.dataset.theme = 'dark'
-    stubStorage({ getItem: () => 'light' })
-
-    expect(currentTheme()).toBe('dark')
-  })
-
-  it('bez atrybutu schodzi na zapisana preferencje', () => {
-    stubStorage({ getItem: () => 'dark' })
-    vi.stubGlobal('matchMedia', () => ({ matches: false }))
-
-    expect(currentTheme()).toBe('dark')
-  })
-
-  it('bez atrybutu i bez preferencji pyta system', () => {
-    stubStorage({ getItem: () => null })
+describe('rozwiazanie trybu', () => {
+  it('jawny tryb nie pyta systemu', () => {
     vi.stubGlobal('matchMedia', () => ({ matches: true }))
 
-    expect(currentTheme()).toBe('dark')
+    expect(resolveTheme('light')).toBe('light')
+    expect(resolveTheme('dark')).toBe('dark')
+    expect(resolveTheme('system')).toBe('dark')
+  })
+})
+
+describe('tryb biezacy', () => {
+  it('czyta zapisana preferencje', () => {
+    stubStorage({ getItem: () => 'light' })
+
+    expect(currentMode()).toBe('light')
+  })
+
+  it('bez zapisu schodzi na tryb systemowy', () => {
+    stubStorage({ getItem: () => null })
+
+    expect(currentMode()).toBe('system')
+  })
+})
+
+describe('naniesienie motywu', () => {
+  it('ustawia atrybut na dokumencie', () => {
+    applyTheme('dark')
+
+    expect(document.documentElement.dataset.theme).toBe('dark')
   })
 })
