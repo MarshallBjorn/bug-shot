@@ -14,20 +14,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  detect:
-    runs-on: ubuntu-latest
-    outputs:
-      has_package: ${{ steps.check.outputs.has_package }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: check
-        run: |
-          if [ -f widget/package.json ]; then
-            echo "has_package=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_package=false" >> "$GITHUB_OUTPUT"
-          fi
-
   smoke:
     runs-on: ubuntu-latest
     steps:
@@ -38,16 +24,21 @@ jobs:
 
       - name: Check JS syntax
         run: |
-          for f in widget/*.js; do
+          for f in widget/*.js widget/vendor/*.js; do
             [ -f "$f" ] && node --check "$f"
           done
 
       - name: Validate HTML
         run: npx --yes html-validate widget/*.html
 
-  build-test:
-    needs: detect
-    if: needs.detect.outputs.has_package == 'true'
+  # Zastepuje dawne "detect" + "build-test" + "publish-npm". Package.json
+  # istnieje od tego momentu (poprzednio "detect" bylo martwym kodem — zawsze
+  # false), wiec ten job realnie sie odpala na kazdy PR/push do widget/**.
+  #
+  # NIE publikuje nigdzie (bez npm publish, bez NPM_TOKEN) — to job
+  # walidacyjny. Jedyna autoryzowana sciezka publikacji to release.yaml,
+  # ktory triguje sie WYLACZNIE z push do main.
+  build-validate:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -57,58 +48,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
-          cache: 'npm'
-          cache-dependency-path: ./widget/package-lock.json
 
-      - run: npm ci
-      - run: npm run lint --if-present
-      - run: npm run build
-      - run: npm test --if-present
+      - name: Build dist (walidacja pakowania, bez publikacji)
+        run: node scripts/build.mjs
 
-      - name: Upload static bundle
+      - name: Verify npm package contents (dry-run, brak publikacji)
+        run: npm pack --dry-run
+
+      - name: Upload dist (do wgladu, nie do release — release.yaml buduje wlasny dist)
         uses: actions/upload-artifact@v4
         with:
-          name: widget-${{ github.sha }}
+          name: widget-dist-${{ github.sha }}
           path: widget/dist/
           if-no-files-found: error
-
-  publish-npm:
-    needs: [detect, build-test]
-    if: |
-      needs.detect.outputs.has_package == 'true' &&
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./widget
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24.x'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@${{ github.repository_owner }}'
-          cache: 'npm'
-          cache-dependency-path: ./widget/package-lock.json
-
-      - run: npm ci
-      - run: npm run build
-      - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # publish-cdn:
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   needs: build-test
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         name: widget-${{ github.sha }}
-  #         path: dist/
-  #     - name: Upload to CDN
-  #       run: echo "TODO: rsync/aws s3 cp dist/ do docelowej domeny + wersjonowana sciezka /widget/vX.Y.Z/ + /latest/"

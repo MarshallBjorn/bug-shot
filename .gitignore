@@ -823,3 +823,5 @@ bug-shot-widgets/
 /e2e/.last-run.json
 
 *.age-key
+
+loadtest/reports/*

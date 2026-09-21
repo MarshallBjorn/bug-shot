@@ -1,0 +1,156 @@
+SPR4: Release automation — manifest
+=====================================
+
+NEW FILES
+---------
+
+.github/workflows/release.yaml
+  Glowny pipeline. Trigger: push do main, bez path filtra. Joby: version ->
+  guard -> docker-retag / widget-publish -> widget-cdn -> gh-release.
+  Retaguje istniejacy SHA-image (docker buildx imagetools create), nie
+  rebuilduje. Publikuje @bug-shot/widget do npmjs.org. Wysyla dist widgetu
+  na istniejacy CDN (nginx /widgets/) przez istniejacy SSH/WireGuard.
+  Tworzy tag vX.Y.Z + GitHub Release jako ostatni krok.
+
+scripts/release/compute-version.sh
+  Liczy nastepna wersje z Conventional Commits w zakresie <ostatni tag>..HEAD
+  na main. Ignoruje merge commity. Obsluguje feat!:/fix!: oraz "BREAKING
+  CHANGE:" w body. Brak release-worthy commitow -> should_release=false,
+  exit 0 (sukces, bez release).
+
+scripts/release/release-dry-run.sh
+  Lokalny podglad (Git Bash/WSL) — co bylo by opublikowane, zero efektow
+  ubocznych. Uzywa compute-version.sh.
+
+scripts/release/render-notes.sh
+  Skleja scripts/release/release-notes-template.md z natywnie wygenerowanymi
+  przez GitHub API (POST releases/generate-notes) notatkami "What's Changed"
+  z linkami do PR.
+
+scripts/release/release-notes-template.md
+  Szablon: Docker Images / Widget / Upgrade + placeholder na generated body.
+  Sekcja Upgrade opisuje FAKTYCZNY automatyczny deploy (deploy-prod.yaml),
+  z odnosnikiem do docs/deployment.md jako fallback DR.
+
+widget/package.json
+  NOWY plik. @bug-shot/widget, bez "type": "module" (widget to klasyczny
+  browser script, nie ESM). publishConfig.access=public, registry npmjs.org.
+
+widget/scripts/build.mjs
+  Deterministyczna konkatenacja (NIE bundler) w kolejnosci zweryfikowanej
+  z widget/index.html: vendor/html-to-image.js -> mask.js -> capture.js ->
+  widget.js. config.js celowo pominiety (per-srodowisko, w .gitignore).
+  Fail-fast jesli brakuje ktoregos pliku wejsciowego.
+
+widget/README.md
+  Dokumentacja uzycia (CDN + npm self-hosting) na podstawie faktycznego
+  window.BUGSHOT_CONFIG.apiBaseUrl uzywanego w widget.js/mask.js.
+
+RELEASE-AUTOMATION-SETUP.md, RELEASE-AUTOMATION-APPLY.md (ten dokument i ten plik)
+  Dokumentacja jednorazowego setupu i procedury zastosowania.
+
+
+MODIFIED FILES
+--------------
+
+.github/workflows/deploy-prod.yaml
+  USUNIETO: caly job "build-tag-push" (rebuild obrazu na tag push).
+  Deploy teraz pobiera obraz JUZ zretagowany przez release.yaml
+  (ghcr.io/.../bugshot-backend:VERSION) — zero rebuildu na tagu.
+  ZMIENIONO: zrodlo VERSION z needs.build-tag-push.outputs.version na
+  lokalny steps.v.outputs.version (ten sam parsing tagu co wczesniej,
+  tylko bez posredniego joba).
+  ZNALEZIONY PRE-EXISTING BUG (naprawiony przy okazji, bo linia i tak
+  wymagala dotkniecia): "uses: ./.github/actions/wg_connect" (podkreslnik)
+  podczas gdy faktyczny katalog na dysku to ".github/actions/wg-connect"
+  (myslnik). To by nigdy nie zadzialalo — Action nie zostalby znaleziony.
+  Ten sam blad istnieje NADAL (nienaprawiony, poza scope tego taska) w
+  deploy-staging.yaml i rollback.yaml — do naprawienia osobno, jesli
+  faktycznie byl przyczyna wczesniejszych problemow z deployem.
+  USUNIETO permissions.packages:write (deploy juz nie pushuje do GHCR,
+  tylko pull z publicznego package'a).
+  ZACHOWANE bez zmian: WireGuard, SSH, rolling deploy per-service z
+  health-checkiem, smoke test, Playwright smoke, auto-rollback, Discord
+  notify, teardown WireGuard.
+
+.github/workflows/widget.yaml
+  USUNIETO: job "detect" (martwy kod — sprawdzal istnienie widget/package.json,
+  zawsze zwracal false, bo pliku nie bylo; teraz plik istnieje wiec ten
+  warunek by przestal byc martwy i odpalilby stara logike publish-npm).
+  USUNIETO: job "build-test" (uzywal npm ci + package-lock.json, ktorego
+  nowy widget/package.json nie ma, bo nie ma zaleznosci — zastapiony
+  build-validate).
+  USUNIETO: job "publish-npm" (celowal w npm.pkg.github.com z GITHUB_TOKEN
+  — nieaktualne w stosunku do decyzji: docelowy target to publiczny
+  npmjs.org, jedyna autoryzowana publikacja jest teraz w release.yaml).
+  USUNIETO: zakomentowany szkielet "publish-cdn" (TODO bez implementacji).
+  DODANO: job "build-validate" — buduje dist (node scripts/build.mjs),
+  weryfikuje zawartosc paczki (npm pack --dry-run), NIE publikuje nigdzie.
+  ZACHOWANE bez zmian: job "smoke" (syntax check + html-validate),
+  triggery (push/PR na widget/**, ten plik, Makefile), concurrency.
+
+
+REMOVED BEHAVIOR
+-----------------
+
+- deploy-prod.yaml: rebuild obrazu Docker na tag push (docker buildx build
+  --push w jobie build-tag-push) — zastapiony retagiem juz istniejacego,
+  przeskanowanego SHA-image z release.yaml. Powod: artifact identity —
+  obraz wdrazany na prod ma byc bajt-identyczny z obrazem, ktory przeszedl
+  Trivy/Dockle w CI (_image.yaml), a nie osobno przebudowanym artefaktem.
+
+- widget.yaml: publikacja do npm.pkg.github.com — zastapiona publikacja do
+  publicznego npmjs.org w release.yaml (decyzja z Trello "Publikacja
+  widgetu do NPM" + istniejaca dokumentacja projektu wskazujaca publiczny
+  @bug-shot/widget).
+
+
+VALIDATION PERFORMED (w tym srodowisku, przed spakowaniem)
+------------------------------------------------------------
+
+- bash -n na wszystkich 3 skryptach release/*.sh — OK
+- node --check na widget/scripts/build.mjs (poprawna skladnia ESM) — OK
+- node widget/scripts/build.mjs uruchomiony na realnych plikach z ZIP-a
+  uzytkownika — wygenerowal poprawny widget/dist/widget.js + widget.css
+- npm pack --dry-run na widget/ z wygenerowanym dist/ — pokazal wylacznie
+  package.json + dist/widget.js + dist/widget.css + README.md (zero
+  config.js, zero .env, zero plikow deweloperskich)
+- release-dry-run.sh uruchomiony na realnej historii git z uploaded ZIP-a
+  — poprawnie wypisal ostatni tag (brak), bump, nastepna wersje
+- grep na calym overlay: zero pozostalosci "needs.build-tag-push",
+  zero "widget-v" (poza komentarzami odnoszacymi sie do historii/README),
+  zero "npm.pkg.github.com" w nowych/zmienionych plikach
+- actionlint NIE zostal uruchomiony w tym srodowisku (wymaga Dockera z
+  siecia, ktora tu jest ograniczona do konkretnych domen) — brak internetu
+  do pobrania obrazu rhysd/actionlint nie jest bledem implementacji;
+  uruchom go lokalnie wedlug RELEASE-AUTOMATION-APPLY.md krok 4
+
+
+KNOWN ONE-TIME MANUAL SETUP
+------------------------------
+
+Patrz RELEASE-AUTOMATION-SETUP.md. Skrocona lista:
+1. Secret NPM_TOKEN (nowy)
+2. Variable WIDGET_CDN_BASE_URL = https://fs-bugshot.on-labs.dev (do
+   potwierdzenia jednym curl — patrz rozbieznosc kod vs docs opisana tam)
+3. GHCR: Change visibility -> Public dla bugshot-backend i bugshot-frontend
+4. mkdir na VPS: ~/bugshot-prod/bug-shot-widgets
+5. npm scope @bug-shot na npmjs.org (jesli jeszcze nie istnieje)
+
+
+KNOWN LIMITATIONS
+-------------------
+
+- docker-retag fallback (GHCR Packages API) zaklada, ze co najmniej JEDEN
+  SHA-image dla backend/frontend zostal kiedykolwiek opublikowany. Jesli
+  ktorys serwis nigdy nie mial udanego builda w _image.yaml, pierwszy
+  release dla niego zawiedzie z czytelnym komunikatem (celowo, zamiast
+  cichego builda z niewiadomego zrodla).
+- WIDGET_CDN_BASE_URL wymaga jednorazowej weryfikacji (patrz wyzej) —
+  repo zawiera dwie rozne pisownie tego samego subdomainu (kod vs docs).
+- Ten sam typo w wg_connect/wg-connect co naprawiony w deploy-prod.yaml
+  NADAL wystepuje w deploy-staging.yaml i rollback.yaml — swiadomie
+  nietkniete (poza scope tego taska), warto zgłosić osobno.
+- Backup image pozostaje bez semver/latest (SHA-only) — decyzja swiadoma,
+  nie automatyczne przeoczenie; zmiana zakresu to jedna dodatkowa pozycja
+  w petli "for svc in backend frontend" w release.yaml.
