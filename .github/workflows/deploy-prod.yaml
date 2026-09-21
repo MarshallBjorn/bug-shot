@@ -46,6 +46,7 @@ jobs:
           wg_runner_address:  ${{ secrets.WG_RUNNER_ADDRESS }}
           vps_address:        ${{ secrets.WG_VPS_ADDRESS }}
           deploy_ssh_key:     ${{ secrets.DEPLOY_SSH_KEY }}
+          ssh_port:           ${{ secrets.SSH_PORT }}
 
       - name: Rolling deploy
         run: |
