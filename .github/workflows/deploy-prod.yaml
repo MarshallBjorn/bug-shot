@@ -3,6 +3,12 @@ name: deploy-prod
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Wersja do zdeployowania (musi juz istniec w GHCR, np. 1.2.3 — bez "v")'
+        required: true
+        type: string
 
 concurrency:
   group: deploy-prod
@@ -19,6 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+<<<<<<< HEAD
       - id: v
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
@@ -27,6 +34,20 @@ jobs:
       # literowka naprawiona przy okazji tej samej linii, ktora i tak trzeba
       # bylo dotknac (patrz RELEASE-AUTOMATION-MANIFEST.txt, sekcja "znaleziony
       # pre-existing bug").
+=======
+      # Wersja pochodzi albo z inputu (reczny workflow_dispatch), albo z nazwy
+      # tagu (automatyczny deploy po release.yaml). W obu przypadkach obraz
+      # SemVer musi juz byc opublikowany w GHCR (retag robi release.yaml) —
+      # ten workflow tylko pobiera i wdraza, nie buduje.
+      - id: v
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          fi
+
+>>>>>>> 4987b0b (chore: cd fixes)
       - uses: ./.github/actions/wg-connect
         with:
           wg_private_key:     ${{ secrets.WG_PRIVATE_KEY }}
