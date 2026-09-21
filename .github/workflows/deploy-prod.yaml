@@ -55,7 +55,7 @@ jobs:
 
           ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_VERSION="$VERSION" bash << 'REMOTE'
           set -euo pipefail
-          cd ~/bugshot-prod
+          cd /opt/apps/bugshot
           COMPOSE="docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml"
 
           export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VERSION}"
@@ -101,7 +101,7 @@ jobs:
         continue-on-error: true
         run: |
           ssh vps bash << 'REMOTE'
-          cd ~/bugshot-prod/e2e
+          cd /opt/apps/bugshot/e2e
           [ -f package.json ] && npx playwright test smoke.spec.ts --reporter=list || echo "skip"
           REMOTE
 
@@ -112,7 +112,7 @@ jobs:
 
           ssh vps DEPLOY_OWNER="$OWNER" bash << 'REMOTE'
           set -euo pipefail
-          cd ~/bugshot-prod
+          cd /opt/apps/bugshot
 
           PREV=$(cat .deploy-tag-prev 2>/dev/null || true)
           [ -z "$PREV" ] && { echo "No previous tag"; exit 1; }
