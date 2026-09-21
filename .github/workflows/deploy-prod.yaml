@@ -56,7 +56,7 @@ jobs:
           ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_VERSION="$VERSION" bash << 'REMOTE'
           set -euo pipefail
           cd /opt/apps/bugshot
-          COMPOSE="docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml"
+          COMPOSE="docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml"
 
           export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VERSION}"
           export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${DEPLOY_VERSION}"
@@ -89,12 +89,19 @@ jobs:
         run: |
           ssh vps bash << 'REMOTE'
           set -euo pipefail
+          cd /opt/apps/bugshot
+          COMPOSE="docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml"
 
-          for url in http://localhost:8080/healthz http://localhost:3000/healthz; do
-            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$url")
-            [ "$status" = "200" ] || { echo "FAIL: $url → $status"; exit 1; }
-            echo "OK: $url → $status"
-          done
+          # Prod nie publikuje portow na hosta (serwisy sa za Traefikiem w sieci
+          # proxy), wiec healthz sprawdzamy WEWNATRZ kontenera — ten sam endpoint,
+          # co docker healthcheck. Porty wewnetrzne: backend 8080, frontend 80.
+          echo "--- backend /healthz ---"
+          $COMPOSE exec -T backend curl -fsS http://127.0.0.1:8080/healthz
+
+          echo "--- frontend /healthz ---"
+          $COMPOSE exec -T frontend wget -qO- http://127.0.0.1/healthz
+
+          echo "--- smoke OK ---"
           REMOTE
 
       - name: Playwright smoke
@@ -122,7 +129,7 @@ jobs:
           export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${PREV}"
           export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${PREV}"
 
-          docker compose --env-file .env \
+          docker compose --env-file .env.prod \
             -f docker-compose.yml \
             -f docker-compose.prod.yml \
             up -d --no-build --remove-orphans
