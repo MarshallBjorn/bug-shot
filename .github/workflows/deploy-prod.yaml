@@ -56,7 +56,7 @@ jobs:
           ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_VERSION="$VERSION" bash << 'REMOTE'
           set -euo pipefail
           cd /opt/apps/bugshot
-          COMPOSE="docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml"
+          COMPOSE="docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml"
 
           export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VERSION}"
           export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${DEPLOY_VERSION}"
