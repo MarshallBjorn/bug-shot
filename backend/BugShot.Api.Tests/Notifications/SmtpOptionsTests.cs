@@ -18,7 +18,7 @@ public sealed class SmtpOptionsTests
         Assert.Null(options.Password);
         Assert.Equal("noreply@bug-shot.test", options.FromAddress);
         Assert.Equal("Bug-Shot", options.FromName);
-        Assert.False(options.UseStartTls);
+        Assert.Null(options.UseStartTls);
     }
 
     [Fact]
@@ -129,22 +129,20 @@ public sealed class SmtpOptionsTests
     }
 
     [Fact]
-    public void Read_InvalidPortOrBool_KeepsDefaultInsteadOfThrowing()
+    public void Read_InvalidPort_Throws()
     {
-        var configuration = Build(new()
-        {
-            ["SMTP_PORT"] = "not-a-number",
-            ["SMTP_USE_STARTTLS"] = "not-a-bool"
-        });
-
-        var options = SmtpOptions.Read(configuration);
-
-        Assert.Equal(25, options.Port);
-        Assert.False(options.UseStartTls);
+        var configuration = Build(new() { ["SMTP_PORT"] = "25a" });
+        var exception = Assert.Throws<FormatException>(() => { _ = SmtpOptions.Read(configuration); });
+        Assert.Contains("Invalid SMTP port", exception.Message, StringComparison.Ordinal);
     }
 
-    private static IConfiguration Build(Dictionary<string, string?> values)
-        => new ConfigurationBuilder()
-            .AddInMemoryCollection(values)
-            .Build();
+    [Fact]
+    public void Read_InvalidUseStartTls_Throws()
+    {
+        var configuration = Build(new() { ["SMTP_USE_STARTTLS"] = "sometimes" });
+        var exception = Assert.Throws<FormatException>(() => { _ = SmtpOptions.Read(configuration); });
+        Assert.Contains("Invalid SMTP_USE_STARTTLS", exception.Message, StringComparison.Ordinal);
+    }
+    private static IConfiguration Build(System.Collections.Generic.Dictionary<string, string?> values) =>
+        new ConfigurationBuilder().AddInMemoryCollection(values).Build();
 }

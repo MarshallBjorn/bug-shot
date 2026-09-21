@@ -92,7 +92,7 @@ Unknown tokens render as an empty string (tracked in
 for another event type, they render empty and count as missing.
 Default templates are seeded by migration `20260916074237_AddNotifications`
 (global, `project_id = null`); projects can override per event/channel via
-`PUT /api/v1/projects/{projectId}/notification-templates`.
+`PUT /api/v1/projects/{projectId}/templates`.
 
 ## Local E2E (with real email)
 
@@ -117,3 +117,66 @@ Webhook delivery cannot use this local stack (see SSRF note above) — for
 a live webhook proof use a public HTTPS endpoint and create the channel
 against `demoProjectId` (`11111111-1111-1111-1111-111111111111`) via the
 admin API or UI.
+
+## Delivery lifecycle
+
+`Pending` is the only status claimed by the dispatcher.
+
+`Sending` means the delivery is currently being attempted.
+
+`Sent` means successful delivery.
+
+`Failed` is terminal for permanent failures, disabled channels, and deliveries that exhausted the retry budget.
+
+`Throttled` is a terminal drop for the current event and is not requeued.
+
+A stale `Sending` delivery older than 5 minutes is recovered after dispatcher restart. If attempts remain it returns to `Pending`; otherwise it becomes `Failed`.
+
+## Retry policy
+
+A retryable webhook failure uses a maximum of 4 total attempts:
+
+1. initial attempt
+2. retry after 1 minute
+3. retry after 5 minutes
+4. retry after 25 minutes
+
+HTTP 429 and HTTP 5xx are retryable.
+HTTP 4xx other than 429 are terminal.
+
+## Database text limits
+
+Rendered notification text is fitted before `NotificationDelivery` is persisted:
+
+- `RenderedSubject`: 255 characters
+- `RenderedBody`: 8000 characters
+- `LastError`: 2000 characters
+
+Truncation does not split UTF-16 surrogate pairs.
+
+## SMTP
+
+When `SMTP_USE_STARTTLS` is unset or blank, MailKit uses `StartTlsWhenAvailable`.
+`SMTP_USE_STARTTLS=true` requires StartTLS.
+`SMTP_USE_STARTTLS=false` explicitly disables TLS.
+Blank SMTP values are treated as absent. Non-empty invalid SMTP values fail configuration parsing.
+Development compose uses SMTP port `25` when `SMTP_PORT` is not set.
+
+## Webhook payload
+
+Webhook payloads preserve the existing fields and also expose:
+
+- `text` for Slack-style consumers
+- `content` for Discord-style consumers
+
+Discord `content` is limited to 2000 characters.
+
+## Test webhook endpoint
+
+`POST /api/v1/projects/{projectId}/notifications/{channelId}/test` returns:
+
+- `400` for invalid URL or webhook validation errors
+- `502` when the receiver cannot be reached
+- `504` when the receiver times out
+
+Internal stack traces are not returned.

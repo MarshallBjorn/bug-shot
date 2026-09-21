@@ -431,7 +431,7 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
                 Id = new Guid("10000000-0000-0000-0000-000000000001"),
                 EventType = NotificationEventType.TicketCreated,
                 ChannelType = NotificationChannelType.Email,
-                Subject = "New ticket {{ticket.id}}",
+                Subject = "[{{project.name}}] New ticket {{ticket.id}}",
                 Body = "{{ticket.description}}",
                 CreatedAt = notificationTemplateCreatedAt
             },
@@ -449,7 +449,7 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
                 Id = new Guid("10000000-0000-0000-0000-000000000003"),
                 EventType = NotificationEventType.CommentAdded,
                 ChannelType = NotificationChannelType.Email,
-                Subject = "New comment on {{ticket.id}}",
+                Subject = "[{{project.name}}] New comment on {{ticket.id}}",
                 Body = "{{comment.author}}: {{comment.body}}",
                 CreatedAt = notificationTemplateCreatedAt
             },
@@ -467,7 +467,7 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
                 Id = new Guid("10000000-0000-0000-0000-000000000005"),
                 EventType = NotificationEventType.StatusChanged,
                 ChannelType = NotificationChannelType.Email,
-                Subject = "Status changed for {{ticket.id}}",
+                Subject = "[{{project.name}}] Status changed for {{ticket.id}}",
                 Body = "{{status.from}} -> {{status.to}}",
                 CreatedAt = notificationTemplateCreatedAt
             },

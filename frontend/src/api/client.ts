@@ -1,4 +1,4 @@
-﻿import { accessToken, renewSession } from '../auth/session'
+import { accessToken, renewSession } from '../auth/session'
 import { apiBaseUrl } from '../config'
 import { ApiError } from './error'
 

@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Net.Mime;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
@@ -47,7 +47,7 @@ public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender 
         return Ok(channels);
     }
 
-    /// <summary>Tworzy kanaĹ‚ powiadomieĹ„.</summary>
+    /// <summary>Tworzy kanał powiadomień.</summary>
     /// <remarks>Admin only. Validates addresses, types, and throttling configuration.</remarks>
     [HttpPost]
     [ProducesResponseType<NotificationChannelResponse>(StatusCodes.Status201Created)]
@@ -101,8 +101,8 @@ public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender 
         return Created((string?)null, MapToResponse(channel));
     }
 
-    /// <summary>Aktualizuje kanaĹ‚ powiadomieĹ„.</summary>
-    /// <remarks>Tylko dla administratora. Typ kanaĹ‚u pozostaje niezmienny.</remarks>
+    /// <summary>Aktualizuje kanał powiadomień.</summary>
+    /// <remarks>Tylko dla administratora. Typ kanału pozostaje niezmienny.</remarks>
     [HttpPut("{channelId:guid}")]
     [ProducesResponseType<NotificationChannelResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -167,7 +167,7 @@ public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender 
         return Ok(MapToResponse(channel));
     }
 
-    /// <summary>Usuwa kanaĹ‚ powiadomieĹ„.</summary>
+    /// <summary>Usuwa kanał powiadomień.</summary>
     /// <remarks>Tylko dla administratora.</remarks>
     [HttpDelete("{channelId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -201,21 +201,29 @@ public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender 
     }
 
     /// <summary>Wysyła testowe zdarzenie webhooka dla kanału projektu.</summary>
-    [HttpPost("{channelId:guid}/test")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [HttpPost("{channelId:guid}/test")]
     public async Task<IActionResult> SendTestWebhook(
         Guid projectId,
         Guid channelId,
         CancellationToken cancellationToken)
     {
-        var channel = await db.NotificationChannels
-            .SingleOrDefaultAsync(
-                c => c.Id == channelId && c.ProjectId == projectId,
-                cancellationToken);
+        var channel =
+            await db.NotificationChannels
+                .SingleOrDefaultAsync(
+                    c =>
+                        c.Id == channelId &&
+                        c.ProjectId == projectId,
+                    cancellationToken);
 
         if (channel is null)
         {
@@ -227,7 +235,6 @@ public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender 
             ModelState.AddModelError(
                 nameof(channelId),
                 "Test event is available only for webhook channels.");
-
             return ValidationProblem(ModelState);
         }
 
@@ -236,7 +243,6 @@ public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender 
             ModelState.AddModelError(
                 nameof(channelId),
                 "The webhook channel is disabled.");
-
             return ValidationProblem(ModelState);
         }
 
@@ -245,32 +251,52 @@ public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender 
             ModelState.AddModelError(
                 nameof(channelId),
                 "The webhook channel has no URL.");
-
             return ValidationProblem(ModelState);
         }
 
         var deliveryId = Guid.NewGuid();
 
-        var payload = $$"""
+        var payloadObj = new
         {
-          "eventId": "{{Guid.NewGuid()}}",
-          "eventType": "test",
-          "projectId": "{{projectId}}",
-          "message": "BugShot test webhook",
-          "createdAt": "{{DateTimeOffset.UtcNow:O}}"
-        }
-        """;
+            eventId = Guid.NewGuid(),
+            eventType = "test",
+            projectId = projectId,
+            message = "BugShot test webhook",
+            createdAt = DateTimeOffset.UtcNow
+        };
 
-        await webhookSender.SendWebhookAsync(
-            channel.WebhookUrl,
-            channel.WebhookSecret,
-            deliveryId,
-            "test",
-            payload,
-            cancellationToken);
+        var payload = System.Text.Json.JsonSerializer.Serialize(payloadObj);
+
+        try
+        {
+            await webhookSender.SendWebhookAsync(
+                channel.WebhookUrl,
+                channel.WebhookSecret,
+                deliveryId,
+                "test",
+                payload,
+                cancellationToken);
+        }
+        catch (HttpRequestException ex)
+        {
+            return StatusCode(502, new { error = "Błąd komunikacji z docelowym adresem webhooka.", details = ex.Message });
+        }
+        catch (TaskCanceledException ex)
+        {
+            return StatusCode(504, new { error = "Limit czasu żądania webhooka został przekroczony (10s).", details = ex.Message });
+        }
+        catch (UriFormatException ex)
+        {
+            return BadRequest(new { error = "Nieprawidłowy format adresu URL webhooka.", details = ex.Message });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { error = "Wewnętrzny błąd serwera podczas wysyłania powiadomienia testowego." });
+        }
 
         return NoContent();
     }
+
     private void ValidateChannelParameters(
         NotificationChannelType? type,
         string? emailAddress,

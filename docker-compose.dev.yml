@@ -39,7 +39,7 @@ services:
       SWAGGER_USER: ${SWAGGER_USER:-}
       SWAGGER_PASSWORD: ${SWAGGER_PASSWORD:-}
       Smtp__Host: ${SMTP_HOST:-}
-      Smtp__Port: ${SMTP_PORT:-}
+      Smtp__Port: ${SMTP_PORT:-25}
       Smtp__Username: ${SMTP_USERNAME:-}
       Smtp__Password: ${SMTP_PASSWORD:-}
       Smtp__FromAddress: ${SMTP_FROM_ADDRESS:-}

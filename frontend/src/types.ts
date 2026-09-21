@@ -1,4 +1,4 @@
-﻿export type TicketStatus = 'New' | 'InProgress' | 'Resolved' | 'Rejected' | 'Deleted'
+export type TicketStatus = 'New' | 'InProgress' | 'Resolved' | 'Rejected' | 'Deleted'
 
 export interface TicketListItem {
   id: string

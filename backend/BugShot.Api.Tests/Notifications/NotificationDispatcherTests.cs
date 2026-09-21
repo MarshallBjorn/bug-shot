@@ -93,7 +93,7 @@ public class NotificationDispatcherTests
                 .AsNoTracking()
                 .SingleAsync(d => d.Id == delivery.Id);
 
-        Assert.Equal(NotificationDeliveryStatus.Failed, d1.Status);
+        Assert.Equal(NotificationDeliveryStatus.Pending, d1.Status);
         Assert.Equal(1, d1.AttemptCount);
         Assert.NotNull(d1.LastError);
 
@@ -305,7 +305,7 @@ public class NotificationDispatcherTests
         var webhookSender = new FakeWebhookSender
         {
             ExceptionToThrow =
-                new HttpRequestException("HTTP 400 Bad Request")
+                new HttpRequestException("HTTP 400 Bad Request", null, System.Net.HttpStatusCode.BadRequest)
         };
 
         await RunDispatcherOnceAsync(

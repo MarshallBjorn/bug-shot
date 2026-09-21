@@ -140,6 +140,18 @@ public sealed class NotificationEnqueuer(
                 comment,
                 statusChange);
 
+            var fittedSubject =
+                NotificationText.FitToColumn<NotificationDelivery>(
+                    db.Model,
+                    nameof(NotificationDelivery.RenderedSubject),
+                    renderedSubject.Content);
+
+            var fittedBody =
+                NotificationText.FitToColumn<NotificationDelivery>(
+                    db.Model,
+                    nameof(NotificationDelivery.RenderedBody),
+                    renderedBody.Content) ?? string.Empty;
+
             db.NotificationDeliveries.Add(new NotificationDelivery
             {
                 ProjectId = notificationEvent.ProjectId,
@@ -149,8 +161,8 @@ public sealed class NotificationEnqueuer(
                 Status = NotificationDeliveryStatus.Pending,
                 AttemptCount = 0,
                 NextAttemptAt = DateTimeOffset.UtcNow,
-                RenderedSubject = renderedSubject.Content,
-                RenderedBody = renderedBody.Content
+                RenderedSubject = fittedSubject,
+                RenderedBody = fittedBody
             });
         }
     }
