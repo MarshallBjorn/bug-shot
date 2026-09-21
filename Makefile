@@ -36,6 +36,16 @@ test-backend:
 test-frontend: frontend/node_modules
 	cd frontend && npm test
 
+# ─── load test ───
+loadtest: loadtest/reports
+	k6 run loadtest/k6-tickets.js --env BASE_URL=http://localhost:8080
+
+loadtest-quick:
+	k6 run loadtest/k6-tickets.js --env BASE_URL=http://localhost:8080 --env K6_QUICK=1
+
+loadtest/reports:
+	mkdir -p loadtest/reports
+
 # stawia wlasne API i panel na osobnych portach i wlasnej bazie wiec nie koliduje z make dev
 # potrzebuje za to bazy z compose wiec make dev musi chodzic
 e2e: e2e/node_modules

@@ -1,0 +1,111 @@
+name: loadtest
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'   # monday 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Test duration (k6 format, e.g. 5m, 2m)'
+        default: '5m'
+        type: string
+      rate:
+        description: 'Requests per second per scenario'
+        default: '100'
+        type: string
+
+concurrency:
+  group: loadtest
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  loadtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: bugshot_loadtest
+          POSTGRES_USER: bugshot
+          POSTGRES_PASSWORD: loadtest-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bugshot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ConnectionStrings__DefaultConnection: "Host=localhost;Port=5432;Database=bugshot_loadtest;Username=bugshot;Password=loadtest-only"
+      ASPNETCORE_URLS: "http://+:8080"
+      JWT__SigningKey: "loadtest-signing-key-minimum-32-bytes!!"
+      JWT__Issuer: "bugshot-loadtest"
+      JWT__Audience: "bugshot-loadtest"
+      Attachments__RootPath: /tmp/bugshot-attachments
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+            --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D68
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      - name: Build & start API
+        run: |
+          mkdir -p /tmp/bugshot-attachments
+          cd backend
+          dotnet build -c Release
+          dotnet run --project BugShot.Api/BugShot.Api.csproj -c Release &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080/healthz && break
+            [ "$i" -eq 30 ] && { echo "API did not start"; exit 1; }
+            sleep 2
+          done
+          echo "API ready"
+
+      - name: Seed test data
+        run: node scripts/seed.mjs --count 10000 --base-url http://localhost:8080
+
+      - name: Apply performance indexes
+        run: |
+          PGPASSWORD=loadtest-only psql \
+            -h localhost -U bugshot -d bugshot_loadtest \
+            < loadtest/add-performance-indexes.sql
+
+      - name: Run k6
+        run: |
+          mkdir -p loadtest/reports
+          k6 run loadtest/k6-tickets.js \
+            --env BASE_URL=http://localhost:8080 \
+            --summary-export loadtest/reports/summary.json
+        env:
+          K6_DURATION: ${{ inputs.duration || '5m' }}
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadtest-report-${{ github.run_number }}
+          path: loadtest/reports/
+          retention-days: 30
