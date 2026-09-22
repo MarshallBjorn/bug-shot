@@ -262,12 +262,12 @@ jobs:
           # Katalog wersji: IMMUTABLE — tworzymy i wypelniamy, bez czyszczenia
           # (guard job juz zagwarantowal, ze ten commit nie mial pelnego release,
           # wiec katalog jest pusty albo z przerwanego runu tej samej wersji).
-          ssh vps "mkdir -p ~/${BASE}/v${VER}"
-          tar -C widget/dist -czf - . | ssh vps "tar -C ~/${BASE}/v${VER} -xzf -"
+          ssh vps 'mkdir -p ~/'"${BASE}"'/v'"${VER}"
+          tar -C widget/dist -czf - . | ssh vps 'tar -C ~/'"${BASE}"'/v'"${VER}"' -xzf -'
 
           # latest/: jedyny katalog, ktory wolno czyscic i nadpisywac.
-          ssh vps "rm -rf ~/${BASE}/latest && mkdir -p ~/${BASE}/latest"
-          tar -C widget/dist -czf - . | ssh vps "tar -C ~/${BASE}/latest -xzf -"
+          ssh vps 'rm -rf ~/'"${BASE}"'/latest && mkdir -p ~/'"${BASE}"'/latest'
+          tar -C widget/dist -czf - . | ssh vps 'tar -C ~/'"${BASE}"'/latest -xzf -'
 
       - name: Teardown WireGuard
         if: always()
