@@ -89,6 +89,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: read   # gh run watch — dogladamy build HEAD-a przed retagiem
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -109,25 +110,51 @@ jobs:
         run: |
           set -euo pipefail
           OWNER_LC=$(printf '%s' "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+          HEAD_SHA_FULL=$(git rev-parse HEAD)
           HEAD_SHA7=$(git rev-parse --short=7 HEAD)
 
           for svc in backend frontend; do
             IMAGE="ghcr.io/${OWNER_LC}/bugshot-${svc}"
+            WF="${svc}.yaml"
             SRC_TAG=""
 
-            # FAST PATH: backend.yaml/frontend.yaml maja path-filtry (backend/**,
-            # frontend/**), wiec jesli TEN konkretny commit dotknal danego serwisu,
-            # obraz dla HEAD SHA istnieje juz w GHCR.
-            if docker manifest inspect "${IMAGE}:${HEAD_SHA7}" >/dev/null 2>&1; then
+            # Build (${svc}.yaml) i release startuja z tego samego push-a na main
+            # ROWNOLEGLE, a _image.yaml pushuje obraz :HEAD_SHA dopiero na koncu
+            # (po trivy+dockle, ~kilka minut). Dlatego zwykly `docker manifest
+            # inspect :HEAD_SHA` moze tu jeszcze zwrocic 404 — i STARY kod bral
+            # wtedy po cichu fallback (najnowszy obcy SHA), przez co deploy
+            # dostawal POPRZEDNI obraz. Fix: rozroznic "build trwa" od "brak
+            # buildu" pytajac Actions API o run builda dla HEAD:
+            #   - jest run  -> czekamy na niego i WYMAGAMY obrazu :HEAD_SHA,
+            #   - brak run  -> ten commit nie dotknal $svc -> uczciwy fallback.
+            RUN_ID=""
+            for _ in $(seq 1 6); do
+              RUN_ID=$(gh run list --workflow "$WF" --commit "$HEAD_SHA_FULL" \
+                         --event push --json databaseId \
+                         --limit 1 --jq '.[0].databaseId // empty' 2>/dev/null || true)
+              [ -n "$RUN_ID" ] && break
+              echo "[$svc] run builda ${WF} dla HEAD jeszcze nie widoczny, czekam…"
+              sleep 10
+            done
+
+            if [ -n "$RUN_ID" ]; then
+              echo "[$svc] build ${WF} #${RUN_ID} dla HEAD (${HEAD_SHA7}) — czekam na zakonczenie…"
+              if ! gh run watch "$RUN_ID" --exit-status --interval 15 >/dev/null; then
+                echo "::error::[$svc] build ${WF} #${RUN_ID} dla HEAD zakonczyl sie niepowodzeniem — NIE retaguje (deploy dostalby zly/stary obraz). Napraw build i ponow release."
+                exit 1
+              fi
+              if ! docker manifest inspect "${IMAGE}:${HEAD_SHA7}" >/dev/null 2>&1; then
+                echo "::error::[$svc] build ${WF} zakonczony sukcesem, ale obraz ${IMAGE}:${HEAD_SHA7} nie istnieje w GHCR. Sprawdz job 'push' w ${WF} (pushuje tylko na push do main)."
+                exit 1
+              fi
               SRC_TAG="$HEAD_SHA7"
-              echo "[$svc] fast path: HEAD SHA image istnieje (${HEAD_SHA7})"
+              echo "[$svc] OK: obraz HEAD gotowy (${HEAD_SHA7})"
             else
-              # FALLBACK: ten commit nie dotknal $svc (np. release-worthy fix
-              # dotyczyl tylko widgetu/docs) -> nie ma obrazu dla HEAD SHA.
+              # FALLBACK: brak run-a builda dla HEAD -> ten commit nie dotknal
+              # $svc (np. release-worthy zmiana tylko w widget/docs/infra).
               # Bierzemy najnowszy opublikowany krotki-SHA tag wprost z GHCR
-              # Package API (nie z git-log-walk — API jest zrodlem prawdy o
-              # tym, co faktycznie zostalo opublikowane).
-              echo "[$svc] fallback: HEAD SHA image nie istnieje, szukam najnowszego w GHCR API"
+              # Package API (zrodlo prawdy o tym, co faktycznie opublikowano).
+              echo "[$svc] brak builda ${WF} dla HEAD — serwis nietkniety, fallback do najnowszego SHA z GHCR API"
               VJSON=$(gh api --paginate --slurp "users/${REPO_OWNER}/packages/container/bugshot-${svc}/versions?per_page=100" 2>/dev/null | jq -c 'add // []')
               if [ "$VJSON" = "[]" ] || [ -z "$VJSON" ]; then
                 VJSON=$(gh api --paginate --slurp "orgs/${REPO_OWNER}/packages/container/bugshot-${svc}/versions?per_page=100" 2>/dev/null | jq -c 'add // []')
@@ -141,7 +168,7 @@ jobs:
             fi
 
             if [ -z "$SRC_TAG" ]; then
-              echo "::error::[$svc] Brak jakiegokolwiek opublikowanego SHA-image w GHCR (ani HEAD, ani fallback z API). Release automation nie ma z czego zretagowac ${VERSION}. Sprawdz czy _image.yaml kiedykolwiek pomyslnie zbudowal ten serwis."
+              echo "::error::[$svc] Brak jakiegokolwiek zrodlowego obrazu (ani HEAD, ani fallback z API). Release automation nie ma z czego zretagowac ${VERSION}. Sprawdz czy _image.yaml kiedykolwiek pomyslnie zbudowal ten serwis."
               exit 1
             fi
 
@@ -179,6 +206,17 @@ jobs:
         run: |
           set -euo pipefail
           VER="${{ needs.version.outputs.next_version }}"
+
+          # Brak tokena to problem konfiguracji, nie realny blad publikacji.
+          # Widget jest ODSPRZEGNIETY od deployu (gh-release nie zalezy od tego
+          # joba), wiec zamiast walic caly release na npm ENEEDAUTH — pomijamy
+          # publikacje z czytelnym ostrzezeniem. Ustaw sekret repo NPM_TOKEN,
+          # aby ja wznowic. Deploy prod NIE jest tym blokowany.
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::warning::NPM_TOKEN nie jest ustawiony — pomijam publikacje @bug-shot/widget@${VER} w npm. Ustaw sekret repo NPM_TOKEN, aby wznowic. Release i deploy NIE sa tym blokowane."
+            exit 0
+          fi
+
           if npm view "@bug-shot/widget@${VER}" version >/dev/null 2>&1; then
             echo "@bug-shot/widget@${VER} juz opublikowane w npm — skip (bezpieczny rerun)."
           else
@@ -186,7 +224,9 @@ jobs:
           fi
 
   widget-cdn:
-    needs: [version, guard, widget-publish]
+    # Niezalezne od widget-publish: sync na CDN (rsync dist/) nie potrzebuje npm,
+    # a i tak buduje dist samodzielnie. Dzieki temu awaria npm nie blokuje CDN.
+    needs: [version, guard]
     if: needs.guard.outputs.resume_from != 'complete'
     permissions: { contents: read }
     runs-on: ubuntu-latest
@@ -228,14 +268,14 @@ jobs:
         run: sudo wg-quick down wg0 || true
 
   gh-release:
-    needs: [version, guard, docker-retag, widget-publish, widget-cdn]
+    # Sciezka krytyczna deployu = tylko docker-retag. Widget (npm + CDN) jest
+    # ODSPRZEGNIETY: jego awaria nie blokuje utworzenia taga v* ani deployu prod.
+    needs: [version, guard, docker-retag]
     if: |
       always() &&
       needs.guard.result == 'success' &&
       needs.guard.outputs.resume_from != 'complete' &&
-      needs.docker-retag.result == 'success' &&
-      needs.widget-publish.result == 'success' &&
-      needs.widget-cdn.result == 'success'
+      needs.docker-retag.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
