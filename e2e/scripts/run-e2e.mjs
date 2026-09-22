@@ -9,6 +9,8 @@ const composeArgs = [
   'bugshot-e2e',
   '-f',
   '../docker-compose.e2e.yml',
+  '-f',
+  '../docker-compose.notifications.e2e.yml',
 ]
 
 const run = (args, options = {}) => {
@@ -64,6 +66,7 @@ try {
     '--build',
     'postgres-e2e',
     'minio-e2e',
+    'mailpit-e2e',
     'backend-e2e',
     'frontend-e2e',
   ])
@@ -89,6 +92,7 @@ try {
         E2E_POSTGRES_DB: 'bugshot_e2e',
         E2E_API_BASE_URL: 'http://localhost:8085',
         E2E_DASHBOARD_BASE_URL: 'http://localhost:5175',
+        E2E_MAILPIT_API_URL: 'http://localhost:8026',
       },
     },
   )

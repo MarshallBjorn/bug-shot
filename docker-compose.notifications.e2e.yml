@@ -1,0 +1,35 @@
+﻿# Override dla docker-compose.e2e.yml - dodaje Mailpit do izolowanego stacku E2E,
+# zeby mozna bylo przetestowac realne wysylanie maili z Notifications bez
+# dotykania produkcyjnego SMTP i bez zmiany bazowego pliku e2e.
+#
+# Uzycie (Postgres 5435 / backend 8085 / frontend 5175 z docker-compose.e2e.yml,
+# NIC nie koliduje z dev Postgres 5433):
+#
+#   $env:E2E_JWT_SIGNING_KEY = "local-e2e-signing-key-not-a-secret"
+#   docker compose -f docker-compose.e2e.yml -f docker-compose.notifications.e2e.yml up -d --build
+#
+# Mailpit UI:  http://127.0.0.1:8026
+# Mailpit SMTP (z hosta, jesli potrzebny): 127.0.0.1:1026 -> kontener 1025
+#
+# NIE dodawac tego pliku do docker-compose.prod.yml ani do zadnego
+# production-facing kompozycji - to jest wylacznie dev/E2E fixture.
+
+services:
+  mailpit-e2e:
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:8026:8025"
+      - "127.0.0.1:1026:1025"
+    networks:
+      - e2e
+
+  backend-e2e:
+    depends_on:
+      mailpit-e2e:
+        condition: service_started
+    environment:
+      Smtp__Host: mailpit-e2e
+      Smtp__Port: "1025"
+      Smtp__FromAddress: noreply@bug-shot.test
+      Smtp__FromName: Bug-Shot
+      Smtp__UseStartTls: "false"

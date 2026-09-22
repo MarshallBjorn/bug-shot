@@ -10,6 +10,7 @@ using BugShot.Api.Data;
 using BugShot.Api.Idempotency;
 using BugShot.Api.Live;
 using BugShot.Api.Models;
+using BugShot.Api.Notifications;
 using BugShot.Api.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
@@ -28,7 +29,9 @@ public class TicketsController(
     IDistributedCache idempotencyCache,
     ITicketNotifier notifier,
     ILogger<TicketsController> logger,
-    ISanitizationService sanitization) : ControllerBase
+    ISanitizationService sanitization,
+    INotificationEnqueuer notificationEnqueuer,
+        INotificationWorkerSignal notificationWorkerSignal) : ControllerBase
 {
     private const string IdempotencyKeyHeader = "Idempotency-Key";
     private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromHours(24);
@@ -154,7 +157,15 @@ public class TicketsController(
             ExpiresAt = expiresAt
         });
 
+                await notificationEnqueuer.EnqueueAsync(
+            new NotificationEvent(
+                project.Id,
+                ticket.Id,
+                NotificationEventType.TicketCreated),
+            cancellationToken);
+
         await db.SaveChangesAsync(cancellationToken);
+            notificationWorkerSignal.Signal();
 
         if (!string.IsNullOrEmpty(idempotencyKey))
         {
@@ -273,7 +284,16 @@ public class TicketsController(
 
         db.TicketComments.Add(comment);
 
+                await notificationEnqueuer.EnqueueAsync(
+            new NotificationEvent(
+                ticket.ProjectId,
+                ticket.Id,
+                NotificationEventType.CommentAdded,
+                comment.Id),
+            cancellationToken);
+
         await db.SaveChangesAsync(cancellationToken);
+            notificationWorkerSignal.Signal();
 
         return CreatedAtAction(
             nameof(GetComments),
@@ -410,6 +430,7 @@ public class TicketsController(
         db.TicketAttachments.RemoveRange(ticket.Attachments);
 
         await db.SaveChangesAsync(cancellationToken);
+            notificationWorkerSignal.Signal();
         await transaction.CommitAsync(cancellationToken);
 
         foreach (var attachmentPath in attachmentPaths)
@@ -510,10 +531,19 @@ public class TicketsController(
 
         db.TicketStatusChanges.Add(statusChange);
 
+        await notificationEnqueuer.EnqueueAsync(
+            new NotificationEvent(
+                ticket.ProjectId,
+                ticket.Id,
+                NotificationEventType.StatusChanged,
+                statusChange.Id),
+            cancellationToken);
+
         try
         {
             // row_version jest tokenem wspolbieznosci wiec update trafia tylko w wersje ktora czytalismy
             await db.SaveChangesAsync(cancellationToken);
+            notificationWorkerSignal.Signal();
         }
         catch (DbUpdateConcurrencyException)
         {

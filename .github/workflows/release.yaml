@@ -248,21 +248,26 @@ jobs:
 
       - name: Sync widget dist na CDN (nginx /widgets/, istniejacy bind-mount)
         run: |
+          # shellcheck disable=SC2029
+          # BASE/VER sa CELOWO rozwijane po stronie runnera przed zdalna komenda
+          # (~ zostaje niezaescapowane i rozwija sie na VPS). Dyrektywa na gorze
+          # skryptu wycisza SC2029 dla wszystkich ponizszych wywolan ssh.
           set -euo pipefail
           VER="${{ needs.version.outputs.next_version }}"
 
-          # shellcheck disable=SC2029
-          # VER is intentionally expanded by the runner before the remote mkdir command.
-          ssh vps "mkdir -p ~/bugshot-prod/bug-shot-widgets/v${VER} ~/bugshot-prod/bug-shot-widgets/latest"
+          # tar-over-ssh zamiast rsync — VPS nie ma rsync, a to nie wymaga
+          # zadnych zaleznosci po stronie serwera (tylko tar + ssh).
+          BASE="bugshot-prod/bug-shot-widgets"
 
-          # Katalog wersji: IMMUTABLE. Nigdy --delete, nigdy nie nadpisuj
-          # istniejacej wersji (guard job juz zagwarantowal, ze ten commit
-          # jeszcze nie mial pelnego release, wiec ten katalog jest albo
-          # pusty, albo z przerwanego runu tej samej wersji — bezpieczne).
-          rsync -az widget/dist/ "vps:~/bugshot-prod/bug-shot-widgets/v${VER}/"
+          # Katalog wersji: IMMUTABLE — tworzymy i wypelniamy, bez czyszczenia
+          # (guard job juz zagwarantowal, ze ten commit nie mial pelnego release,
+          # wiec katalog jest pusty albo z przerwanego runu tej samej wersji).
+          ssh vps 'mkdir -p ~/'"${BASE}"'/v'"${VER}"
+          tar -C widget/dist -czf - . | ssh vps 'tar -C ~/'"${BASE}"'/v'"${VER}"' -xzf -'
 
-          # latest/: jedyny katalog, ktory wolno nadpisywac / czyscic.
-          rsync -az --delete widget/dist/ "vps:~/bugshot-prod/bug-shot-widgets/latest/"
+          # latest/: jedyny katalog, ktory wolno czyscic i nadpisywac.
+          ssh vps 'rm -rf ~/'"${BASE}"'/latest && mkdir -p ~/'"${BASE}"'/latest'
+          tar -C widget/dist -czf - . | ssh vps 'tar -C ~/'"${BASE}"'/latest -xzf -'
 
       - name: Teardown WireGuard
         if: always()

@@ -169,6 +169,7 @@ function AdminProjectsPage() {
                 <strong>{project.name}</strong>
                 <code>{project.key}</code>
                 <Link to={`/projects/${project.id}/tickets`}>Zgłoszenia</Link>
+                <Link to={`/admin/projects/${project.id}/notifications`}>Powiadomienia</Link>
                 <button type="button" onClick={() => handleRename(project)}>
                   Zmień nazwę
                 </button>
@@ -202,3 +203,4 @@ function AdminProjectsPage() {
 }
 
 export default AdminProjectsPage
+
