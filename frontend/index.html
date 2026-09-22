@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bug-shot</title>
+    <!-- Runtime config: external same-origin file (CSP script-src 'self' OK).
+         Dev: served from public/. Prod: overwritten per-deploy by the container
+         entrypoint from .env.prod. Loads before the deferred module bundle. -->
+    <script src="/config.js"></script>
   </head>
   <body>
     <div id="root"></div>
