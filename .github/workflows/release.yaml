@@ -244,6 +244,7 @@ jobs:
           wg_runner_address:  ${{ secrets.WG_RUNNER_ADDRESS }}
           vps_address:        ${{ secrets.WG_VPS_ADDRESS }}
           deploy_ssh_key:     ${{ secrets.DEPLOY_SSH_KEY }}
+          ssh_port:           ${{ secrets.SSH_PORT }}
 
       - name: Sync widget dist na CDN (nginx /widgets/, istniejacy bind-mount)
         run: |
@@ -293,10 +294,13 @@ jobs:
           VER="${{ needs.version.outputs.next_version }}"
           LAST="${{ needs.version.outputs.last_tag }}"
           [ -z "$LAST" ] && LAST="none"
+          # WIDGET_CDN_BASE_URL to dotyczy tylko sekcji CDN widgetu w notatkach.
+          # Widget jest odsprzegniety od deployu, wiec jej brak NIE moze blokowac
+          # utworzenia taga v* ani deployu prod — degradujemy do warningu, a
+          # render-notes.sh pomija sekcje CDN gdy URL pusty.
           CDN_BASE="${{ vars.WIDGET_CDN_BASE_URL }}"
           if [ -z "$CDN_BASE" ]; then
-            echo "::error::Repository variable WIDGET_CDN_BASE_URL nie jest ustawiona. Patrz RELEASE-AUTOMATION-SETUP.md."
-            exit 1
+            echo "::warning::Repository variable WIDGET_CDN_BASE_URL nie jest ustawiona — sekcja CDN widgetu zostanie pominieta w release notes. Deploy NIE jest tym blokowany. Ustaw ja: gh variable set WIDGET_CDN_BASE_URL --body <url>."
           fi
           bash scripts/release/render-notes.sh "$VER" "$LAST" "$CDN_BASE" > /tmp/notes.md
 
