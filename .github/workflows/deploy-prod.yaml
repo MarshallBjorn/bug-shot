@@ -56,6 +56,20 @@ jobs:
           ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_VERSION="$VERSION" bash << 'REMOTE'
           set -euo pipefail
           cd /opt/apps/bugshot
+
+          # Zsynchronizuj pliki repo (compose, entrypoint, nginx.conf itd.) do
+          # DOKLADNIE tej wersji, ktora deployujemy. Bez tego VPS zostaje ze
+          # starym compose — to byla przyczyna incydentu z pustym /config.js
+          # (nowy obraz + stary compose bez runtime `environment:`).
+          # .env.prod i inne pliki nietrackowane pozostaja nietkniete.
+          git fetch --tags --force --prune origin
+          if ! git rev-parse -q --verify "refs/tags/v${DEPLOY_VERSION}^{commit}" >/dev/null; then
+            echo "::error::Tag v${DEPLOY_VERSION} nie istnieje w repo — release nie utworzyl taga? Przerywam, zeby nie deployowac na nieaktualnych plikach compose."
+            exit 1
+          fi
+          git checkout -f "v${DEPLOY_VERSION}"
+          echo "Pliki repo zsynchronizowane do v${DEPLOY_VERSION}"
+
           COMPOSE="docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml"
 
           export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VERSION}"
