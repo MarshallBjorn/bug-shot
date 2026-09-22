@@ -22,8 +22,250 @@ namespace BugShot.Api.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "attachment_kind", new[] { "screenshot", "user_upload", "console_log" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "notification_channel_type", new[] { "email", "webhook" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "notification_delivery_status", new[] { "pending", "sending", "sent", "failed", "throttled" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "notification_event_type", new[] { "ticket_created", "comment_added", "status_changed" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "ticket_status", new[] { "new", "in_progress", "resolved", "rejected", "deleted" });
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("BugShot.Api.Models.NotificationChannel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EmailAddress")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("email_address");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_enabled");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<int?>("ThrottleMaxEvents")
+                        .HasColumnType("integer")
+                        .HasColumnName("throttle_max_events");
+
+                    b.Property<int?>("ThrottleWindowSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("throttle_window_seconds");
+
+                    b.Property<NotificationChannelType>("Type")
+                        .HasColumnType("notification_channel_type")
+                        .HasColumnName("type");
+
+                    b.Property<string>("WebhookSecret")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("webhook_secret");
+
+                    b.Property<string>("WebhookUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("webhook_url");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notification_channels");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_notification_channels_project_id");
+
+                    b.ToTable("notification_channels", (string)null);
+                });
+
+            modelBuilder.Entity("BugShot.Api.Models.NotificationDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("channel_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<NotificationEventType>("EventType")
+                        .HasColumnType("notification_event_type")
+                        .HasColumnName("event_type");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_attempt_at");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("RenderedBody")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)")
+                        .HasColumnName("rendered_body");
+
+                    b.Property<string>("RenderedSubject")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("rendered_subject");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<NotificationDeliveryStatus>("Status")
+                        .HasColumnType("notification_delivery_status")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notification_deliveries");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_notification_deliveries_project_id");
+
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_notification_deliveries_ticket_id");
+
+                    b.HasIndex("ChannelId", "CreatedAt")
+                        .HasDatabaseName("ix_notification_deliveries_channel_id_created_at");
+
+                    b.HasIndex("Status", "NextAttemptAt")
+                        .HasDatabaseName("ix_notification_deliveries_status_next_attempt_at");
+
+                    b.ToTable("notification_deliveries", (string)null);
+                });
+
+            modelBuilder.Entity("BugShot.Api.Models.NotificationTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("body");
+
+                    b.Property<NotificationChannelType>("ChannelType")
+                        .HasColumnType("notification_channel_type")
+                        .HasColumnName("channel_type");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<NotificationEventType>("EventType")
+                        .HasColumnType("notification_event_type")
+                        .HasColumnName("event_type");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("subject");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notification_templates");
+
+                    b.HasIndex("EventType", "ChannelType")
+                        .IsUnique()
+                        .HasDatabaseName("ix_notification_templates_event_type_channel_type")
+                        .HasFilter("project_id IS NULL");
+
+                    b.HasIndex("ProjectId", "EventType", "ChannelType")
+                        .IsUnique()
+                        .HasDatabaseName("ix_notification_templates_project_id_event_type_channel_type")
+                        .HasFilter("project_id IS NOT NULL");
+
+                    b.ToTable("notification_templates", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000001"),
+                            Body = "{{ticket.description}}",
+                            ChannelType = NotificationChannelType.Email,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 15, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            EventType = NotificationEventType.TicketCreated,
+                            Subject = "[{{project.name}}] New ticket {{ticket.id}}"
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000002"),
+                            Body = "{{ticket.description}}",
+                            ChannelType = NotificationChannelType.Webhook,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 15, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            EventType = NotificationEventType.TicketCreated
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000003"),
+                            Body = "{{comment.author}}: {{comment.body}}",
+                            ChannelType = NotificationChannelType.Email,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 15, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            EventType = NotificationEventType.CommentAdded,
+                            Subject = "[{{project.name}}] New comment on {{ticket.id}}"
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000004"),
+                            Body = "{{comment.author}}: {{comment.body}}",
+                            ChannelType = NotificationChannelType.Webhook,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 15, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            EventType = NotificationEventType.CommentAdded
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000005"),
+                            Body = "{{status.from}} -> {{status.to}}",
+                            ChannelType = NotificationChannelType.Email,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 15, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            EventType = NotificationEventType.StatusChanged,
+                            Subject = "[{{project.name}}] Status changed for {{ticket.id}}"
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000006"),
+                            Body = "{{status.from}} -> {{status.to}}",
+                            ChannelType = NotificationChannelType.Webhook,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 15, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            EventType = NotificationEventType.StatusChanged
+                        });
+                });
 
             modelBuilder.Entity("BugShot.Api.Models.Project", b =>
                 {
@@ -632,6 +874,59 @@ namespace BugShot.Api.Migrations
                     b.ToTable("user_refresh_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("BugShot.Api.Models.NotificationChannel", b =>
+                {
+                    b.HasOne("BugShot.Api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_channels_projects_project_id");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("BugShot.Api.Models.NotificationDelivery", b =>
+                {
+                    b.HasOne("BugShot.Api.Models.NotificationChannel", "Channel")
+                        .WithMany("Deliveries")
+                        .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_deliveries_notification_channels_channel_id");
+
+                    b.HasOne("BugShot.Api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_deliveries_projects_project_id");
+
+                    b.HasOne("BugShot.Api.Models.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_deliveries_tickets_ticket_id");
+
+                    b.Navigation("Channel");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("BugShot.Api.Models.NotificationTemplate", b =>
+                {
+                    b.HasOne("BugShot.Api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_notification_templates_projects_project_id");
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("BugShot.Api.Models.ProjectOrigin", b =>
                 {
                     b.HasOne("BugShot.Api.Models.Project", "Project")
@@ -746,6 +1041,11 @@ namespace BugShot.Api.Migrations
                         .HasConstraintName("fk_user_refresh_tokens_users_user_id");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("BugShot.Api.Models.NotificationChannel", b =>
+                {
+                    b.Navigation("Deliveries");
                 });
 
             modelBuilder.Entity("BugShot.Api.Models.Project", b =>

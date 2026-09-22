@@ -1,4 +1,4 @@
-﻿using BugShot.Api.Models;
+using BugShot.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace BugShot.Api.Data;
@@ -26,6 +26,12 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
     public DbSet<User> Users => Set<User>();
 
     public DbSet<UserRefreshToken> UserRefreshTokens => Set<UserRefreshToken>();
+
+    public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
+
+    public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
+
+    public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
 
     public override int SaveChanges()
     {
@@ -74,6 +80,9 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
     {
         modelBuilder.HasPostgresEnum<TicketStatus>();
         modelBuilder.HasPostgresEnum<AttachmentKind>();
+        modelBuilder.HasPostgresEnum<NotificationChannelType>();
+        modelBuilder.HasPostgresEnum<NotificationEventType>();
+        modelBuilder.HasPostgresEnum<NotificationDeliveryStatus>();
 
         modelBuilder.Entity<Project>(entity =>
         {
@@ -354,6 +363,124 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             });
         });
 
+                        modelBuilder.Entity<NotificationChannel>(entity =>
+        {
+            entity.Property(c => c.EmailAddress).HasMaxLength(320);
+            entity.Property(c => c.WebhookUrl).HasMaxLength(2048);
+            entity.Property(c => c.WebhookSecret).HasMaxLength(256);
+
+            entity.HasIndex(c => c.ProjectId);
+
+            entity.HasOne(c => c.Project)
+                .WithMany()
+                .HasForeignKey(c => c.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NotificationTemplate>(entity =>
+        {
+            entity.Property(t => t.Subject).HasMaxLength(255);
+            entity.Property(t => t.Body).HasMaxLength(4000);
+
+            entity.HasOne(t => t.Project)
+                .WithMany()
+                .HasForeignKey(t => t.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(t => new { t.EventType, t.ChannelType })
+                .IsUnique()
+                .HasFilter("project_id IS NULL");
+
+            entity.HasIndex(t => new { t.ProjectId, t.EventType, t.ChannelType })
+                .IsUnique()
+                .HasFilter("project_id IS NOT NULL");
+        });
+
+        modelBuilder.Entity<NotificationDelivery>(entity =>
+        {
+            entity.Property(d => d.RenderedSubject).HasMaxLength(255);
+            entity.Property(d => d.RenderedBody).HasMaxLength(8000);
+            entity.Property(d => d.LastError).HasMaxLength(2000);
+
+            entity.HasOne(d => d.Project)
+                .WithMany()
+                .HasForeignKey(d => d.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.Channel)
+                .WithMany(c => c.Deliveries)
+                .HasForeignKey(d => d.ChannelId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.Ticket)
+                .WithMany()
+                .HasForeignKey(d => d.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(d => new { d.Status, d.NextAttemptAt });
+            entity.HasIndex(d => new { d.ChannelId, d.CreatedAt });
+            entity.HasIndex(d => d.TicketId);
+        });
+
+        var notificationTemplateCreatedAt =
+            new DateTimeOffset(2026, 9, 15, 0, 0, 0, TimeSpan.Zero);
+
+        modelBuilder.Entity<NotificationTemplate>().HasData(
+            new NotificationTemplate
+            {
+                Id = new Guid("10000000-0000-0000-0000-000000000001"),
+                EventType = NotificationEventType.TicketCreated,
+                ChannelType = NotificationChannelType.Email,
+                Subject = "[{{project.name}}] New ticket {{ticket.id}}",
+                Body = "{{ticket.description}}",
+                CreatedAt = notificationTemplateCreatedAt
+            },
+            new NotificationTemplate
+            {
+                Id = new Guid("10000000-0000-0000-0000-000000000002"),
+                EventType = NotificationEventType.TicketCreated,
+                ChannelType = NotificationChannelType.Webhook,
+                Subject = null,
+                Body = "{{ticket.description}}",
+                CreatedAt = notificationTemplateCreatedAt
+            },
+            new NotificationTemplate
+            {
+                Id = new Guid("10000000-0000-0000-0000-000000000003"),
+                EventType = NotificationEventType.CommentAdded,
+                ChannelType = NotificationChannelType.Email,
+                Subject = "[{{project.name}}] New comment on {{ticket.id}}",
+                Body = "{{comment.author}}: {{comment.body}}",
+                CreatedAt = notificationTemplateCreatedAt
+            },
+            new NotificationTemplate
+            {
+                Id = new Guid("10000000-0000-0000-0000-000000000004"),
+                EventType = NotificationEventType.CommentAdded,
+                ChannelType = NotificationChannelType.Webhook,
+                Subject = null,
+                Body = "{{comment.author}}: {{comment.body}}",
+                CreatedAt = notificationTemplateCreatedAt
+            },
+            new NotificationTemplate
+            {
+                Id = new Guid("10000000-0000-0000-0000-000000000005"),
+                EventType = NotificationEventType.StatusChanged,
+                ChannelType = NotificationChannelType.Email,
+                Subject = "[{{project.name}}] Status changed for {{ticket.id}}",
+                Body = "{{status.from}} -> {{status.to}}",
+                CreatedAt = notificationTemplateCreatedAt
+            },
+            new NotificationTemplate
+            {
+                Id = new Guid("10000000-0000-0000-0000-000000000006"),
+                EventType = NotificationEventType.StatusChanged,
+                ChannelType = NotificationChannelType.Webhook,
+                Subject = null,
+                Body = "{{status.from}} -> {{status.to}}",
+                CreatedAt = notificationTemplateCreatedAt
+            }
+        );
         modelBuilder.Entity<User>(entity =>
         {
             entity.Property(u => u.Email).HasMaxLength(256);
