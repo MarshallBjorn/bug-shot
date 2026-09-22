@@ -22,9 +22,11 @@
 
 set -euo pipefail
 
-VERSION="${1:?Usage: render-notes.sh <VERSION> <PREV_TAG|none> <CDN_BASE_URL>}"
+VERSION="${1:?Usage: render-notes.sh <VERSION> <PREV_TAG|none> [CDN_BASE_URL]}"
 PREV_TAG="${2:?}"
-CDN_BASE="${3:?}"
+# CDN_BASE opcjonalny: gdy pusty, sekcja CDN widgetu jest pomijana (widget jest
+# odsprzegniety od deployu, wiec brak tej zmiennej nie moze wywrocic release).
+CDN_BASE="${3-}"
 
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY env var required (owner/repo)}"
 : "${GITHUB_REPOSITORY_OWNER:?GITHUB_REPOSITORY_OWNER env var required}"
@@ -64,6 +66,9 @@ printf '%s' "$GENERATED_BODY" > "$TMP_GEN"
 
 awk -v version="$VERSION" -v owner="$OWNER_LC" -v cdn="$CDN_BASE" -v genfile="$TMP_GEN" '
 {
+  # Brak CDN_BASE -> pomijamy wiersze odwolujace sie do {{CDN_BASE}}
+  # (linki CDN widgetu), reszta notatek renderuje sie normalnie.
+  if (cdn == "" && index($0, "{{CDN_BASE}}") > 0) { next }
   gsub(/\{\{VERSION\}\}/, version)
   gsub(/\{\{OWNER\}\}/, owner)
   gsub(/\{\{CDN_BASE\}\}/, cdn)
