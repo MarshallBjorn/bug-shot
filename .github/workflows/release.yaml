@@ -248,13 +248,15 @@ jobs:
 
       - name: Sync widget dist na CDN (nginx /widgets/, istniejacy bind-mount)
         run: |
+          # shellcheck disable=SC2029
+          # BASE/VER sa CELOWO rozwijane po stronie runnera przed zdalna komenda
+          # (~ zostaje niezaescapowane i rozwija sie na VPS). Dyrektywa na gorze
+          # skryptu wycisza SC2029 dla wszystkich ponizszych wywolan ssh.
           set -euo pipefail
           VER="${{ needs.version.outputs.next_version }}"
 
           # tar-over-ssh zamiast rsync — VPS nie ma rsync, a to nie wymaga
           # zadnych zaleznosci po stronie serwera (tylko tar + ssh).
-          # shellcheck disable=SC2029
-          # BASE/VER sa celowo rozwijane przez runnera przed zdalna komenda.
           BASE="bugshot-prod/bug-shot-widgets"
 
           # Katalog wersji: IMMUTABLE — tworzymy i wypelniamy, bez czyszczenia
