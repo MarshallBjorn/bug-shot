@@ -192,6 +192,7 @@ public class TicketsController(
     /// <remarks>Skasowane zgloszenie odpowiada 200 ze statusem Deleted i pustymi polami.</remarks>
     [HttpGet("{id:guid}")]
     [EnableCors(CorsPolicies.Dashboard)]
+    [ProjectAccess(ProjectRole.Viewer, ProjectAccessScope.Ticket, "id")]
     [ProducesResponseType<TicketDetails>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -263,6 +264,7 @@ public class TicketsController(
     /// <remarks>Skasowane zgloszenie konczy sie na 409 bo nie ma juz czego komentowac.</remarks>
     [HttpPost("{id:guid}/comments")]
     [EnableCors(CorsPolicies.Dashboard)]
+    [ProjectAccess(ProjectRole.Member, ProjectAccessScope.Ticket, "id")]
     [ProducesResponseType<TicketCommentResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -328,6 +330,7 @@ public class TicketsController(
     /// <param name="pageSize">Rozmiar strony przycinany do 100.</param>
     [HttpGet("{id:guid}/comments")]
     [EnableCors(CorsPolicies.Dashboard)]
+    [ProjectAccess(ProjectRole.Viewer, ProjectAccessScope.Ticket, "id")]
     [ProducesResponseType<PagedResult<TicketCommentResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -381,6 +384,7 @@ public class TicketsController(
     /// </remarks>
     [HttpDelete("{id:guid}")]
     [EnableCors(CorsPolicies.Dashboard)]
+    [ProjectAccess(ProjectRole.Member, ProjectAccessScope.Ticket, "id")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -482,6 +486,7 @@ public class TicketsController(
     /// </remarks>
     [HttpPatch("{id:guid}/status")]
     [EnableCors(CorsPolicies.Dashboard)]
+    [ProjectAccess(ProjectRole.Member, ProjectAccessScope.Ticket, "id")]
     [ProducesResponseType<TicketStatusResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

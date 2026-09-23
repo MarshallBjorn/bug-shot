@@ -8,4 +8,7 @@ public static class ClaimsPrincipalExtensions
     // token przechodzi walidacje wiec sub zawsze jest i zawsze jest guidem
     public static Guid UserId(this ClaimsPrincipal principal) =>
         Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+
+    public static bool IsAdmin(this ClaimsPrincipal principal) =>
+        principal.IsInRole(AccessTokenIssuer.AdminRole);
 }

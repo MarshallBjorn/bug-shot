@@ -70,10 +70,46 @@ public class ProjectNotificationsEndpointsTests : IDisposable
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", developer.AccessToken);
 
+        Guid projectId;
+
+        using (var db = OpenContext())
+        {
+            projectId = db.Projects.Single(p => p.Key == "demo").Id;
+
+            db.ProjectMembers.Add(new ProjectMember
+            {
+                ProjectId = projectId,
+                UserId = developer.User.Id,
+                Role = ProjectRole.Member
+            });
+
+            await db.SaveChangesAsync();
+        }
+
         var response = await client.GetAsync(
-            $"/api/v1/projects/{Guid.NewGuid()}/notifications");
+            $"/api/v1/projects/{projectId}/notifications");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task NonMember_ReturnsNotFound()
+    {
+        var developer = await CreateDeveloper();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", developer.AccessToken);
+
+        Guid projectId;
+
+        using (var db = OpenContext())
+        {
+            projectId = db.Projects.Single(p => p.Key == "demo").Id;
+        }
+
+        var response = await client.GetAsync(
+            $"/api/v1/projects/{projectId}/notifications");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -347,6 +383,10 @@ public class ProjectNotificationsEndpointsTests : IDisposable
                         "notification_event_type");
                     npgsql.MapEnum<NotificationDeliveryStatus>(
                         "notification_delivery_status");
+                    npgsql.MapEnum<ProjectRole>(
+                        "project_role");
+                    npgsql.MapEnum<UserTokenPurpose>(
+                        "user_token_purpose");
                 })
             .UseSnakeCaseNamingConvention()
             .Options;

@@ -1,6 +1,8 @@
 using System.Net.Mime;
 using BugShot.Api.Attachments;
 using BugShot.Api.Data;
+using BugShot.Api.Models;
+using BugShot.Api.Security;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +21,7 @@ public class AttachmentsController(BugShotDbContext db, AttachmentStorageOptions
     /// Odpowiedz nie trafia do cache wspoldzielonego.
     /// </remarks>
     [HttpGet("{id:guid}/download")]
+    [ProjectAccess(ProjectRole.Viewer, ProjectAccessScope.Attachment, "id")]
     // typ konkretnego pliku znany jest dopiero przy odpowiedzi wiec dokument opisuje same bajty
     [Produces(MediaTypeNames.Application.Octet)]
     [ProducesResponseType(StatusCodes.Status200OK)]

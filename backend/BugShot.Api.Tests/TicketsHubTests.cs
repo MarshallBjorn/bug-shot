@@ -9,6 +9,7 @@ using BugShot.Api.Security;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 
@@ -158,7 +159,8 @@ public class TicketsHubTests : IDisposable
         var przyszlo = new TaskCompletionSource<TicketListItem>(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.On<TicketListItem>("TicketCreated", ticket => przyszlo.TrySetResult(ticket));
 
-        await connection.InvokeAsync("Subscribe", Guid.NewGuid());
+        // projektu bez dostepu nie da sie nawet zasubskrybowac
+        await Assert.ThrowsAsync<HubException>(() => connection.InvokeAsync("Subscribe", Guid.NewGuid()));
         await CreateTicket();
 
         var wygaslo = await Task.WhenAny(przyszlo.Task, Task.Delay(TimeSpan.FromSeconds(2)));

@@ -2,6 +2,7 @@ using BugShot.Api.Contracts;
 using BugShot.Api.Controllers;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
+using BugShot.Api.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +27,8 @@ public class ProjectsControllerTests
                 npgsql.MapEnum<NotificationChannelType>("notification_channel_type");
                 npgsql.MapEnum<NotificationEventType>("notification_event_type");
                 npgsql.MapEnum<NotificationDeliveryStatus>("notification_delivery_status");
+                npgsql.MapEnum<ProjectRole>("project_role");
+                npgsql.MapEnum<UserTokenPurpose>("user_token_purpose");
             })
             .UseSnakeCaseNamingConvention()
             .Options;
@@ -46,7 +49,7 @@ public class ProjectsControllerTests
     public async Task UtworzenieProjektuZZajetymKluczemDajeBladWalidacji()
     {
         var db = NewContext();
-        var controller = new ProjectsController(db);
+        var controller = new ProjectsController(db, new ProjectAccess(db));
         var key = UniqueKey();
 
         var pierwszy = await controller.Create(new CreateProjectRequest("Pierwszy", key), CancellationToken.None);
@@ -63,7 +66,7 @@ public class ProjectsControllerTests
     public async Task ZmianaNazwyProjektuNieRuszaKlucza()
     {
         var db = NewContext();
-        var controller = new ProjectsController(db);
+        var controller = new ProjectsController(db, new ProjectAccess(db));
         var project = await CreateProject(controller, "Stara nazwa");
 
         var updated = await controller.Update(project.Id, new UpdateProjectRequest("Nowa nazwa"), CancellationToken.None);
@@ -77,7 +80,7 @@ public class ProjectsControllerTests
     public async Task UsuniecieProjektuZTicketamiJestZablokowaneZKomunikatem()
     {
         var db = NewContext();
-        var controller = new ProjectsController(db);
+        var controller = new ProjectsController(db, new ProjectAccess(db));
         var project = await CreateProject(controller, "Z ticketem");
 
         db.Tickets.Add(new Ticket
@@ -101,7 +104,7 @@ public class ProjectsControllerTests
     public async Task UsuniecieProjektuBezTicketowDzialaOdRazu()
     {
         var db = NewContext();
-        var controller = new ProjectsController(db);
+        var controller = new ProjectsController(db, new ProjectAccess(db));
         var project = await CreateProject(controller, "Bez ticketow");
 
         var result = await controller.Delete(project.Id, CancellationToken.None);
@@ -114,7 +117,7 @@ public class ProjectsControllerTests
     public async Task DodanieIUsuniecieOriginuDzialaNaProjekcie()
     {
         var db = NewContext();
-        var controller = new ProjectsController(db);
+        var controller = new ProjectsController(db, new ProjectAccess(db));
         var project = await CreateProject(controller, "Z originami");
 
         var added = await controller.AddOrigin(
@@ -148,7 +151,7 @@ public class ProjectsControllerTests
     public async Task OriginInnyNizSchematIHostDajeBladWalidacji(string value)
     {
         var db = NewContext();
-        var controller = new ProjectsController(db);
+        var controller = new ProjectsController(db, new ProjectAccess(db));
         var project = await CreateProject(controller, "Zle originy");
 
         var added = await controller.AddOrigin(project.Id, new CreateProjectOriginRequest(value), CancellationToken.None);
@@ -163,7 +166,7 @@ public class ProjectsControllerTests
     public async Task OriginTrafiaDoBazyWPostaciWysylanejPrzezPrzegladarke()
     {
         var db = NewContext();
-        var controller = new ProjectsController(db);
+        var controller = new ProjectsController(db, new ProjectAccess(db));
         var project = await CreateProject(controller, "Normalizacja originu");
 
         var added = await controller.AddOrigin(

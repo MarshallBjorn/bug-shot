@@ -1,6 +1,8 @@
 using System.Net.Mime;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
+using BugShot.Api.Models;
+using BugShot.Api.Security;
 using BugShot.Api.Tickets;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
@@ -11,6 +13,7 @@ namespace BugShot.Api.Controllers;
 [ApiController]
 [Route("api/v1/projects/{projectId:guid}/pages")]
 [EnableCors(CorsPolicies.Dashboard)]
+[ProjectAccess(ProjectRole.Viewer)]
 [Produces(MediaTypeNames.Application.Json)]
 public class ProjectPagesController(BugShotDbContext db) : ControllerBase
 {

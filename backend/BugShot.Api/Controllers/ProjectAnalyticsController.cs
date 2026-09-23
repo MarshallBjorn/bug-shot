@@ -2,6 +2,8 @@ using System.Net.Mime;
 using BugShot.Api.Analytics;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
+using BugShot.Api.Models;
+using BugShot.Api.Security;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +13,7 @@ namespace BugShot.Api.Controllers;
 [ApiController]
 [Route("api/v1/projects/{projectId:guid}/analytics")]
 [EnableCors(CorsPolicies.Dashboard)]
+[ProjectAccess(ProjectRole.Viewer)]
 [Produces(MediaTypeNames.Application.Json)]
 public class ProjectAnalyticsController(BugShotDbContext db) : ControllerBase
 {

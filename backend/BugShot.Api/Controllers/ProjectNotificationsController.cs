@@ -5,7 +5,6 @@ using BugShot.Api.Data;
 using BugShot.Api.Models;
 using BugShot.Api.Notifications.Webhooks;
 using BugShot.Api.Security;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,14 +14,14 @@ namespace BugShot.Api.Controllers;
 [ApiController]
 [Route("api/v1/projects/{projectId:guid}/notifications")]
 [EnableCors(CorsPolicies.Dashboard)]
-[Authorize(Roles = AccessTokenIssuer.AdminRole)]
+[ProjectAccess(ProjectRole.Maintainer)]
 [Produces(MediaTypeNames.Application.Json)]
 public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender webhookSender) : ControllerBase
 {
     private static readonly EmailAddressAttribute EmailValidator = new();
 
     /// <summary>Returns notification channels.</summary>
-    /// <remarks>Tylko dla administratora.</remarks>
+    /// <remarks>Dla maintainera projektu i administratora.</remarks>
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<NotificationChannelResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -48,7 +47,7 @@ public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender 
     }
 
     /// <summary>Tworzy kanał powiadomień.</summary>
-    /// <remarks>Admin only. Validates addresses, types, and throttling configuration.</remarks>
+    /// <remarks>Project maintainer or admin. Validates addresses, types, and throttling configuration.</remarks>
     [HttpPost]
     [ProducesResponseType<NotificationChannelResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -102,7 +101,7 @@ public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender 
     }
 
     /// <summary>Aktualizuje kanał powiadomień.</summary>
-    /// <remarks>Tylko dla administratora. Typ kanału pozostaje niezmienny.</remarks>
+    /// <remarks>Dla maintainera projektu i administratora. Typ kanału pozostaje niezmienny.</remarks>
     [HttpPut("{channelId:guid}")]
     [ProducesResponseType<NotificationChannelResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -168,7 +167,7 @@ public class ProjectNotificationsController(BugShotDbContext db, IWebhookSender 
     }
 
     /// <summary>Usuwa kanał powiadomień.</summary>
-    /// <remarks>Tylko dla administratora.</remarks>
+    /// <remarks>Dla maintainera projektu i administratora.</remarks>
     [HttpDelete("{channelId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
