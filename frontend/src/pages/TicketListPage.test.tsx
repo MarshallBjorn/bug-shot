@@ -306,7 +306,7 @@ describe('TicketListPage', () => {
 
     render(<TicketListPage />)
 
-    expect(useTicketStream).toHaveBeenCalledWith('project-1', {
+    expect(useTicketStream).toHaveBeenCalledWith({
       onEvent: state.apply,
       onReconnected: state.reload,
     })

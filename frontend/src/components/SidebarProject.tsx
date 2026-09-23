@@ -1,6 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Bookmark, Trash2 } from 'lucide-react'
+import { useLiveRevision } from '../hooks/useLiveRevision'
 import { useProjectPages } from '../hooks/useProjectPages'
 import {
   removeSavedFilter,
@@ -20,7 +21,8 @@ function SidebarProject({ projectId, onNavigate }: SidebarProjectProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const { pages, loading } = useProjectPages(projectId)
+  const revision = useLiveRevision()
+  const { pages, loading } = useProjectPages(projectId, revision)
 
   // zapis filtra siedzi w localStorage czyli poza Reactem, wiec panel boczny slucha magazynu
   // zamiast odczytywac go efektem. Dzieki temu zapis z listy widac od razu

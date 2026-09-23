@@ -32,7 +32,7 @@ function TicketListPage() {
   const query = useMemo(() => parseTicketQuery(searchParams), [searchParams])
   const tickets = useTickets(projectId, query)
 
-  const live = useTicketStream(projectId, {
+  const live = useTicketStream({
     onEvent: tickets.apply,
     onReconnected: tickets.reload,
   })
