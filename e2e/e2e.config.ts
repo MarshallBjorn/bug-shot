@@ -19,6 +19,9 @@ export const apiBaseUrl =
 export const dashboardBaseUrl =
   process.env.E2E_DASHBOARD_BASE_URL ?? 'http://localhost:5175'
 
+export const mailpitApiUrl =
+  process.env.E2E_MAILPIT_API_URL ?? 'http://localhost:8026'
+
 export const dashboardPortNumber = 5175
 
 export const attachmentsPath =

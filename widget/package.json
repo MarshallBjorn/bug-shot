@@ -1,0 +1,18 @@
+{
+  "name": "@bug-shot/widget",
+  "version": "0.0.0",
+  "description": "BugShot bug-reporting widget — klasyczny browser script (nie ESM) do wklejenia na cudzej domenie; automatyczne zbieranie zgloszen bledow wraz z kontekstem.",
+  "license": "UNLICENSED",
+  "private": false,
+  "files": [
+    "dist"
+  ],
+  "main": "dist/widget.js",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  }
+}

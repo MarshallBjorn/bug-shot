@@ -6,6 +6,9 @@ using BugShot.Api.Data;
 using BugShot.Api.Live;
 using BugShot.Api.Models;
 using BugShot.Api.OpenApi;
+using BugShot.Api.Notifications;
+using BugShot.Api.Notifications.Email;
+using BugShot.Api.Notifications.Webhooks;
 using BugShot.Api.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -30,6 +33,17 @@ if (string.IsNullOrWhiteSpace(signingKey))
     throw new InvalidOperationException("JWT_SIGNING_KEY is not configured.");
 }
 
+builder.Services.AddSingleton(_ => SmtpOptions.Read(builder.Configuration));
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+
+builder.Services
+    .AddHttpClient("NotificationWebhook", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(10);
+    })
+    .ConfigurePrimaryHttpMessageHandler(_ => SsrfProtection.CreateSafeHandler());
+
+builder.Services.AddScoped<IWebhookSender, WebhookSender>();
 var widgetOrigins = builder.Configuration.GetSection("Cors:WidgetOrigins").Get<string[]>() ?? [];
 var dashboardOrigins = builder.Configuration.GetSection("Cors:DashboardOrigins").Get<string[]>() ?? [];
 
@@ -120,10 +134,17 @@ builder.Services.AddDbContext<BugShotDbContext>(options => options
     {
         npgsql.MapEnum<TicketStatus>("ticket_status");
         npgsql.MapEnum<AttachmentKind>("attachment_kind");
+        npgsql.MapEnum<NotificationChannelType>("notification_channel_type");
+        npgsql.MapEnum<NotificationEventType>("notification_event_type");
+        npgsql.MapEnum<NotificationDeliveryStatus>("notification_delivery_status");
     })
     .UseSnakeCaseNamingConvention());
 
 builder.Services.AddScoped<ISanitizationService, SanitizationService>();
+builder.Services.AddSingleton<INotificationWorkerSignal, NotificationWorkerSignal>();
+builder.Services.AddHostedService<NotificationDispatcherHostedService>();
+builder.Services.AddScoped<INotificationEnqueuer, NotificationEnqueuer>();
+builder.Services.AddScoped<INotificationRenderer, NotificationRenderer>();
 builder.Services.AddCors(options =>
 {
     // widget siedzi na cudzych domenach i moze tylko zglaszac

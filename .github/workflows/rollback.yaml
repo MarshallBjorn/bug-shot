@@ -12,7 +12,6 @@ on:
         required: true
         type: choice
         options:
-          - staging
           - prod
 
 concurrency:
@@ -31,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./.github/actions/wg_connect
+      - uses: ./.github/actions/wg-connect
         with:
           wg_private_key:     ${{ secrets.WG_PRIVATE_KEY }}
           wg_endpoint:        ${{ secrets.WG_ENDPOINT }}
@@ -39,13 +38,14 @@ jobs:
           wg_runner_address:  ${{ secrets.WG_RUNNER_ADDRESS }}
           vps_address:        ${{ secrets.WG_VPS_ADDRESS }}
           deploy_ssh_key:     ${{ secrets.DEPLOY_SSH_KEY }}
+          ssh_port:           ${{ secrets.SSH_PORT }}
 
       - name: Verify images exist
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           VER="${{ inputs.version }}"
 
-          for svc in backend frontend; do
+          for svc in backend frontend backup; do
             IMAGE="ghcr.io/${OWNER}/bugshot-${svc}:${VER}"
             echo "Checking $IMAGE..."
             docker manifest inspect "$IMAGE" > /dev/null 2>&1 || \
@@ -61,25 +61,21 @@ jobs:
 
           ssh vps DEPLOY_OWNER="$OWNER" DEPLOY_VER="$VER" DEPLOY_ENV="$ENV" bash << 'REMOTE'
           set -euo pipefail
-
-          case "$DEPLOY_ENV" in
-            staging) DIR=~/bugshot-staging ;;
-            prod)    DIR=~/bugshot-prod ;;
-            *)       echo "Unknown env: $DEPLOY_ENV"; exit 1 ;;
-          esac
-
-          cd "$DIR"
+          cd /opt/apps/bugshot
 
           export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VER}"
           export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${DEPLOY_VER}"
+          # prod compose wymaga BACKUP_IMAGE (${...:?}) — musi byc ustawiony do `compose up`.
+          export BACKUP_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backup:${DEPLOY_VER}"
 
           docker pull "$BACKEND_IMAGE"
           docker pull "$FRONTEND_IMAGE"
+          docker pull "$BACKUP_IMAGE"
 
           [ -f .deploy-tag ] && cp .deploy-tag .deploy-tag-prev
           echo "$DEPLOY_VER" > .deploy-tag
 
-          docker compose --env-file .env \
+          docker compose --env-file .env.prod \
             -f docker-compose.yml \
             -f docker-compose.prod.yml \
             up -d --no-build --remove-orphans
@@ -91,12 +87,17 @@ jobs:
         run: |
           ssh vps bash << 'REMOTE'
           set -euo pipefail
+          cd /opt/apps/bugshot
+          COMPOSE="docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml"
 
-          for url in http://localhost:8080/healthz http://localhost:3000/healthz; do
-            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$url")
-            [ "$status" = "200" ] || { echo "FAIL: $url → $status"; exit 1; }
-            echo "OK: $url → $status"
-          done
+          # Prod za Traefikiem — healthz sprawdzamy wewnatrz kontenera (backend 8080, frontend 80).
+          echo "--- backend /healthz ---"
+          $COMPOSE exec -T backend curl -fsS http://127.0.0.1:8080/healthz
+
+          echo "--- frontend /healthz ---"
+          $COMPOSE exec -T frontend wget -qO- http://127.0.0.1/healthz
+
+          echo "--- smoke OK ---"
           REMOTE
 
       - name: Notify Discord

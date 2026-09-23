@@ -13,6 +13,7 @@ import TicketListPage from './pages/TicketListPage'
 const ProjectAnalyticsPage = lazy(() => import('./pages/ProjectAnalyticsPage'))
 const AdminProjectsPage = lazy(() => import('./pages/AdminProjectsPage'))
 const AdminSanitizationRulesPage = lazy(() => import('./pages/AdminSanitizationRulesPage'))
+const AdminProjectNotificationsPage = lazy(() => import('./pages/AdminProjectNotificationsPage'))
 
 function Loading() {
   return <p className="text-sm text-muted-foreground">Ładowanie widoku...</p>
@@ -45,6 +46,14 @@ function App() {
               }
             />
             <Route
+              path="admin/projects/:projectId/notifications"
+              element={
+                <Suspense fallback={<Loading />}>
+                  <AdminProjectNotificationsPage />
+                </Suspense>
+              }
+            />
+            <Route
               path="admin/sanitization-rules"
               element={
                 <Suspense fallback={<Loading />}>
@@ -61,3 +70,4 @@ function App() {
 }
 
 export default App
+

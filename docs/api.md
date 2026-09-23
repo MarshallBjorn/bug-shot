@@ -660,3 +660,17 @@ W środowisku `Development` migracje wykonują się przy starcie API. Poza nim s
 - systemowe logowanie i audyt poza `sanitization_logs`. Miejsca wpięcia zostawiamy w kodzie, żeby dało się to dopiąć bez przepisywania warstwy
 - odesłanie do sanityzacji i walidacji plików w głównym `README`
 - Redis jako cache przed Postgresem
+
+## Notifications
+
+Notification administration endpoints:
+
+- `GET /api/v1/projects/{projectId}/notifications` - list project notification channels
+- `POST /api/v1/projects/{projectId}/notifications` - create an Email or Webhook channel
+- `PUT /api/v1/projects/{projectId}/notifications/{channelId}` - update a notification channel
+- `DELETE /api/v1/projects/{projectId}/notifications/{channelId}` - delete a notification channel
+- `POST /api/v1/projects/{projectId}/notifications/{channelId}/test` - send a test webhook event
+- `GET /api/v1/projects/{projectId}/templates` - list notification templates
+- `PUT /api/v1/projects/{projectId}/templates/{eventType}/{channelType}` - update a project template override
+
+Webhook secrets are never returned by the API.

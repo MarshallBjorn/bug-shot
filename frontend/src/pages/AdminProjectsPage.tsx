@@ -238,6 +238,12 @@ function AdminProjectsPage() {
                 >
                   Zgłoszenia
                 </Link>
+                <Link
+                  to={`/admin/projects/${project.id}/notifications`}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Powiadomienia
+                </Link>
                 <span className="ml-auto flex gap-2">
                   <Button
                     type="button"
@@ -329,3 +335,4 @@ function AdminProjectsPage() {
 }
 
 export default AdminProjectsPage
+

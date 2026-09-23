@@ -94,11 +94,11 @@ services:
     build: !reset null
     restart: unless-stopped
     logging: *default-logging
-    build:
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?VITE_API_BASE_URL required}
-        VITE_MEDIA_BASE_URL: ${VITE_MEDIA_BASE_URL:?VITE_MEDIA_BASE_URL required}
     user: "101:101"
+    # Runtime config (nie build-time) — entrypoint zapisze /config.js z tych zmiennych.
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:?VITE_API_BASE_URL required}
+      VITE_MEDIA_BASE_URL: ${VITE_MEDIA_BASE_URL:-}
     # nginx alpine — non-root działa na oficjalnym obrazie od 1.25+, ale wymaga tmpfs na cache/run
     tmpfs:
       - /var/cache/nginx:rw,noexec,nosuid,size=32m,uid=101,gid=101
@@ -177,6 +177,8 @@ services:
 
   backup:
     <<: *hardened
+    image: ${BACKUP_IMAGE:?BACKUP_IMAGE required}
+    build: !reset null
     restart: "no"
     logging: *default-logging
     user: "10002:10002"

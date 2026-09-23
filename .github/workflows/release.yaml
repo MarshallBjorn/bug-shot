@@ -1,0 +1,360 @@
+name: release
+
+# Trigger na kazdy push do main, BEZ path filtra — release-worthy commit moze
+# dotyczyc backendu, frontendu, widgetu, docs, infra. deploy-prod.yaml i tak
+# odpali sie dopiero pozniej, na push tagu utworzonego w jobie gh-release.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  version:
+    permissions: { contents: read }
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.compute.outputs.should_release }}
+      next_version:   ${{ steps.compute.outputs.next_version }}
+      last_tag:       ${{ steps.compute.outputs.last_tag }}
+      bump:           ${{ steps.compute.outputs.bump }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - id: compute
+        run: bash scripts/release/compute-version.sh
+
+  guard:
+    needs: version
+    if: needs.version.outputs.should_release == 'true'
+    permissions: { contents: read }
+    runs-on: ubuntu-latest
+    outputs:
+      resume_from: ${{ steps.check.outputs.resume_from }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - id: check
+        name: Rozpoznaj stan poprzedniego release (idempotencja / bezpieczny rerun)
+        run: |
+          set -euo pipefail
+          VER="${{ needs.version.outputs.next_version }}"
+          TAG="v${VER}"
+
+          git fetch --tags --quiet
+
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG nie istnieje — swiezy release, start od zera."
+            echo "resume_from=start" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Tag istnieje. Sprawdz, czy wskazuje na biezacy HEAD (spodziewane)
+          # czy na inny commit (przypadek D — stop z bledem, to jest realny
+          # konflikt, nie prosty rerun).
+          TAG_SHA=$(git rev-list -n1 "$TAG")
+          HEAD_SHA=$(git rev-parse HEAD)
+
+          if [ "$TAG_SHA" != "$HEAD_SHA" ]; then
+            echo "::error::Tag $TAG juz istnieje, ale wskazuje na inny commit ($TAG_SHA) niz biezacy HEAD ($HEAD_SHA). To NIE jest bezpieczny rerun — wymaga recznej decyzji (czy to duplikat wersji, czy pomylka w wyliczeniu). Zatrzymuje release."
+              exit 1
+          fi
+
+          # Tag == HEAD. Sprawdz czy GitHub Release rowniez istnieje.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG i GitHub Release $TAG juz istnieja i wskazuja na HEAD — release juz kompletny (przypadek A)."
+            echo "resume_from=complete" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag $TAG istnieje i wskazuje na HEAD, ale GitHub Release jeszcze nie powstal (przypadek B/C) — wznawiam publikacje artefaktow (kazdy krok jest idempotentny)."
+            echo "resume_from=resume" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stop jesli release juz w pelni kompletny
+        if: steps.check.outputs.resume_from == 'complete'
+        run: |
+          echo "Nic do zrobienia — release v${{ needs.version.outputs.next_version }} juz istnieje w calosci."
+
+  docker-retag:
+    needs: [version, guard]
+    if: needs.guard.outputs.resume_from != 'complete'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      actions: read   # gh run watch — dogladamy build HEAD-a przed retagiem
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve najnowszy opublikowany SHA-image i retag (backend, frontend, backup)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.next_version }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          OWNER_LC=$(printf '%s' "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+          HEAD_SHA_FULL=$(git rev-parse HEAD)
+          HEAD_SHA7=$(git rev-parse --short=7 HEAD)
+
+          for svc in backend frontend backup; do
+            IMAGE="ghcr.io/${OWNER_LC}/bugshot-${svc}"
+            WF="${svc}.yaml"
+            SRC_TAG=""
+
+            # Build (${svc}.yaml) i release startuja z tego samego push-a na main
+            # ROWNOLEGLE, a _image.yaml pushuje obraz :HEAD_SHA dopiero na koncu
+            # (po trivy+dockle, ~kilka minut). Dlatego zwykly `docker manifest
+            # inspect :HEAD_SHA` moze tu jeszcze zwrocic 404 — i STARY kod bral
+            # wtedy po cichu fallback (najnowszy obcy SHA), przez co deploy
+            # dostawal POPRZEDNI obraz. Fix: rozroznic "build trwa" od "brak
+            # buildu" pytajac Actions API o run builda dla HEAD:
+            #   - jest run  -> czekamy na niego i WYMAGAMY obrazu :HEAD_SHA,
+            #   - brak run  -> ten commit nie dotknal $svc -> uczciwy fallback.
+            RUN_ID=""
+            for _ in $(seq 1 6); do
+              RUN_ID=$(gh run list --workflow "$WF" --commit "$HEAD_SHA_FULL" \
+                         --event push --json databaseId \
+                         --limit 1 --jq '.[0].databaseId // empty' 2>/dev/null || true)
+              [ -n "$RUN_ID" ] && break
+              echo "[$svc] run builda ${WF} dla HEAD jeszcze nie widoczny, czekam…"
+              sleep 10
+            done
+
+            if [ -n "$RUN_ID" ]; then
+              echo "[$svc] build ${WF} #${RUN_ID} dla HEAD (${HEAD_SHA7}) — czekam na zakonczenie…"
+              if ! gh run watch "$RUN_ID" --exit-status --interval 15 >/dev/null; then
+                echo "::error::[$svc] build ${WF} #${RUN_ID} dla HEAD zakonczyl sie niepowodzeniem — NIE retaguje (deploy dostalby zly/stary obraz). Napraw build i ponow release."
+                exit 1
+              fi
+              if ! docker manifest inspect "${IMAGE}:${HEAD_SHA7}" >/dev/null 2>&1; then
+                echo "::error::[$svc] build ${WF} zakonczony sukcesem, ale obraz ${IMAGE}:${HEAD_SHA7} nie istnieje w GHCR. Sprawdz job 'push' w ${WF} (pushuje tylko na push do main)."
+                exit 1
+              fi
+              SRC_TAG="$HEAD_SHA7"
+              echo "[$svc] OK: obraz HEAD gotowy (${HEAD_SHA7})"
+            else
+              # FALLBACK: brak run-a builda dla HEAD -> ten commit nie dotknal
+              # $svc (np. release-worthy zmiana tylko w widget/docs/infra).
+              # Bierzemy najnowszy opublikowany krotki-SHA tag wprost z GHCR
+              # Package API (zrodlo prawdy o tym, co faktycznie opublikowano).
+              echo "[$svc] brak builda ${WF} dla HEAD — serwis nietkniety, fallback do najnowszego SHA z GHCR API"
+              VJSON=$(gh api --paginate --slurp "users/${REPO_OWNER}/packages/container/bugshot-${svc}/versions?per_page=100" 2>/dev/null | jq -c 'add // []')
+              if [ "$VJSON" = "[]" ] || [ -z "$VJSON" ]; then
+                VJSON=$(gh api --paginate --slurp "orgs/${REPO_OWNER}/packages/container/bugshot-${svc}/versions?per_page=100" 2>/dev/null | jq -c 'add // []')
+              fi
+              [ -z "$VJSON" ] && VJSON="[]"
+              SRC_TAG=$(printf '%s' "$VJSON" | jq -r '
+                sort_by(.created_at) | reverse
+                | map(.metadata.container.tags[]? // empty)
+                | map(select(test("^[0-9a-f]{7}$")))
+                | .[0] // empty')
+            fi
+
+            if [ -z "$SRC_TAG" ]; then
+              echo "::error::[$svc] Brak jakiegokolwiek zrodlowego obrazu (ani HEAD, ani fallback z API). Release automation nie ma z czego zretagowac ${VERSION}. Sprawdz czy _image.yaml kiedykolwiek pomyslnie zbudowal ten serwis."
+              exit 1
+            fi
+
+            echo "=== [$svc] retag ${SRC_TAG} -> :${VERSION}, :latest ==="
+            docker buildx imagetools create \
+              --tag "${IMAGE}:${VERSION}" \
+              --tag "${IMAGE}:latest" \
+              "${IMAGE}:${SRC_TAG}"
+          done
+
+  widget-publish:
+    needs: [version, guard]
+    if: needs.guard.outputs.resume_from != 'complete'
+    permissions: { contents: read }
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Build dist
+        run: node widget/scripts/build.mjs
+
+      - name: Ustaw wersje w package.json (bez git taga, tylko w workspace runnera)
+        working-directory: ./widget
+        run: npm version "${{ needs.version.outputs.next_version }}" --no-git-tag-version --allow-same-version
+
+      - name: Publish (idempotentnie — skip jesli ta wersja juz opublikowana)
+        working-directory: ./widget
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          VER="${{ needs.version.outputs.next_version }}"
+
+          # Brak tokena to problem konfiguracji, nie realny blad publikacji.
+          # Widget jest ODSPRZEGNIETY od deployu (gh-release nie zalezy od tego
+          # joba), wiec zamiast walic caly release na npm ENEEDAUTH — pomijamy
+          # publikacje z czytelnym ostrzezeniem. Ustaw sekret repo NPM_TOKEN,
+          # aby ja wznowic. Deploy prod NIE jest tym blokowany.
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::warning::NPM_TOKEN nie jest ustawiony — pomijam publikacje @bug-shot/widget@${VER} w npm. Ustaw sekret repo NPM_TOKEN, aby wznowic. Release i deploy NIE sa tym blokowane."
+            exit 0
+          fi
+
+          if npm view "@bug-shot/widget@${VER}" version >/dev/null 2>&1; then
+            echo "@bug-shot/widget@${VER} juz opublikowane w npm — skip (bezpieczny rerun)."
+          else
+            npm publish --access public
+          fi
+
+  widget-cdn:
+    # Niezalezne od widget-publish: sync na CDN (rsync dist/) nie potrzebuje npm,
+    # a i tak buduje dist samodzielnie. Dzieki temu awaria npm nie blokuje CDN.
+    needs: [version, guard]
+    if: needs.guard.outputs.resume_from != 'complete'
+    permissions: { contents: read }
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build dist
+        run: node widget/scripts/build.mjs
+
+      - uses: ./.github/actions/wg-connect
+        with:
+          wg_private_key:     ${{ secrets.WG_PRIVATE_KEY }}
+          wg_endpoint:        ${{ secrets.WG_ENDPOINT }}
+          wg_peer_public_key: ${{ secrets.WG_PEER_PUBLIC_KEY }}
+          wg_runner_address:  ${{ secrets.WG_RUNNER_ADDRESS }}
+          vps_address:        ${{ secrets.WG_VPS_ADDRESS }}
+          deploy_ssh_key:     ${{ secrets.DEPLOY_SSH_KEY }}
+          ssh_port:           ${{ secrets.SSH_PORT }}
+
+      - name: Sync widget dist na CDN (nginx /widgets/, istniejacy bind-mount)
+        run: |
+          # shellcheck disable=SC2029
+          # BASE/VER sa CELOWO rozwijane po stronie runnera przed zdalna komenda
+          # (~ zostaje niezaescapowane i rozwija sie na VPS). Dyrektywa na gorze
+          # skryptu wycisza SC2029 dla wszystkich ponizszych wywolan ssh.
+          set -euo pipefail
+          VER="${{ needs.version.outputs.next_version }}"
+
+          # tar-over-ssh zamiast rsync — VPS nie ma rsync, a to nie wymaga
+          # zadnych zaleznosci po stronie serwera (tylko tar + ssh).
+          BASE="bugshot-prod/bug-shot-widgets"
+
+          # Katalog wersji: IMMUTABLE — tworzymy i wypelniamy, bez czyszczenia
+          # (guard job juz zagwarantowal, ze ten commit nie mial pelnego release,
+          # wiec katalog jest pusty albo z przerwanego runu tej samej wersji).
+          ssh vps 'mkdir -p ~/'"${BASE}"'/v'"${VER}"
+          tar -C widget/dist -czf - . | ssh vps 'tar -C ~/'"${BASE}"'/v'"${VER}"' -xzf -'
+
+          # latest/: jedyny katalog, ktory wolno czyscic i nadpisywac.
+          ssh vps 'rm -rf ~/'"${BASE}"'/latest && mkdir -p ~/'"${BASE}"'/latest'
+          tar -C widget/dist -czf - . | ssh vps 'tar -C ~/'"${BASE}"'/latest -xzf -'
+
+      - name: Teardown WireGuard
+        if: always()
+        run: sudo wg-quick down wg0 || true
+
+  gh-release:
+    # Sciezka krytyczna deployu = tylko docker-retag. Widget (npm + CDN) jest
+    # ODSPRZEGNIETY: jego awaria nie blokuje utworzenia taga v* ani deployu prod.
+    needs: [version, guard, docker-retag]
+    if: |
+      always() &&
+      needs.guard.result == 'success' &&
+      needs.guard.outputs.resume_from != 'complete' &&
+      needs.docker-retag.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Render release notes (wlasny szablon + generated PR notes)
+        env:
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          VER="${{ needs.version.outputs.next_version }}"
+          LAST="${{ needs.version.outputs.last_tag }}"
+          [ -z "$LAST" ] && LAST="none"
+          # WIDGET_CDN_BASE_URL to dotyczy tylko sekcji CDN widgetu w notatkach.
+          # Widget jest odsprzegniety od deployu, wiec jej brak NIE moze blokowac
+          # utworzenia taga v* ani deployu prod — degradujemy do warningu, a
+          # render-notes.sh pomija sekcje CDN gdy URL pusty.
+          CDN_BASE="${{ vars.WIDGET_CDN_BASE_URL }}"
+          if [ -z "$CDN_BASE" ]; then
+            echo "::warning::Repository variable WIDGET_CDN_BASE_URL nie jest ustawiona — sekcja CDN widgetu zostanie pominieta w release notes. Deploy NIE jest tym blokowany. Ustaw ja: gh variable set WIDGET_CDN_BASE_URL --body <url>."
+          fi
+          bash scripts/release/render-notes.sh "$VER" "$LAST" "$CDN_BASE" > /tmp/notes.md
+
+      - name: Utworz tag + GitHub Release (finalny krok publikacji, idempotentny)
+        run: |
+          set -euo pipefail
+          VER="${{ needs.version.outputs.next_version }}"
+          TAG="v${VER}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG juz istnieje (rownolegly rerun?) — skip create, exit 0."
+            exit 0
+          fi
+
+          # Jesli tag juz istnieje (przypadek B z guard joba), gh release
+          # create uzyje istniejacego taga zamiast tworzyc nowy na HEAD —
+          # guard job juz potwierdzil, ze tag == HEAD, wiec to bezpieczne.
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file /tmp/notes.md \
+            --target "$(git rev-parse HEAD)"
+
+  trigger-deploy:
+    # CD auto-chaining. Tag v* tworzy job gh-release przez `gh release create`
+    # uwierzytelniony sekretem GITHUB_TOKEN. GitHub CELOWO nie triguje nowych
+    # workflow od zdarzen wygenerowanych GITHUB_TOKEN-em (ochrona przed
+    # rekursja), wiec deploy-prod (on: push: tags: ['v*']) NIE odpalal sie sam —
+    # tag powstawal, a deploy nie. workflow_dispatch i repository_dispatch to
+    # jedyne dwa wyjatki od tej reguly, dlatego jawnie dispatchujemy deploy-prod
+    # z wyliczona wersja. (Wariant "po ksiazce" = tworzyc tag pod PAT/GitHub App
+    # tokenem zamiast GITHUB_TOKEN — swiadomie odlozony.)
+    needs: [version, gh-release]
+    if: needs.gh-release.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write     # gh workflow run — dispatch deploy-prod
+      contents: read     # gh resolve workflow po nazwie (repo prywatne → bez tego 404)
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # BEZ actions/checkout — `gh workflow run` dziala przez API (GH_TOKEN +
+      # GH_REPO), nie potrzebuje plikow repo. Wczesniej byl tu checkout z
+      # permissions bez `contents: read`, przez co na PRYWATNYM repo checkout
+      # zwracal 404 "Repository not found" i wywalal caly release po tym, jak
+      # tag v* i GitHub Release juz powstaly (deploy nie byl dispatchowany).
+      - name: Dispatch deploy-prod dla nowej wersji
+        run: |
+          set -euo pipefail
+          VER="${{ needs.version.outputs.next_version }}"
+          echo "Dispatch deploy-prod (workflow_dispatch) dla v${VER}"
+          gh workflow run deploy-prod.yaml -f version="${VER}"
