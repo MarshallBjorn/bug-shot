@@ -103,6 +103,10 @@ bash scripts/release/release-dry-run.sh          # pełny podgląd bez publikacj
    + GitHub Release. To finalny, idempotentny krok.
 7. **trigger-deploy** — dispatchuje `deploy-prod.yaml` z wyliczona wersja
    (patrz nizej, dlaczego to osobny krok).
+8. **sbom** *(odsprzegniete)* — `syft` skanuje obrazy `:<ver>` (backend,
+   frontend, backup), generuje SPDX JSON i dolacza jako assety GitHub Release.
+   Opcjonalnie podpisuje obrazy `cosign` (keyless) gdy `vars.ENABLE_COSIGN=true`.
+   Szczegoly DR/SBOM: [dr.md](dr.md).
 
 ### Dlaczego deploy jest dispatchowany, a nie tryguje sie z push tagu
 
@@ -172,7 +176,9 @@ Szczegoly wlaczenia npm i CDN: sekcja [Widget: npm + CDN](#widget-npm--cdn).
 | `DISCORD_WEBHOOK_URL` | secret | powiadomienia deploy/rollback/backup |
 | `NPM_TOKEN` | secret | **brak** — potrzebny do `npm publish` widgetu |
 | `WIDGET_CDN_BASE_URL` | variable | **brak** — bazowy URL CDN w release notes |
-| `GITHUB_TOKEN` | auto | GHCR push/retag, gh-release, dispatch deployu |
+| `VPS_DEPLOY_PATH` | variable | baza deployu na VPS dla CDN (fallback `/opt/apps/bugshot`) |
+| `ENABLE_COSIGN` | variable | `true` wlacza podpisy cosign w jobie `sbom` (domyslnie OFF) |
+| `GITHUB_TOKEN` | auto | GHCR push/retag, gh-release, dispatch deployu, SBOM upload |
 
 Sprawdzenie stanu:
 ```bash
@@ -223,10 +229,9 @@ Mechanizm juz jest: job `widget-cdn` buduje `dist/` i wgrywa je na VPS, a
   compose ma `image: ${BACKUP_IMAGE}` + `build: !reset null`, a `deploy-prod` i
   `rollback` ustawiaja i pobieraja `BACKUP_IMAGE`. Backup to job wsadowy — bez
   health-gatingu, podnosi go koncowy `compose up`.
-- [ ] **CDN: sciezka jako zmienna** — job `widget-cdn` wgrywa do
-  `~/bugshot-prod/bug-shot-widgets`, a nginx montuje `./bug-shot-widgets` w
-  `/opt/apps/bugshot`. Wynies baze deployu do zmiennej/sekretu repo
-  (`/opt/apps/bugshot`) i uzyj jej w `widget-cdn` oraz `deploy-prod`.
+- [x] **CDN: sciezka jako zmienna** — zrobione w kodzie: `widget-cdn` uzywa
+  `${VPS_DEPLOY_PATH:-/opt/apps/bugshot}/bug-shot-widgets` (ten sam katalog co
+  bind-mount nginx). **Zostaje**: `gh variable set VPS_DEPLOY_PATH --body /opt/apps/bugshot`.
 - [ ] **npm**: ustawic `NPM_TOKEN`.
 - [ ] **CDN**: ustawic `WIDGET_CDN_BASE_URL`.
 - [ ] **(opcjonalnie) wariant B** — tag pod PAT/GitHub App, aby usunac job

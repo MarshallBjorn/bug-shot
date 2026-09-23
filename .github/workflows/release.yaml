@@ -247,27 +247,36 @@ jobs:
           ssh_port:           ${{ secrets.SSH_PORT }}
 
       - name: Sync widget dist na CDN (nginx /widgets/, istniejacy bind-mount)
+        env:
+          VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH }}
         run: |
           # shellcheck disable=SC2029
           # BASE/VER sa CELOWO rozwijane po stronie runnera przed zdalna komenda
-          # (~ zostaje niezaescapowane i rozwija sie na VPS). Dyrektywa na gorze
-          # skryptu wycisza SC2029 dla wszystkich ponizszych wywolan ssh.
+          # (rozwijaja sie na VPS jako literaly). Dyrektywa na gorze skryptu
+          # wycisza SC2029 dla wszystkich ponizszych wywolan ssh.
           set -euo pipefail
           VER="${{ needs.version.outputs.next_version }}"
 
           # tar-over-ssh zamiast rsync — VPS nie ma rsync, a to nie wymaga
           # zadnych zaleznosci po stronie serwera (tylko tar + ssh).
-          BASE="bugshot-prod/bug-shot-widgets"
+          #
+          # ABSOLUTNA sciezka z repo variable VPS_DEPLOY_PATH (fallback
+          # /opt/apps/bugshot) = DOKLADNIE ten sam katalog, ktory nginx montuje
+          # jako bind-mount `./bug-shot-widgets` (deploy-prod robi `cd
+          # ${VPS_DEPLOY_PATH}`). Wczesniej bylo ~/bugshot-prod/bug-shot-widgets
+          # — INNY katalog niz serwowany przez nginx, wiec pliki laptowaly poza
+          # CDN i /widgets/ oddawal 404/stare.
+          BASE="${VPS_DEPLOY_PATH:-/opt/apps/bugshot}/bug-shot-widgets"
 
           # Katalog wersji: IMMUTABLE — tworzymy i wypelniamy, bez czyszczenia
           # (guard job juz zagwarantowal, ze ten commit nie mial pelnego release,
           # wiec katalog jest pusty albo z przerwanego runu tej samej wersji).
-          ssh vps 'mkdir -p ~/'"${BASE}"'/v'"${VER}"
-          tar -C widget/dist -czf - . | ssh vps 'tar -C ~/'"${BASE}"'/v'"${VER}"' -xzf -'
+          ssh vps 'mkdir -p '"${BASE}"'/v'"${VER}"
+          tar -C widget/dist -czf - . | ssh vps 'tar -C '"${BASE}"'/v'"${VER}"' -xzf -'
 
           # latest/: jedyny katalog, ktory wolno czyscic i nadpisywac.
-          ssh vps 'rm -rf ~/'"${BASE}"'/latest && mkdir -p ~/'"${BASE}"'/latest'
-          tar -C widget/dist -czf - . | ssh vps 'tar -C ~/'"${BASE}"'/latest -xzf -'
+          ssh vps 'rm -rf '"${BASE}"'/latest && mkdir -p '"${BASE}"'/latest'
+          tar -C widget/dist -czf - . | ssh vps 'tar -C '"${BASE}"'/latest -xzf -'
 
       - name: Teardown WireGuard
         if: always()
@@ -358,3 +367,81 @@ jobs:
           VER="${{ needs.version.outputs.next_version }}"
           echo "Dispatch deploy-prod (workflow_dispatch) dla v${VER}"
           gh workflow run deploy-prod.yaml -f version="${VER}"
+
+  sbom:
+    # SPR4: SBOM (Software Bill of Materials) dla KAZDEGO release. Syft skanuje
+    # opublikowane obrazy :<ver> (backend, frontend, backup) i generuje SPDX
+    # JSON, ktory dolaczamy jako assety do GitHub Release. Odsprzegniete od
+    # sciezki krytycznej deployu — jak widget.
+    needs: [version, guard, docker-retag, gh-release]
+    if: |
+      always() &&
+      needs.gh-release.result == 'success' &&
+      needs.guard.outputs.resume_from != 'complete'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # gh release upload
+      packages: read    # pull obrazow z GHCR do skanu syft
+      id-token: write   # (opcjonalnie) cosign keyless — patrz krok nizej
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install syft
+        run: |
+          set -euo pipefail
+          # instalator anchore; mozna przypiac wersje dopisujac ja na koncu (np. v1.20.0)
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+      - name: Generuj SBOM (SPDX JSON) i dolacz do GitHub Release
+        env:
+          VERSION: ${{ needs.version.outputs.next_version }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          OWNER_LC=$(printf '%s' "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+          TAG="v${VERSION}"
+
+          FILES=()
+          for svc in backend frontend backup; do
+            IMG="ghcr.io/${OWNER_LC}/bugshot-${svc}:${VERSION}"
+            OUT="sbom-${svc}-${VERSION}.spdx.json"
+            echo "=== syft ${IMG} -> ${OUT} ==="
+            syft "registry:${IMG}" -o "spdx-json=${OUT}"
+            FILES+=("$OUT")
+          done
+
+          # --clobber = idempotencja przy rerunie (nadpisuje istniejace assety).
+          gh release upload "$TAG" "${FILES[@]}" --clobber
+          echo "SBOM dolaczony do release $TAG: ${FILES[*]}"
+
+      # OPCJONALNIE: podpis obrazow cosign (keyless, OIDC). Wlacza sie repo
+      # variable ENABLE_COSIGN=true — domyslnie OFF, zeby nie wymuszac Rekor/
+      # Fulcio zanim zespol tego chce. Podpisuje po digescie (tag :ver -> digest).
+      - name: Install cosign
+        if: vars.ENABLE_COSIGN == 'true'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Cosign sign (keyless) opublikowanych obrazow
+        if: vars.ENABLE_COSIGN == 'true'
+        env:
+          VERSION: ${{ needs.version.outputs.next_version }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          COSIGN_YES: "true"
+        run: |
+          set -euo pipefail
+          OWNER_LC=$(printf '%s' "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+          for svc in backend frontend backup; do
+            IMG="ghcr.io/${OWNER_LC}/bugshot-${svc}"
+            DIGEST=$(docker buildx imagetools inspect "${IMG}:${VERSION}" \
+                      --format '{{json .Manifest.Digest}}' | tr -d '"')
+            echo "=== cosign sign ${IMG}@${DIGEST} ==="
+            cosign sign --yes "${IMG}@${DIGEST}"
+          done
