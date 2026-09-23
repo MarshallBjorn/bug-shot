@@ -177,6 +177,8 @@ services:
 
   backup:
     <<: *hardened
+    image: ${BACKUP_IMAGE:?BACKUP_IMAGE required}
+    build: !reset null
     restart: "no"
     logging: *default-logging
     user: "10002:10002"
