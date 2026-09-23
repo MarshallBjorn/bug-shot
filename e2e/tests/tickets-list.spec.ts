@@ -67,7 +67,8 @@ test.describe('paginacja i kanal live', () => {
     await expect(page.getByText('Żadne zgłoszenie nie pasuje do filtrów.')).toBeVisible()
   })
 
-  test('doladowanie dokleja kolejna strone', async ({ page, request }) => {
+  // przy dwoch wierszach dol listy od razu jest w widoku wiec kolejna strona schodzi bez klikania
+  test('doladowanie dokleja kolejna strone gdy dol listy wjedzie w widok', async ({ page, request }) => {
     for (const numer of [1, 2, 3]) {
       await reportTicket(request, `Paginacja kursorowa ${numer}`)
     }
@@ -75,11 +76,6 @@ test.describe('paginacja i kanal live', () => {
     await openSignedIn(page, `${ticketsPath()}?limit=2&search=Paginacja+kursorowa`)
 
     const wiersze = ticketRows(page)
-
-    await expect(wiersze).toHaveCount(2)
-    await expect(page.getByText('Pokazano 2 z 3')).toBeVisible()
-
-    await page.getByRole('button', { name: 'Załaduj więcej' }).click()
 
     await expect(wiersze).toHaveCount(3)
     await expect(page.getByText('Koniec listy, 3 wyniki')).toBeVisible()

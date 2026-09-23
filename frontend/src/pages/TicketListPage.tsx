@@ -198,6 +198,7 @@ function TicketListPage() {
             total={tickets.total}
             hasMore={tickets.hasMore}
             busy={tickets.loading || tickets.loadingMore}
+            paused={tickets.error !== null}
             onLoadMore={tickets.loadMore}
           />
         </div>
