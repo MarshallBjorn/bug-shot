@@ -15,6 +15,8 @@ import { useAuth } from '../auth/AuthContext'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useTickets } from '../hooks/useTickets'
 import { useTicketStream } from '../hooks/useTicketStream'
+import { useProjectRole } from '../projects/ProjectsContext'
+import { canWorkOnTickets } from '../roles'
 import { isFiltered, parseTicketQuery, ticketQueryToParams, type TicketQuery } from '../ticketQuery'
 
 function TicketListPage() {
@@ -22,6 +24,7 @@ function TicketListPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const canWork = canWorkOnTickets(useProjectRole(projectId))
 
   const [focused, setFocused] = useState(-1)
   const [statusMenuId, setStatusMenuId] = useState<string | null>(null)
@@ -100,7 +103,7 @@ function TicketListPage() {
         onPress: () => {
           const ticket = tickets.items[focused]
 
-          if (ticket) {
+          if (ticket && canWork) {
             setStatusMenuId(ticket.id)
           }
         },
@@ -119,7 +122,7 @@ function TicketListPage() {
         },
       },
     ],
-    [focused, move, navigate, projectId, searchParams, tickets.items],
+    [canWork, focused, move, navigate, projectId, searchParams, tickets.items],
   )
 
   useKeyboardShortcuts(shortcuts)
@@ -188,7 +191,7 @@ function TicketListPage() {
                 focusedIndex={focused}
                 statusMenuId={statusMenuId}
                 onStatusMenuChange={setStatusMenuId}
-                onPickStatus={(ticket, status) => changeStatus(ticket.id, status)}
+                onPickStatus={canWork ? (ticket, status) => changeStatus(ticket.id, status) : undefined}
               />
             </div>
           </div>

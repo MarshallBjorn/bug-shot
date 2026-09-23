@@ -1,4 +1,4 @@
-import { ChartColumn, Inbox, ShieldCheck, SlidersHorizontal } from 'lucide-react'
+import { ChartColumn, Inbox, ShieldCheck, SlidersHorizontal, Users } from 'lucide-react'
 import { NavLink } from 'react-router'
 import type { ReactNode } from 'react'
 import SidebarProject from './SidebarProject'
@@ -6,6 +6,8 @@ import SidebarProject from './SidebarProject'
 interface AppSidebarProps {
   projectId: string
   isAdmin: boolean
+  // maintainer choc jednego projektu widzi ustawienia swoich projektow
+  managesProjects?: boolean
   onNavigate?: () => void
 }
 
@@ -51,7 +53,7 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function AppSidebar({ projectId, isAdmin, onNavigate }: AppSidebarProps) {
+function AppSidebar({ projectId, isAdmin, managesProjects = false, onNavigate }: AppSidebarProps) {
   return (
     <nav aria-label="Nawigacja panelu" className="flex flex-col gap-5 p-3">
       {projectId && (
@@ -67,14 +69,21 @@ function AppSidebar({ projectId, isAdmin, onNavigate }: AppSidebarProps) {
 
       {projectId && <SidebarProject projectId={projectId} onNavigate={onNavigate} />}
 
-      {isAdmin && (
+      {(isAdmin || managesProjects) && (
         <Section label="Administracja">
+          {isAdmin && (
+            <Item to="/admin/users" icon={<Users />} onNavigate={onNavigate}>
+              Konta
+            </Item>
+          )}
           <Item to="/admin/projects" icon={<ShieldCheck />} onNavigate={onNavigate}>
             Zarządzanie projektami
           </Item>
-          <Item to="/admin/sanitization-rules" icon={<SlidersHorizontal />} onNavigate={onNavigate}>
-            Sanityzacja
-          </Item>
+          {isAdmin && (
+            <Item to="/admin/sanitization-rules" icon={<SlidersHorizontal />} onNavigate={onNavigate}>
+              Sanityzacja
+            </Item>
+          )}
         </Section>
       )}
     </nav>

@@ -24,6 +24,8 @@ import type { LogLevel } from '../consoleLog'
 import { useAttachmentText } from '../hooks/useAttachmentText'
 import { useTicket } from '../hooks/useTicket'
 import { useTicketStream } from '../hooks/useTicketStream'
+import { useProjectRole } from '../projects/ProjectsContext'
+import { canWorkOnTickets } from '../roles'
 import { isImage } from '../media'
 import { readListSearch } from '../navigation'
 import { ticketQueryToParams, emptyQuery } from '../ticketQuery'
@@ -35,6 +37,7 @@ function TicketDetailsPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { ticket, missing, error, loading, reload } = useTicket(ticketId)
+  const canWork = canWorkOnTickets(useProjectRole(projectId))
 
   const [comments, setComments] = useState<TicketComment[]>([])
   const [commentsTicketId, setCommentsTicketId] = useState('')
@@ -340,7 +343,7 @@ function TicketDetailsPage() {
               loading={commentsLoading}
             />
 
-            {ticket.status !== 'Deleted' && (
+            {ticket.status !== 'Deleted' && canWork && (
               <CommentForm author={author} busy={addingComment} onSubmit={addComment} />
             )}
           </section>
@@ -354,6 +357,7 @@ function TicketDetailsPage() {
               allowed={ticket.allowedStatuses}
               busy={updatingStatus}
               onChange={handleStatusChange}
+              readOnly={!canWork}
             />
             {statusError && (
               <p role="alert" className="text-sm text-destructive">
@@ -367,7 +371,7 @@ function TicketDetailsPage() {
             <TicketEnvironment environment={ticket.environment} userAgent={ticket.userAgent} />
           </section>
 
-          {ticket.status !== 'Deleted' && (
+          {ticket.status !== 'Deleted' && canWork && (
             <section aria-label="Kasowanie" className="space-y-2">
               <h3 className="text-xs font-medium text-muted-foreground">Nieodwracalne</h3>
               <DeleteTicketDialog

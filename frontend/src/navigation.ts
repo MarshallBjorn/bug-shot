@@ -12,6 +12,6 @@ export function readListSearch(state: unknown) {
 
 // zwykly uzytkownik poza projektem nie ma w nawigacji ani jednej pozycji
 // wiec powloka musi wiedziec kiedy belka jest pusta i w ogole jej nie stawiac
-export function hasSidebarItems(projectId: string, isAdmin: boolean) {
-  return Boolean(projectId) || isAdmin
+export function hasSidebarItems(projectId: string, withAdministration: boolean) {
+  return Boolean(projectId) || withAdministration
 }

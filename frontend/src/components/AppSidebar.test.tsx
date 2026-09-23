@@ -56,3 +56,15 @@ it('klik w pozycje zamyka wysuwana nawigacje', () => {
 
   expect(onNavigate).toHaveBeenCalledTimes(1)
 })
+
+it('administrator widzi konta a maintainer tylko projekty', () => {
+  const { unmount } = render(<AppSidebar projectId="" isAdmin />)
+
+  expect(screen.getByRole('link', { name: 'Konta' }).getAttribute('href')).toBe('/admin/users')
+
+  unmount()
+  render(<AppSidebar projectId="" isAdmin={false} managesProjects />)
+
+  expect(screen.queryByRole('link', { name: 'Konta' })).toBeNull()
+  expect(screen.getByRole('link', { name: 'Zarządzanie projektami' })).toBeDefined()
+})

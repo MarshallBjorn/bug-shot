@@ -20,6 +20,17 @@ vi.mock('../api/projects', () => ({
   renameProject: vi.fn(),
 }))
 
+const access = vi.hoisted(() => ({ isAdmin: true }))
+
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    status: 'authenticated',
+    user: { id: 'u1', email: 'admin@bug-shot.local', isAdmin: access.isAdmin, isActive: true },
+    logIn: vi.fn(),
+    logOut: vi.fn(),
+  }),
+}))
+
 vi.mock('react-router', () => ({
   Link: ({
     to,
@@ -45,10 +56,12 @@ const project = {
   origins: [
     { id: 'o1', origin: 'https://acme.example' },
   ],
+  role: 'Maintainer' as const,
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  access.isAdmin = true
   mockedGetProjects.mockResolvedValue([project])
   mockedCreateProject.mockResolvedValue({
     ...project,
@@ -234,6 +247,22 @@ describe('AdminProjectsPage', () => {
     await vi.waitFor(() => {
       expect(mockedDeleteProject).toHaveBeenCalledWith('p1')
     })
+  })
+
+  it('maintainer widzi tylko swoje projekty bez zakladania i kasowania', async () => {
+    access.isAdmin = false
+    mockedGetProjects.mockResolvedValue([
+      project,
+      { ...project, id: 'p2', name: 'Cudzy', key: 'OTHER', role: 'Member' as const },
+    ])
+
+    render(<AdminProjectsPage />)
+
+    expect(await screen.findByText('Acme')).toBeDefined()
+    expect(screen.queryByText('Cudzy')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Nowy projekt' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Usuń projekt Acme' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Zmień nazwę projektu Acme' })).toBeDefined()
   })
 })
 

@@ -5,12 +5,22 @@ import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { useAuth } from '../auth/AuthContext'
 import ProjectLiveProvider from '../live/ProjectLive'
+import { useManagesAnyProject } from '../projects/ProjectsContext'
+import { ProjectsProvider } from '../projects/ProjectsProvider'
 import { hasSidebarItems } from '../navigation'
 import AppSidebar from './AppSidebar'
 import ShortcutsDialog from './ShortcutsDialog'
 import ThemeToggle from './ThemeToggle'
 
 function AppLayout() {
+  return (
+    <ProjectsProvider>
+      <Shell />
+    </ProjectsProvider>
+  )
+}
+
+function Shell() {
   const { user, logOut } = useAuth()
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
@@ -19,7 +29,8 @@ function AppLayout() {
   // skroty dzialaja tylko na liscie zgloszen wiec tylko tam je podpowiadamy
   const onTicketList = useMatch('/projects/:projectId/tickets') !== null
   const isAdmin = Boolean(user?.isAdmin)
-  const withSidebar = hasSidebarItems(projectId, isAdmin)
+  const managesProjects = useManagesAnyProject()
+  const withSidebar = hasSidebarItems(projectId, isAdmin || managesProjects)
 
   async function leave() {
     await logOut()
@@ -27,7 +38,14 @@ function AppLayout() {
   }
 
   function sidebar(onNavigate?: () => void) {
-    return <AppSidebar projectId={projectId} isAdmin={isAdmin} onNavigate={onNavigate} />
+    return (
+      <AppSidebar
+        projectId={projectId}
+        isAdmin={isAdmin}
+        managesProjects={managesProjects}
+        onNavigate={onNavigate}
+      />
+    )
   }
 
   return (
@@ -71,9 +89,13 @@ function AppLayout() {
             )}
             <ThemeToggle />
             {/* na waskim ekranie adres konta ustepuje miejsca przyciskowi wylogowania */}
-            <span className="hidden truncate text-sm text-muted-foreground sm:inline">
+            <Link
+              to="/account"
+              title="Moje konto"
+              className="hidden truncate text-sm text-muted-foreground hover:text-foreground sm:inline"
+            >
               {user?.email}
-            </span>
+            </Link>
             <Button type="button" variant="outline" size="sm" onClick={leave}>
               Wyloguj
             </Button>

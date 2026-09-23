@@ -112,13 +112,50 @@ export interface ProjectOrigin {
   origin: string
 }
 
+// kolejnosc jak w API, wyzsza rola zawiera nizsza
+export type ProjectRole = 'Viewer' | 'Member' | 'Maintainer'
+
 export interface Project {
   id: string
   name: string
   key: string
   createdAt: string
   origins: ProjectOrigin[]
+  // rola zalogowanego konta, administrator ma wszedzie Maintainer
+  role: ProjectRole
 }
+
+export type UserAccountState = 'Active' | 'Invited' | 'Disabled'
+
+export interface ProjectAccess {
+  projectId: string
+  role: ProjectRole
+}
+
+export interface UserProject extends ProjectAccess {
+  projectName: string
+}
+
+export interface UserAccount {
+  id: string
+  email: string
+  isAdmin: boolean
+  state: UserAccountState
+  createdAt: string
+  projects: UserProject[]
+}
+
+// link wraca tylko gdy mail nie wyszedl i trzeba przekazac go recznie
+export interface AccountLinkResult {
+  emailSent: boolean
+  link: string | null
+}
+
+export interface CreatedUser extends AccountLinkResult {
+  user: UserAccount
+}
+
+export type AccountTokenPurpose = 'Invitation' | 'PasswordReset'
 
 // projectId puste oznacza regule globalna
 export interface SanitizationRule {

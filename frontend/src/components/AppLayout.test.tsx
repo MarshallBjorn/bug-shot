@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AppLayout from './AppLayout'
 import { ThemeProvider } from '../theme/ThemeProvider'
 import { useAuth } from '../auth/AuthContext'
+import { getProjects } from '../api/projects'
 
 const navigate = vi.fn()
 const logOut = vi.fn()
@@ -12,6 +13,10 @@ let match: string | null = null
 
 vi.mock('../auth/AuthContext', () => ({
   useAuth: vi.fn(),
+}))
+
+vi.mock('../api/projects', () => ({
+  getProjects: vi.fn(),
 }))
 
 vi.mock('./SidebarProject', () => ({
@@ -56,6 +61,7 @@ beforeEach(() => {
   params = { projectId: 'p1' }
   match = null
   logOut.mockResolvedValue(undefined)
+  vi.mocked(getProjects).mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -196,5 +202,37 @@ describe('AppLayout', () => {
     renderLayout()
 
     expect(screen.queryByRole('button', { name: 'Skróty klawiszowe' })).toBeNull()
+  })
+
+  it('maintainer projektu widzi ustawienia projektow bez kont i sanityzacji', async () => {
+    params = {}
+    vi.mocked(getProjects).mockResolvedValue([
+      { id: 'p1', name: 'Sklep', key: 'shop', createdAt: '2026-09-01', origins: [], role: 'Maintainer' },
+    ])
+    mockedUseAuth.mockReturnValue({
+      status: 'authenticated',
+      user: { id: 'user', email: 'user@test.local', isAdmin: false, isActive: true },
+      logIn: vi.fn(),
+      logOut,
+    })
+
+    renderLayout()
+
+    expect(await screen.findByRole('link', { name: 'Zarządzanie projektami' })).toBeDefined()
+    expect(screen.queryByRole('link', { name: 'Konta' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Sanityzacja' })).toBeNull()
+  })
+
+  it('adres konta prowadzi do ustawien konta', () => {
+    mockedUseAuth.mockReturnValue({
+      status: 'authenticated',
+      user: { id: 'user', email: 'user@test.local', isAdmin: false, isActive: true },
+      logIn: vi.fn(),
+      logOut,
+    })
+
+    renderLayout()
+
+    expect(screen.getByRole('link', { name: 'user@test.local' }).getAttribute('href')).toBe('/account')
   })
 })

@@ -13,6 +13,7 @@ import {
   removeProjectOrigin,
   renameProject,
 } from '../api/projects'
+import { useAuth } from '../auth/AuthContext'
 import type { Project } from '../types'
 
 type Pending =
@@ -36,6 +37,9 @@ const prompts: Record<'rename' | 'origin', (project: Project) => PromptRequest> 
 }
 
 function AdminProjectsPage() {
+  const { user } = useAuth()
+  // maintainer zmienia ustawienia swoich projektow a zakladanie i kasowanie zostaje dla administratora
+  const isAdmin = Boolean(user?.isAdmin)
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -52,7 +56,7 @@ function AdminProjectsPage() {
 
     getProjects(controller.signal)
       .then((items) => {
-        setProjects(items)
+        setProjects(items.filter((project) => project.role === 'Maintainer'))
         setError(null)
       })
       .catch((cause: Error) => {
@@ -166,40 +170,42 @@ function AdminProjectsPage() {
     <div className="space-y-4">
       <h2 className="text-xl font-semibold tracking-tight">Zarządzanie projektami</h2>
 
-      <form
-        className="flex flex-wrap items-end gap-2 rounded-lg border bg-card p-4"
-        onSubmit={handleCreate}
-      >
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Nazwa</span>
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            disabled={creating}
-            required
-          />
-        </label>
+      {isAdmin && (
+        <form
+          className="flex flex-wrap items-end gap-2 rounded-lg border bg-card p-4"
+          onSubmit={handleCreate}
+        >
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Nazwa</span>
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              disabled={creating}
+              required
+            />
+          </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Klucz</span>
-          <Input
-            value={key}
-            onChange={(event) => setKey(event.target.value)}
-            disabled={creating}
-            required
-          />
-        </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Klucz</span>
+            <Input
+              value={key}
+              onChange={(event) => setKey(event.target.value)}
+              disabled={creating}
+              required
+            />
+          </label>
 
-        <Button type="submit" disabled={creating || !name.trim() || !key.trim()}>
-          {creating ? 'Zakładanie...' : 'Nowy projekt'}
-        </Button>
+          <Button type="submit" disabled={creating || !name.trim() || !key.trim()}>
+            {creating ? 'Zakładanie...' : 'Nowy projekt'}
+          </Button>
 
-        {createError && (
-          <span role="alert" className="text-sm text-destructive">
-            {createError}
-          </span>
-        )}
-      </form>
+          {createError && (
+            <span role="alert" className="text-sm text-destructive">
+              {createError}
+            </span>
+          )}
+        </form>
+      )}
 
       {error && (
         <p
@@ -254,15 +260,17 @@ function AdminProjectsPage() {
                   >
                     Zmień nazwę
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    aria-label={`Usuń projekt ${project.name}`}
-                    onClick={() => askDelete(project)}
-                  >
-                    Usuń
-                  </Button>
+                  {isAdmin && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label={`Usuń projekt ${project.name}`}
+                      onClick={() => askDelete(project)}
+                    >
+                      Usuń
+                    </Button>
+                  )}
                 </span>
               </div>
 

@@ -20,6 +20,12 @@ const routerState = vi.hoisted(() => ({
   locationState: { listSearch: 'status=New&page=2' } as unknown,
 }))
 
+const access = vi.hoisted(() => ({ role: 'Member' as string | null }))
+
+vi.mock('../projects/ProjectsContext', () => ({
+  useProjectRole: () => access.role,
+}))
+
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
     status: 'authenticated',
@@ -173,6 +179,7 @@ const comment = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  access.role = 'Member'
   routerState.locationState = {
     listSearch: 'status=New&page=2',
   }
@@ -443,5 +450,26 @@ describe('kanal live na detalu', () => {
     live.onEvent({ type: 'deleted', ticketId: 't4' })
 
     expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('podglad bez roli member nie komentuje nie zmienia statusu i nie kasuje', async () => {
+    access.role = 'Viewer'
+
+    render(<TicketDetailsPage />)
+
+    expect(
+      await screen.findByText('Nic się jeszcze nie stało z tym zgłoszeniem.'),
+    ).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Dodaj komentarz' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'InProgress' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Kasowanie' })).toBeNull()
+  })
+
+  it('akcje czekaja az wiadomo jaka role ma konto', () => {
+    access.role = null
+
+    render(<TicketDetailsPage />)
+
+    expect(screen.queryByRole('button', { name: 'Dodaj komentarz' })).toBeNull()
   })
 })

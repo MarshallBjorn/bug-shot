@@ -49,7 +49,7 @@ function TicketTable({
           <th scope="col">Adres strony</th>
           <th scope="col">Załączniki i komentarze</th>
           <th scope="col">Zgłoszono</th>
-          <th scope="col">Akcje</th>
+          {onPickStatus && <th scope="col">Akcje</th>}
         </tr>
       </thead>
       <tbody>
@@ -124,24 +124,27 @@ function TicketTable({
                 </time>
               </td>
 
-              <td className="py-1.5 pr-2 align-top">
-                <TicketStatusMenu
-                  status={ticket.status}
-                  open={statusMenuId === ticket.id}
-                  onOpenChange={(open) => onStatusMenuChange?.(open ? ticket.id : null)}
-                  onPick={(status) => onPickStatus?.(ticket, status)}
-                >
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    aria-label={`Zmień status zgłoszenia ${ticket.description}`}
+              {/* rola tylko do odczytu nie dostaje menu statusu */}
+              {onPickStatus && (
+                <td className="py-1.5 pr-2 align-top">
+                  <TicketStatusMenu
+                    status={ticket.status}
+                    open={statusMenuId === ticket.id}
+                    onOpenChange={(open) => onStatusMenuChange?.(open ? ticket.id : null)}
+                    onPick={(status) => onPickStatus?.(ticket, status)}
                   >
-                    <ChevronDown aria-hidden="true" />
-                  </Button>
-                </TicketStatusMenu>
-              </td>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      aria-label={`Zmień status zgłoszenia ${ticket.description}`}
+                    >
+                      <ChevronDown aria-hidden="true" />
+                    </Button>
+                  </TicketStatusMenu>
+                </td>
+              )}
             </tr>
           )
         })}

@@ -8,17 +8,19 @@ interface TicketStatusControlProps {
   allowed: TicketStatus[]
   busy: boolean
   onChange: (status: TicketStatus) => void
+  // rola tylko do odczytu widzi status bez przyciskow przejsc
+  readOnly?: boolean
 }
 
 // przyciski ida z allowedStatuses z API, czyli z mapy przejsc przylozonej do stanu na serwerze
-function TicketStatusControl({ status, allowed, busy, onChange }: TicketStatusControlProps) {
+function TicketStatusControl({ status, allowed, busy, onChange, readOnly = false }: TicketStatusControlProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <StatusBadge status={status} />
       </div>
 
-      {allowed.length === 0 ? (
+      {readOnly ? null : allowed.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {status === 'Deleted'
             ? 'Skasowane zgłoszenie nie zmienia już statusu.'

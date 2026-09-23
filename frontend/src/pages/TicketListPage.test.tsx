@@ -24,6 +24,12 @@ vi.mock('react-router', () => ({
   useNavigate: () => navigate,
 }))
 
+const access = vi.hoisted(() => ({ role: 'Member' as string | null }))
+
+vi.mock('../projects/ProjectsContext', () => ({
+  useProjectRole: () => access.role,
+}))
+
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
     status: 'authenticated',
@@ -81,9 +87,11 @@ vi.mock('../components/TicketTable', () => ({
       {projectId}:{items.length}:{listSearch}
       <span data-testid="table-focused">{focusedIndex}</span>
       <span data-testid="table-menu">{statusMenuId ?? ''}</span>
-      <button type="button" onClick={() => onPickStatus?.(items[0], 'InProgress')}>
-        Mock zmiana statusu
-      </button>
+      {onPickStatus && (
+        <button type="button" onClick={() => onPickStatus(items[0], 'InProgress')}>
+          Mock zmiana statusu
+        </button>
+      )}
     </div>
   ),
 }))
@@ -170,6 +178,7 @@ function result(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  access.role = 'Member'
 
   searchParams.delete('status')
   searchParams.delete('search')
@@ -439,5 +448,21 @@ describe('TicketListPage', () => {
         'bartek@bug-shot.local',
       )
     })
+  })
+
+  it('rola tylko do odczytu nie dostaje zmiany statusu ani skrotu x', () => {
+    access.role = 'Viewer'
+    tickets.mockReturnValue(result([ticket('ticket-1')]))
+
+    render(<TicketListPage />)
+
+    expect(screen.queryByRole('button', { name: 'Mock zmiana statusu' })).toBeNull()
+
+    // ten sam przebieg przy roli member otwiera menu, patrz test skrotow wyzej
+    fireEvent.keyDown(document.body, { key: 'j' })
+    fireEvent.keyDown(document.body, { key: 'x' })
+
+    expect(screen.getByTestId('table-focused').textContent).toBe('0')
+    expect(screen.getByTestId('table-menu').textContent).toBe('')
   })
 })
