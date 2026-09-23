@@ -145,6 +145,7 @@ function ticket(id: string) {
     updatedAt: '2026-09-14T10:00:00+00:00',
     commentCount: 0,
     hasScreenshot: false,
+    hasConsoleLog: false,
   }
 }
 

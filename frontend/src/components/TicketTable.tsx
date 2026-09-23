@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ChevronDown, Image, MessageSquare } from 'lucide-react'
+import { ChevronDown, Image, MessageSquare, Terminal } from 'lucide-react'
 import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { formatDateTime, formatRelativeTime } from '../format'
@@ -98,6 +98,12 @@ function TicketTable({
                     <span className="inline-flex items-center gap-0.5" title="Ma zrzut ekranu">
                       <Image aria-hidden="true" className="size-3.5" />
                       <span className="sr-only">Ma zrzut ekranu</span>
+                    </span>
+                  )}
+                  {ticket.hasConsoleLog && (
+                    <span className="inline-flex items-center gap-0.5" title="Ma log konsoli">
+                      <Terminal aria-hidden="true" className="size-3.5" />
+                      <span className="sr-only">Ma log konsoli</span>
                     </span>
                   )}
                   {ticket.commentCount > 0 && (

@@ -34,6 +34,7 @@ function ticket(patch: Partial<TicketListItem> = {}): TicketListItem {
     updatedAt: '2026-09-09T10:00:00+00:00',
     commentCount: 0,
     hasScreenshot: false,
+    hasConsoleLog: false,
     ...patch,
   }
 }

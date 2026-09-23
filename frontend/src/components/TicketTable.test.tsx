@@ -21,6 +21,7 @@ function ticket(
     updatedAt: '2026-09-14T10:00:00+00:00',
     commentCount: 0,
     hasScreenshot: false,
+    hasConsoleLog: false,
     ...patch,
   }
 }
@@ -48,6 +49,16 @@ describe('TicketTable', () => {
     expect(screen.getByRole('columnheader', { name: 'Zgłoszono' })).toBeDefined()
     expect(screen.getByRole('link', { name: 'Koszyk gubi produkty' })).toBeDefined()
     expect(screen.getByText('Nowe')).toBeDefined()
+  })
+
+  it('pokazuje znaczniki zrzutu i logu konsoli tylko gdy sa', () => {
+    renderTable([
+      ticket({ id: '1', description: 'Z oboma', hasScreenshot: true, hasConsoleLog: true }),
+      ticket({ id: '2', description: 'Bez niczego' }),
+    ])
+
+    expect(screen.getAllByText('Ma zrzut ekranu')).toHaveLength(1)
+    expect(screen.getAllByText('Ma log konsoli')).toHaveLength(1)
   })
 
   it('renderuje wiele ticketow', () => {

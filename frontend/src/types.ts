@@ -15,6 +15,7 @@ export interface TicketListItem {
   updatedAt: string
   commentCount: number
   hasScreenshot: boolean
+  hasConsoleLog: boolean
 }
 
 export type AttachmentKind = 'Screenshot' | 'UserUpload' | 'ConsoleLog'
