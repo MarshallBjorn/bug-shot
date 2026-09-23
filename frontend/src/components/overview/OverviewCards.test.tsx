@@ -116,6 +116,7 @@ describe('blok czasu', () => {
       <OverviewTimestamp
         reportedAt="2026-09-17T10:00:00Z"
         receivedAt="2026-09-17T10:00:30Z"
+        onFilterByDay={vi.fn()}
       />,
     )
 
@@ -128,6 +129,7 @@ describe('blok czasu', () => {
       <OverviewTimestamp
         reportedAt="2026-09-17T08:00:00Z"
         receivedAt="2026-09-17T10:00:00Z"
+        onFilterByDay={vi.fn()}
       />,
     )
 
@@ -135,9 +137,32 @@ describe('blok czasu', () => {
   })
 
   it('brak czasu z klienta schodzi na czas przyjecia', () => {
-    render(<OverviewTimestamp reportedAt={null} receivedAt="2026-09-17T10:00:00Z" />)
+    render(
+      <OverviewTimestamp
+        reportedAt={null}
+        receivedAt="2026-09-17T10:00:00Z"
+        onFilterByDay={vi.fn()}
+      />,
+    )
 
     expect(screen.queryByText(/Zegar przeglądarki/)).toBeNull()
+  })
+
+  // dzien idzie z czasu serwera bo po nim filtruje lista
+  it('klik filtruje liste po dniu przyjecia', () => {
+    const onFilterByDay = vi.fn()
+
+    render(
+      <OverviewTimestamp
+        reportedAt="2026-09-10T12:00:00Z"
+        receivedAt="2026-09-17T12:00:00Z"
+        onFilterByDay={onFilterByDay}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /2026-09-17/ }))
+
+    expect(onFilterByDay).toHaveBeenCalledWith('2026-09-17')
   })
 })
 

@@ -267,6 +267,7 @@ function TicketDetailsPage() {
               <OverviewTimestamp
                 reportedAt={ticket.reportedAt}
                 receivedAt={ticket.receivedAt}
+                onFilterByDay={(day) => openList({ dateFrom: day, dateTo: day })}
               />
               <OverviewProject projectKey={ticket.projectKey} onOpenProject={() => openList({})} />
             </div>

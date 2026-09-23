@@ -176,6 +176,15 @@ export function ticketQueryToParams(query: TicketQuery): URLSearchParams {
   return params
 }
 
+// dzien kalendarzowy w strefie uzytkownika w formacie filtra daty
+export function calendarDay(instant: string): string {
+  const date = new Date(instant)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
 function dayStart(date: string) {
   const [year, month, day] = date.split('-').map(Number)
 
