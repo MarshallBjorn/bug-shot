@@ -200,11 +200,11 @@ public class TicketAttachmentsController(
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 
-            // zrzut wchodzi osobnym zadaniem po utworzeniu zgloszenia wiec wiersz na liscie wie o nim
-            // dopiero teraz. Bez tego panel do przeladowania pokazywalby zgloszenie jako pozbawione zrzutu
-            if (saved.Any(a => a.Kind == AttachmentKind.Screenshot))
+            // zrzut i log wchodza osobnym zadaniem po utworzeniu zgloszenia wiec wiersz na liscie wie o nich
+            // dopiero teraz. Bez tego panel do przeladowania pokazywalby zgloszenie bez znacznikow
+            if (saved.Any(a => a.Kind is AttachmentKind.Screenshot or AttachmentKind.ConsoleLog))
             {
-                await NotifyScreenshot(projectId, ticketId, cancellationToken);
+                await NotifyAttachments(projectId, ticketId, cancellationToken);
             }
 
             return StatusCode(StatusCodes.Status201Created, saved
@@ -218,7 +218,7 @@ public class TicketAttachmentsController(
         }
     }
 
-    private async Task NotifyScreenshot(Guid projectId, Guid ticketId, CancellationToken cancellationToken)
+    private async Task NotifyAttachments(Guid projectId, Guid ticketId, CancellationToken cancellationToken)
     {
         var item = await db.Tickets
             .AsNoTracking()
@@ -236,7 +236,8 @@ public class TicketAttachmentsController(
                 t.ReceivedAt,
                 t.UpdatedAt,
                 t.Comments.Count,
-                true))
+                t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot),
+                t.Attachments.Any(a => a.Kind == AttachmentKind.ConsoleLog)))
             .SingleAsync(cancellationToken);
 
         await notifier.Changed(projectId, item);

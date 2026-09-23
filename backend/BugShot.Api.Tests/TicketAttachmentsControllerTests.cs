@@ -420,17 +420,34 @@ public class TicketAttachmentsControllerTests : IDisposable
         Assert.Equal("changed", sent.Event);
         Assert.Equal(ticket.Id, sent.TicketId);
         Assert.True(sent.Ticket!.HasScreenshot);
+        Assert.False(sent.Ticket!.HasConsoleLog);
     }
 
     [Fact]
-    public async Task SamLogKonsoliNieRuszaKanaluLive()
+    public async Task WgranieLoguKonsoliIdzieDoKanaluLiveZeWskaznikiem()
     {
         using var db = NewContext();
         var ticket = await CreateTicket(db);
         var notifier = new RecordingTicketNotifier();
 
-        // wiersz listy nie pokazuje logu wiec nie ma o czym powiadamiac
         await Upload(db, ticket.Id, ticket.UploadToken, notifier, ("consoleLog", "console.log", "[2026-09-17T10:00:00.000Z] INFO console.log: test"u8.ToArray()));
+
+        var sent = Assert.Single(notifier.Events);
+
+        Assert.Equal("changed", sent.Event);
+        Assert.True(sent.Ticket!.HasConsoleLog);
+        Assert.False(sent.Ticket!.HasScreenshot);
+    }
+
+    [Fact]
+    public async Task SamZalacznikUzytkownikaNieRuszaKanaluLive()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+        var notifier = new RecordingTicketNotifier();
+
+        // wiersz listy nie pokazuje zwyklych zalacznikow wiec nie ma o czym powiadamiac
+        await Upload(db, ticket.Id, ticket.UploadToken, notifier, ("files", "notatka.png", Png));
 
         Assert.Empty(notifier.Events);
     }

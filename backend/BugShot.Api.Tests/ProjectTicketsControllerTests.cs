@@ -473,6 +473,16 @@ public class ProjectTicketsControllerTests
             SizeBytes = 128
         });
 
+        db.TicketAttachments.Add(new TicketAttachment
+        {
+            TicketId = kasa.Id,
+            Kind = AttachmentKind.ConsoleLog,
+            Uri = "/attachments/console.log",
+            FileName = "console.log",
+            ContentType = "text/plain",
+            SizeBytes = 64
+        });
+
         db.TicketComments.Add(new TicketComment
         {
             TicketId = kasa.Id,
@@ -645,9 +655,11 @@ public class ProjectTicketsControllerTests
         Assert.Equal("Windows", koszyk.OsName);
         Assert.Equal("desktop", koszyk.DeviceType);
         Assert.True(koszyk.HasScreenshot);
+        Assert.False(koszyk.HasConsoleLog);
         Assert.Equal(0, koszyk.CommentCount);
 
         Assert.False(kasa.HasScreenshot);
+        Assert.True(kasa.HasConsoleLog);
         Assert.Equal(1, kasa.CommentCount);
     }
 

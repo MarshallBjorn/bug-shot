@@ -436,9 +436,9 @@ Rzeczy, których nie widać z sygnatury endpointu:
 
 - bez podanego `status` lista pomija tickety skasowane, bo tombstone nie ma czego pokazać. Jawne `status=Deleted` je zwróci
 - `search` szuka po opisie i po adresie strony, bez rozróżniania wielkości liter
-- wiersz listy niesie `page`, `browserName`, `osName`, `deviceType`, `commentCount` i `hasScreenshot`. Liczniki idą podzapytaniami na stronę wyniku, więc koszt trzyma się rozmiaru strony, a nie całej listy. Rozpoznane nazwy są w wierszu dlatego, że panel musi umieć sprawdzić każdy filtr na zgłoszeniu przysłanym kanałem live
+- wiersz listy niesie `page`, `browserName`, `osName`, `deviceType`, `commentCount`, `hasScreenshot` i `hasConsoleLog`. Liczniki idą podzapytaniami na stronę wyniku, więc koszt trzyma się rozmiaru strony, a nie całej listy. Rozpoznane nazwy są w wierszu dlatego, że panel musi umieć sprawdzić każdy filtr na zgłoszeniu przysłanym kanałem live
 - ten sam kształt wiersza leci kanałem live, więc każdy nowy filtr musi mieć odpowiednik po stronie panelu. Bez tego zgłoszenie z kanału wpadłoby na listę, na której filtr nie daje mu prawa się znaleźć
-- wskaźnik `hasScreenshot` przy świeżym zgłoszeniu jest chwilę nieprawdziwy. Załącznik wchodzi osobnym żądaniem po `POST /tickets`, więc zdarzenie `TicketCreated` zna zgłoszenie jeszcze bez pliku. Zapis zrzutu nadaje `TicketChanged` i koryguje wiersz
+- wskaźniki `hasScreenshot` i `hasConsoleLog` przy świeżym zgłoszeniu są chwilę nieprawdziwe. Załączniki wchodzą osobnym żądaniem po `POST /tickets`, więc zdarzenie `TicketCreated` zna zgłoszenie jeszcze bez plików. Zapis zrzutu albo logu nadaje `TicketChanged` i koryguje wiersz
 - `GET /tickets/{id}` dokłada do tego `page` oraz `environment` z rozpoznaną przeglądarką, systemem, urządzeniem, viewportem, językiem i strefą. Kolumny były w bazie od migracji `AddTicketClientDetails`, ale nie wychodziły nigdzie poza analitykę
 - `sort` przyjmuje `receivedAt:desc`, `receivedAt:asc`, `reportedAt:desc` i `reportedAt:asc`. Nierozpoznana wartość wpada w domyślne `receivedAt:desc`
 - sortowanie po `reportedAt` schodzi na `receivedAt` tam gdzie `reportedAt` jest puste. Bez tego zgłoszenia bez czasu z przeglądarki lądowały na końcu listy przy `asc` i na początku przy `desc`, niezależnie od daty pokazanej w tabeli. Kursor porównuje się z tą samą wartością, po której idzie `ORDER BY`, więc zgłoszenia bez `reportedAt` nie wypadają z paginacji
@@ -502,12 +502,12 @@ Klient subskrybuje projekt wywołaniem `Subscribe` z jego identyfikatorem, a wyp
 | Zdarzenie | Ładunek | Kiedy |
 |---|---|---|
 | `TicketCreated` | pozycja listy | widget przysłał nowe zgłoszenie |
-| `TicketChanged` | pozycja listy | `PATCH /tickets/{id}/status` faktycznie zmienił status, `POST /tickets/{id}/comments` dopisał komentarz albo `POST /tickets/{id}/attachments` zapisał zrzut |
+| `TicketChanged` | pozycja listy | `PATCH /tickets/{id}/status` faktycznie zmienił status, `POST /tickets/{id}/comments` dopisał komentarz albo `POST /tickets/{id}/attachments` zapisał zrzut lub log konsoli |
 | `TicketDeleted` | identyfikator | `DELETE /tickets/{id}` zrobił tombstone |
 
 Ładunek dwóch pierwszych ma dokładnie ten sam kształt co wiersz listy, więc panel podmienia go u siebie bez dodatkowego `GET`. Hub serializuje po swojemu, niezależnie od ustawień kontrolerów, więc konwerter enumów jest mu podany osobno. Bez tego ten sam status wychodziłby stringiem z REST i liczbą z kanału.
 
-Wysyłka załącznika nadaje `TicketChanged`, choć nie rusza statusu. Powód jest w kolejności żądań: zrzut wchodzi osobnym `POST` po utworzeniu zgłoszenia, więc `TicketCreated` niesie wiersz z `hasScreenshot` równym `false` i bez tego drugiego zdarzenia panel do przeładowania pokazywałby zgłoszenie ze zrzutem jako pozbawione zrzutu. Nadaje tylko zapis zrzutu. Sam log konsoli nie, bo wiersz listy go nie pokazuje.
+Wysyłka załącznika nadaje `TicketChanged`, choć nie rusza statusu. Powód jest w kolejności żądań: zrzut i log wchodzą osobnym `POST` po utworzeniu zgłoszenia, więc `TicketCreated` niesie wiersz z `hasScreenshot` i `hasConsoleLog` równymi `false` i bez tego drugiego zdarzenia panel do przeładowania pokazywałby zgłoszenie bez znaczników. Same załączniki użytkownika nic nie nadają, bo wiersz listy ich nie pokazuje.
 
 Komentarz nadaje `TicketChanged` z nowym `commentCount`, bo bez tego licznik na liście i filtr `hasComments` rozjeżdżały się do przeładowania. Ładunek to tylko pozycja listy, więc detal zgłoszenia po zdarzeniu ze swoim identyfikatorem pobiera się od nowa razem z komentarzami. Panel trzyma jedno połączenie na projekt, a korzystają z niego lista, drzewo stron w panelu bocznym i detal.
 

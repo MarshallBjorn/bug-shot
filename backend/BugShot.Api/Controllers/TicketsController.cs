@@ -577,7 +577,11 @@ public class TicketsController(
     // kanal live niesie ten sam ksztalt co lista wiec panel podmienia wiersz bez dodatkowego GET
     // licznikow nie ma w encji wiec wolajacy podaje je jawnie
     // swieze zgloszenie nie ma jeszcze ani komentarza ani zalacznika bo te wchodza osobnym zadaniem
-    private static TicketListItem ListItem(Ticket ticket, int commentCount = 0, bool hasScreenshot = false) => new(
+    private static TicketListItem ListItem(
+        Ticket ticket,
+        int commentCount = 0,
+        bool hasScreenshot = false,
+        bool hasConsoleLog = false) => new(
         ticket.Id,
         ticket.Description,
         ticket.PageUrl,
@@ -590,7 +594,8 @@ public class TicketsController(
         ticket.ReceivedAt,
         ticket.UpdatedAt,
         commentCount,
-        hasScreenshot);
+        hasScreenshot,
+        hasConsoleLog);
 
     // wiersz na liscie niesie liczniki wiec kazda zmiana musi je odczytac zeby panel ich nie wyzerowal
     private async Task NotifyChanged(Ticket ticket, CancellationToken cancellationToken)
@@ -601,11 +606,14 @@ public class TicketsController(
             .Select(t => new
             {
                 Comments = t.Comments.Count,
-                Screenshot = t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot)
+                Screenshot = t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot),
+                ConsoleLog = t.Attachments.Any(a => a.Kind == AttachmentKind.ConsoleLog)
             })
             .SingleAsync(cancellationToken);
 
-        await notifier.Changed(ticket.ProjectId, ListItem(ticket, counters.Comments, counters.Screenshot));
+        await notifier.Changed(
+            ticket.ProjectId,
+            ListItem(ticket, counters.Comments, counters.Screenshot, counters.ConsoleLog));
     }
 
     private static TicketStatusResponse StatusResponse(Ticket ticket) => new(

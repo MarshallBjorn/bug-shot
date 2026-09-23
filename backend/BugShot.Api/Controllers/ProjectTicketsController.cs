@@ -138,7 +138,8 @@ public class ProjectTicketsController(BugShotDbContext db) : ControllerBase
                 t.ReceivedAt,
                 t.UpdatedAt,
                 t.Comments.Count,
-                t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot)))
+                t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot),
+                t.Attachments.Any(a => a.Kind == AttachmentKind.ConsoleLog)))
             .ToListAsync(cancellationToken);
 
         if (items.Count <= limit)

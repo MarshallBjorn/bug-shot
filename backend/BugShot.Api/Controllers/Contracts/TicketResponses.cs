@@ -18,7 +18,8 @@ public record TicketListItem(
     DateTimeOffset ReceivedAt,
     DateTimeOffset UpdatedAt,
     int CommentCount,
-    bool HasScreenshot);
+    bool HasScreenshot,
+    bool HasConsoleLog);
 
 // bez uri bo plik wychodzi wylacznie przez GET /attachments/{id}/download
 public record TicketAttachmentResponse(
