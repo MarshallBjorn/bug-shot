@@ -10,6 +10,7 @@ import {
   updateTicketStatus,
 } from '../api/tickets'
 import { ApiError } from '../api/client'
+import { ProjectLiveContext, type StreamHandlers } from '../live/projectLiveContext'
 import type { TicketStatus } from '../types'
 
 const navigate = vi.fn()
@@ -404,9 +405,43 @@ describe('TicketDetailsPage', () => {
   })
 })
 
+describe('kanal live na detalu', () => {
+  function renderLive() {
+    const subscribed: StreamHandlers[] = []
 
+    render(
+      <ProjectLiveContext.Provider
+        value={{
+          status: 'live',
+          subscribe: (handlers) => {
+            subscribed.push(handlers)
+            return () => {}
+          },
+        }}
+      >
+        <TicketDetailsPage />
+      </ProjectLiveContext.Provider>,
+    )
 
+    return subscribed[0]
+  }
 
+  it('zmiana tego zgloszenia przeladowuje detal', () => {
+    const live = renderLive()
 
+    live.onEvent({ type: 'changed', ticket: { ...ticket, id: 't1' } as never })
+    live.onEvent({ type: 'deleted', ticketId: 't1' })
 
+    expect(reload).toHaveBeenCalledTimes(2)
+  })
 
+  it('zdarzenia innych zgloszen nie ruszaja detalu', () => {
+    const live = renderLive()
+
+    live.onEvent({ type: 'changed', ticket: { ...ticket, id: 't2' } as never })
+    live.onEvent({ type: 'created', ticket: { ...ticket, id: 't3' } as never })
+    live.onEvent({ type: 'deleted', ticketId: 't4' })
+
+    expect(reload).not.toHaveBeenCalled()
+  })
+})

@@ -23,6 +23,7 @@ import { useAuth } from '../auth/AuthContext'
 import type { LogLevel } from '../consoleLog'
 import { useAttachmentText } from '../hooks/useAttachmentText'
 import { useTicket } from '../hooks/useTicket'
+import { useTicketStream } from '../hooks/useTicketStream'
 import { isImage } from '../media'
 import { readListSearch } from '../navigation'
 import { ticketQueryToParams, emptyQuery } from '../ticketQuery'
@@ -51,6 +52,17 @@ function TicketDetailsPage() {
   const [railOpen, setRailOpen] = useState(true)
 
   const author = user?.email ?? 'dashboard'
+
+  // status komentarz albo zrzut z innej karty wraca kanalem live
+  // zdarzenie niesie tylko wiersz listy wiec detal pobiera sie od nowa a komentarze ida za nim
+  useTicketStream({
+    onEvent: (event) => {
+      const id = event.type === 'deleted' ? event.ticketId : event.ticket.id
+
+      if (id === ticketId) reload()
+    },
+    onReconnected: reload,
+  })
 
   useEffect(() => {
     if (!toast) {
