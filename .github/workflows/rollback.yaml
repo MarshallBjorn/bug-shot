@@ -45,7 +45,7 @@ jobs:
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           VER="${{ inputs.version }}"
 
-          for svc in backend frontend; do
+          for svc in backend frontend backup; do
             IMAGE="ghcr.io/${OWNER}/bugshot-${svc}:${VER}"
             echo "Checking $IMAGE..."
             docker manifest inspect "$IMAGE" > /dev/null 2>&1 || \
@@ -65,9 +65,12 @@ jobs:
 
           export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VER}"
           export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${DEPLOY_VER}"
+          # prod compose wymaga BACKUP_IMAGE (${...:?}) — musi byc ustawiony do `compose up`.
+          export BACKUP_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backup:${DEPLOY_VER}"
 
           docker pull "$BACKEND_IMAGE"
           docker pull "$FRONTEND_IMAGE"
+          docker pull "$BACKUP_IMAGE"
 
           [ -f .deploy-tag ] && cp .deploy-tag .deploy-tag-prev
           echo "$DEPLOY_VER" > .deploy-tag

@@ -102,7 +102,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve najnowszy opublikowany SHA-image i retag (backend, frontend)
+      - name: Resolve najnowszy opublikowany SHA-image i retag (backend, frontend, backup)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.version.outputs.next_version }}
@@ -113,7 +113,7 @@ jobs:
           HEAD_SHA_FULL=$(git rev-parse HEAD)
           HEAD_SHA7=$(git rev-parse --short=7 HEAD)
 
-          for svc in backend frontend; do
+          for svc in backend frontend backup; do
             IMAGE="ghcr.io/${OWNER_LC}/bugshot-${svc}"
             WF="${svc}.yaml"
             SRC_TAG=""
@@ -327,3 +327,28 @@ jobs:
             --title "$TAG" \
             --notes-file /tmp/notes.md \
             --target "$(git rev-parse HEAD)"
+
+  trigger-deploy:
+    # CD auto-chaining. Tag v* tworzy job gh-release przez `gh release create`
+    # uwierzytelniony sekretem GITHUB_TOKEN. GitHub CELOWO nie triguje nowych
+    # workflow od zdarzen wygenerowanych GITHUB_TOKEN-em (ochrona przed
+    # rekursja), wiec deploy-prod (on: push: tags: ['v*']) NIE odpalal sie sam —
+    # tag powstawal, a deploy nie. workflow_dispatch i repository_dispatch to
+    # jedyne dwa wyjatki od tej reguly, dlatego jawnie dispatchujemy deploy-prod
+    # z wyliczona wersja. (Wariant "po ksiazce" = tworzyc tag pod PAT/GitHub App
+    # tokenem zamiast GITHUB_TOKEN — swiadomie odlozony.)
+    needs: [version, gh-release]
+    if: needs.gh-release.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dispatch deploy-prod dla nowej wersji
+        run: |
+          set -euo pipefail
+          VER="${{ needs.version.outputs.next_version }}"
+          echo "Dispatch deploy-prod (workflow_dispatch) dla v${VER}"
+          gh workflow run deploy-prod.yaml -f version="${VER}"

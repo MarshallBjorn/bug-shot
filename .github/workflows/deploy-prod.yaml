@@ -74,13 +74,20 @@ jobs:
 
           export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${DEPLOY_VERSION}"
           export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${DEPLOY_VERSION}"
+          # backup: prod compose wymaga BACKUP_IMAGE (${...:?}), wiec musi byc
+          # ustawiony dla KAZDEGO `compose up` ponizej, inaczej compose sie wywali.
+          export BACKUP_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backup:${DEPLOY_VERSION}"
 
           docker pull "$BACKEND_IMAGE"
           docker pull "$FRONTEND_IMAGE"
+          docker pull "$BACKUP_IMAGE"
 
           [ -f .deploy-tag ] && cp .deploy-tag .deploy-tag-prev
           echo "$DEPLOY_VERSION" > .deploy-tag
 
+          # backup NIE jest w tej petli: to job wsadowy (restart: "no", cron
+          # wewnatrz), nie ma health-gatingu jak backend/frontend. Podnosi go
+          # koncowy `compose up -d` ponizej (z juz sciagnietym BACKUP_IMAGE).
           for svc in backend frontend; do
             echo "=== Rolling: $svc ==="
             $COMPOSE up -d --no-build --no-deps "$svc"
@@ -142,6 +149,9 @@ jobs:
 
           export BACKEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backend:${PREV}"
           export FRONTEND_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-frontend:${PREV}"
+          export BACKUP_IMAGE="ghcr.io/${DEPLOY_OWNER}/bugshot-backup:${PREV}"
+
+          docker pull "$BACKUP_IMAGE" || true
 
           docker compose --env-file .env.prod \
             -f docker-compose.yml \
