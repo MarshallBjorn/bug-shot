@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sklep demo - moje konto</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%232454d6%22/%3E%3Cpath d=%22M32 14v22%22 stroke=%22white%22 stroke-width=%227%22 stroke-linecap=%22round%22/%3E%3Ccircle cx=%2232%22 cy=%2248%22 r=%224%22 fill=%22white%22/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="./styles.css">
+    <style>
+      .shop { max-width: 1040px; margin: 0 auto; padding: 24px 24px 96px; }
+      .shop-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+      .shop-logo { font-weight: 800; font-size: 1.2rem; color: #2454d6; }
+      .shop-nav { display: flex; gap: 18px; color: #667085; font-size: 0.92rem; }
+      .shop h1 { margin: 0 0 4px; font-size: 1.6rem; }
+      .shop-lead { margin: 0 0 20px; color: #667085; }
+      .shop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+      .card { background: #fff; border: 1px solid #e4e7ec; border-radius: 12px; padding: 18px 20px; }
+      .card h2 { margin: 0 0 12px; font-size: 1rem; }
+      .row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid #f0f2f5; font-size: 0.92rem; }
+      .row:first-of-type { border-top: 0; }
+      .row dt { color: #667085; }
+      .row dd { margin: 0; font-weight: 600; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+      .row-stack { flex-direction: column; gap: 4px; }
+      .row-stack dd { text-align: left; font-size: 0.85rem; }
+      .field { display: grid; gap: 4px; margin-bottom: 10px; font-size: 0.85rem; color: #667085; }
+      .field input { font: inherit; font-size: 0.95rem; color: #172033; padding: 8px 10px; border: 1px solid #d0d5dd; border-radius: 8px; }
+      .tag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #eef2ff; color: #2454d6; font-size: 0.7rem; font-weight: 700; }
+      .dev { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 10px 12px; margin: 0; white-space: normal; }
+      .dev span { display: block; overflow-wrap: anywhere; }
+    </style>
+  </head>
+  <body class="bugshot-demo-host">
+    <main class="shop">
+      <header class="shop-top">
+        <span class="shop-logo">sklep.demo</span>
+        <nav class="shop-nav"><span>Produkty</span><span>Zamówienia</span><span>Moje konto</span></nav>
+      </header>
+
+      <h1>Moje konto</h1>
+      <p class="shop-lead">Zamówienie BS-2026-0917 jest w drodze. Dostawa w czwartek.</p>
+
+      <div class="shop-grid">
+        <section class="card">
+          <h2>Dane klienta</h2>
+          <dl>
+            <div class="row"><dt>Imię i nazwisko</dt><dd>Jan Testowy</dd></div>
+            <div class="row"><dt>E-mail</dt><dd><span>jan.testowy@example.com</span></dd></div>
+            <div class="row"><dt>Telefon</dt><dd><span>+48 600 123 456</span></dd></div>
+            <div class="row"><dt>PESEL</dt><dd><span>90010112345</span></dd></div>
+            <div class="row"><dt>Dowód osobisty</dt><dd><span>ABC 123456</span></dd></div>
+            <div class="row"><dt>Adres dostawy<span class="tag">data-bugshot-mask</span></dt><dd data-bugshot-mask>ul. Przykładowa 12/4, 00-001 Warszawa</dd></div>
+          </dl>
+        </section>
+
+        <section class="card">
+          <h2>Płatności</h2>
+          <dl>
+            <div class="row"><dt>Karta</dt><dd><span>4242 4242 4242 4242</span></dd></div>
+            <div class="row row-stack"><dt>Rachunek do zwrotów</dt><dd><span>PL61109010140000071219812874</span></dd></div>
+            <div class="row"><dt>Ostatnia płatność</dt><dd>129,00 zł</dd></div>
+            <div class="row"><dt>Status</dt><dd>Opłacone</dd></div>
+          </dl>
+        </section>
+
+        <section class="card">
+          <h2>Zmiana danych logowania</h2>
+          <label class="field">Login
+            <input type="text" value="jan.testowy">
+          </label>
+          <label class="field">Hasło<span class="tag">type=password</span>
+            <input type="password" value="SuperTajne123!">
+          </label>
+          <label class="field">Numer karty<span class="tag">autocomplete=cc-number</span>
+            <input type="text" autocomplete="cc-number" value="5555 5555 5555 4444">
+          </label>
+        </section>
+
+        <section class="card">
+          <h2>Dla developera</h2>
+          <pre class="dev"><span>session: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJqYW4udGVzdG93eSJ9.c2lnbmF0dXJlLWRlbW8</span><span>stripe: sk_test_DemoKeyDoNotUse0000</span><span>build: 2.4.1 (a1b2c3d)</span><span>region: eu-central</span></pre>
+        </section>
+      </div>
+    </main>
+
+    <div class="bugshot-widget" data-state="closed">
+      <button
+        class="bugshot-fab"
+        type="button"
+        aria-label="Otwórz formularz zgłoszenia błędu"
+        aria-expanded="false"
+        aria-controls="bugshot-panel"
+      >
+        <span aria-hidden="true">!</span>
+        <span>Zgłoś błąd</span>
+      </button>
+
+      <section
+        class="bugshot-panel"
+        id="bugshot-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bugshot-title"
+        hidden
+      >
+        <header class="bugshot-header">
+          <div>
+            <p class="bugshot-kicker">BugShot</p>
+            <h2 id="bugshot-title">Zgłoś problem</h2>
+          </div>
+          <button class="bugshot-close" type="button" aria-label="Zamknij formularz">
+            ×
+          </button>
+        </header>
+
+        <form class="bugshot-form" novalidate autocomplete="off">
+          <div class="bugshot-field">
+            <label for="bugshot-description">Opis problemu</label>
+            <textarea
+              id="bugshot-description"
+              name="description"
+              rows="6"
+              maxlength="1200"
+              placeholder="Co poszło nie tak? Opisz krok, oczekiwany rezultat i to, co widzisz teraz."
+              required
+            ></textarea>
+            <div class="bugshot-field-meta">
+              <span class="bugshot-hint">Nie wpisuj haseł, tokenów ani danych prywatnych.</span>
+              <span class="bugshot-count" aria-live="polite">0/1200</span>
+            </div>
+          </div>
+
+          <div
+            class="bugshot-attachment"
+            type="button"
+            tabindex="0"
+            aria-label="Dodaj załączniki"
+            aria-describedby="bugshot-attachment-help"
+          >
+            <input
+              class="bugshot-file-input"
+              id="bugshot-files"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              tabindex="-1"
+              multiple
+            >
+            <div class="bugshot-attachment-icon" aria-hidden="true"></div>
+            <div class="bugshot-attachment-copy">
+              <p>Załączniki</p>
+              <span id="bugshot-attachment-help">Kliknij lub przeciągnij obrazy tutaj. Maksymalnie 4 załączniki, zrzut ekranu dochodzi automatycznie.</span>
+            </div>
+          </div>
+
+          <div class="bugshot-file-list" aria-live="polite"></div>
+
+          <p class="bugshot-status" role="status" aria-live="polite" aria-atomic="true"></p>
+
+          <div class="bugshot-actions">
+            <button class="bugshot-secondary" type="button">Anuluj</button>
+            <button class="bugshot-submit" type="submit" disabled>Wyślij</button>
+          </div>
+        </form>
+
+        <section class="bugshot-success-view" hidden aria-live="polite" aria-labelledby="bugshot-success-title">
+          <p class="bugshot-success-kicker">BugShot</p>
+          <div class="bugshot-success-content">
+            <div class="bugshot-success-icon" aria-hidden="true">✓</div>
+            <h3 id="bugshot-success-title" class="bugshot-success-title">Potwierdzenie zgłoszenia</h3>
+            <p class="bugshot-success-copy">Zgłoszenie zostało przyjęte.</p>
+            <p class="bugshot-success-ticket">ID zgłoszenia: <code></code></p>
+            <div class="bugshot-success-actions">
+              <button class="bugshot-secondary bugshot-success-close" type="button">Zamknij</button>
+              <button class="bugshot-secondary bugshot-success-new" type="button">Nowe zgłoszenie</button>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <script src="./config.js"></script>
+    <script src="./vendor/html-to-image.js"></script>
+    <script src="./mask.js"></script>
+    <script src="./capture.js"></script>
+    <script src="./widget.js"></script>
+  </body>
+</html>
