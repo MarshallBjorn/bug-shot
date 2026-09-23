@@ -15,6 +15,11 @@ vi.mock('../auth/AuthContext', () => ({
   useAuth: vi.fn(),
 }))
 
+// prawdziwy kanal live probuje laczyc sie z API i jego logi przychodza juz po zamknieciu srodowiska testu
+vi.mock('../live/ProjectLive', () => ({
+  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
 vi.mock('../api/projects', () => ({
   getProjects: vi.fn(),
 }))
