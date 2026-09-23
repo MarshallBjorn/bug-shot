@@ -136,7 +136,15 @@ function TicketFilters({ query, onChange, searchRef }: TicketFiltersProps) {
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-80 space-y-3">
+        {/* fokus na panelu a nie na pierwszym selekcie bo ten po kliknieciu mysza swieci obwodka */}
+        <PopoverContent
+          align="start"
+          className="w-80 space-y-3"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            ;(event.currentTarget as HTMLElement).focus()
+          }}
+        >
           <FilterSelect
             label="Przeglądarka"
             value={query.browser}

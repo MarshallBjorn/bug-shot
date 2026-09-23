@@ -31,7 +31,7 @@ function OverviewCard({ label, action, onClick, className, children }: OverviewC
       type="button"
       onClick={onClick}
       className={cn(
-        'group flex min-w-0 flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-accent',
+        'group flex min-w-0 flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:-outline-offset-2',
         className,
       )}
     >

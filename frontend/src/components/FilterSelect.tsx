@@ -18,7 +18,7 @@ function FilterSelect({ label, value, onChange, className, children }: FilterSel
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-9 rounded-md border border-input bg-card px-2 text-sm shadow-xs focus-visible:border-ring"
+        className="h-9 rounded-md border border-input bg-card px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring"
       >
         {children}
       </select>

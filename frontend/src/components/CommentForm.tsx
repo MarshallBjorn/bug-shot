@@ -35,7 +35,7 @@ function CommentForm({ author, busy, onSubmit }: CommentFormProps) {
         disabled={busy}
         placeholder="Co ustaliliście w tej sprawie"
         onChange={(event) => setBody(event.target.value)}
-        className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-xs focus-visible:border-ring"
+        className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring"
       />
       <div className="flex justify-end">
         <Button type="submit" size="sm" disabled={busy || !body.trim()}>
