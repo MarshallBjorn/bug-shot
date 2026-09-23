@@ -13,6 +13,10 @@ function Probe({ shortcuts, enabled }: { shortcuts: Shortcut[]; enabled?: boolea
         <option>a</option>
       </select>
       <div aria-label="edytowalny" contentEditable="true" suppressContentEditableWarning />
+      <div role="dialog" aria-label="popover" tabIndex={-1}>
+        <span>tresc</span>
+      </div>
+      <div role="menu" aria-label="menu" tabIndex={-1} />
     </>
   )
 }
@@ -67,6 +71,30 @@ describe('skroty klawiszowe', () => {
     for (const label of ['pole', 'obszar', 'lista', 'edytowalny']) {
       press('x', view.getByLabelText(label))
     }
+
+    expect(onPress).not.toHaveBeenCalled()
+  })
+
+  it('milczy w popoverze dialogu i menu bo maja wlasna klawiature', () => {
+    const onPress = vi.fn()
+
+    const view = render(<Probe shortcuts={[{ key: '/', onPress }]} />)
+
+    press('/', view.getByLabelText('popover'))
+    press('/', view.getByText('tresc'))
+    press('/', view.getByLabelText('menu'))
+
+    expect(onPress).not.toHaveBeenCalled()
+  })
+
+  it('milczy gdy klawisz obsluzyl juz ktos inny', () => {
+    const onPress = vi.fn()
+
+    render(<Probe shortcuts={[{ key: 'Enter', onPress }]} />)
+
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    event.preventDefault()
+    document.body.dispatchEvent(event)
 
     expect(onPress).not.toHaveBeenCalled()
   })

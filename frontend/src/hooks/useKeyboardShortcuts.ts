@@ -5,10 +5,12 @@ export interface Shortcut {
   onPress: () => void
 }
 
+const overlays = '[role="dialog"], [role="alertdialog"], [role="menu"]'
+
 // skrot nie moze wystrzelic gdy ktos pisze w polu ani gdy trzyma modyfikator
 // bo wtedy nalezy do przegladarki albo do systemu
 function ignores(event: KeyboardEvent) {
-  if (event.altKey || event.ctrlKey || event.metaKey) {
+  if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
     return true
   }
 
@@ -23,6 +25,8 @@ function ignores(event: KeyboardEvent) {
   return (
     target.isContentEditable ||
     target.closest('[contenteditable="true"]') !== null ||
+    // popover dialog i menu maja wlasna klawiature wiec skroty listy tam milcza
+    target.closest(overlays) !== null ||
     ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
   )
 }
