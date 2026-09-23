@@ -341,11 +341,17 @@ jobs:
     if: needs.gh-release.result == 'success'
     runs-on: ubuntu-latest
     permissions:
-      actions: write
+      actions: write     # gh workflow run — dispatch deploy-prod
+      contents: read     # gh resolve workflow po nazwie (repo prywatne → bez tego 404)
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v4
+      # BEZ actions/checkout — `gh workflow run` dziala przez API (GH_TOKEN +
+      # GH_REPO), nie potrzebuje plikow repo. Wczesniej byl tu checkout z
+      # permissions bez `contents: read`, przez co na PRYWATNYM repo checkout
+      # zwracal 404 "Repository not found" i wywalal caly release po tym, jak
+      # tag v* i GitHub Release juz powstaly (deploy nie byl dispatchowany).
       - name: Dispatch deploy-prod dla nowej wersji
         run: |
           set -euo pipefail
