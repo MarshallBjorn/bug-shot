@@ -1,7 +1,10 @@
 (function () {
   "use strict";
 
-  const API_BASE_URL = window.BUGSHOT_CONFIG.apiBaseUrl;
+  // bez config.js widget celuje w lokalne API i projekt demo z seeda
+  const CONFIG = window.BUGSHOT_CONFIG || {};
+  const API_BASE_URL = CONFIG.apiBaseUrl || "http://localhost:8080";
+  const PROJECT_KEY = CONFIG.projectKey || "demo";
 
   const MAX_LOG_BYTES = 256 * 1024;
   const MAX_ENTRY_BYTES = 32 * 1024;
@@ -669,7 +672,7 @@
 
   async function submitReport({ description, screenshot, attachments }) {
     const payload = {
-      projectKey: "demo",
+      projectKey: PROJECT_KEY,
       description,
       ...window.BUGSHOT_CAPTURE.payload(),
     };

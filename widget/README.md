@@ -46,6 +46,7 @@ build step:
 ```js
 window.BUGSHOT_CONFIG = {
   apiBaseUrl: "http://localhost:8080",
+  projectKey: "demo", // key of the project that receives the reports
   mask: {
     mode: "blur",       // blur (default) | cover | dots | off
     useDefaults: true,  // keep the built-in heuristics
@@ -79,11 +80,15 @@ For browser testing, serve the `widget/` directory over HTTP instead of opening 
 
 From the repository root, run:
 
-```powershell
-python -m http.server 5500 --directory widget
+```bash
+widget/serve.sh 5500
 ```
 
+On Windows use `widget\serve.ps1 -Port 5500`. Both scripts write `config.js`, which is not committed, from `BUGSHOT_API_URL` (default `http://localhost:8080`) and `BUGSHOT_PROJECT_KEY` (default `demo`). Without `config.js` the widget falls back to the same defaults.
+
 Then open `http://127.0.0.1:5500/`. Stop the server with `Ctrl+C`.
+
+The seeded `demo` project allows `http://127.0.0.1:5500` and `http://localhost:5500`. A page on another port or host needs its origin added to the project in the dashboard, for example a second page started with `widget/serve.sh 5501` needs `http://127.0.0.1:5501`.
 
 ## Integration boundary
 

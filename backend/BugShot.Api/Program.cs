@@ -13,7 +13,9 @@ using BugShot.Api.Notifications.Webhooks;
 using BugShot.Api.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -189,6 +191,8 @@ builder.Services.AddCors(options =>
         .AllowAnyHeader()
         .AllowCredentials());
 });
+
+builder.Services.Replace(ServiceDescriptor.Transient<ICorsPolicyProvider, WidgetCorsPolicyProvider>());
 
 var app = builder.Build();
 

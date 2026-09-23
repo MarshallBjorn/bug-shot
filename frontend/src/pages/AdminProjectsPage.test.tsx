@@ -31,6 +31,12 @@ vi.mock('../auth/AuthContext', () => ({
   }),
 }))
 
+const shared = vi.hoisted(() => ({ reload: vi.fn() }))
+
+vi.mock('../projects/ProjectsContext', () => ({
+  useProjects: () => ({ projects: [], loading: false, reload: shared.reload }),
+}))
+
 vi.mock('react-router', () => ({
   Link: ({
     to,
@@ -140,6 +146,7 @@ describe('AdminProjectsPage', () => {
     })
 
     expect(await screen.findByText('Beta')).toBeDefined()
+    expect(shared.reload).toHaveBeenCalledTimes(1)
   })
 
   it('nie tworzy projektu bez wymaganych danych', async () => {
@@ -226,6 +233,7 @@ describe('AdminProjectsPage', () => {
 
     await vi.waitFor(() => {
       expect(mockedAddProjectOrigin).toHaveBeenCalledWith('p1', 'https://new.example')
+      expect(shared.reload).toHaveBeenCalledTimes(1)
     })
 
     fireEvent.click(
@@ -234,6 +242,7 @@ describe('AdminProjectsPage', () => {
 
     await vi.waitFor(() => {
       expect(mockedRemoveProjectOrigin).toHaveBeenCalledWith('p1', 'o1')
+      expect(shared.reload).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -246,6 +255,7 @@ describe('AdminProjectsPage', () => {
 
     await vi.waitFor(() => {
       expect(mockedDeleteProject).toHaveBeenCalledWith('p1')
+      expect(shared.reload).toHaveBeenCalledTimes(1)
     })
   })
 

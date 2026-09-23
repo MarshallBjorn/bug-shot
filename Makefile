@@ -6,7 +6,7 @@
 .PHONY: dev dev-d down logs config migrate test test-backend test-frontend e2e e2e-install seed seed-reset backup-pg backup-media cleanup restore-test
 
 ENV_FILE ?= .env
-COMPOSE = docker compose --env-file $(ENV_FILE) -f docker-compose.yml
+COMPOSE = docker compose --env-file $(ENV_FILE) -f docker-compose.dev.yml
 
 dev:
 	$(COMPOSE) up --build

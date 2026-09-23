@@ -118,12 +118,20 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
                 .HasForeignKey(o => o.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasData(new ProjectOrigin
-            {
-                Id = new Guid("22222222-2222-2222-2222-222222222222"),
-                ProjectId = new Guid("11111111-1111-1111-1111-111111111111"),
-                Origin = "http://127.0.0.1:5500"
-            });
+            // strona widgetu bywa otwierana pod obiema nazwami wiec demo zna obie
+            entity.HasData(
+                new ProjectOrigin
+                {
+                    Id = new Guid("22222222-2222-2222-2222-222222222222"),
+                    ProjectId = new Guid("11111111-1111-1111-1111-111111111111"),
+                    Origin = "http://127.0.0.1:5500"
+                },
+                new ProjectOrigin
+                {
+                    Id = new Guid("22222222-2222-2222-2222-222222222223"),
+                    ProjectId = new Guid("11111111-1111-1111-1111-111111111111"),
+                    Origin = "http://localhost:5500"
+                });
         });
 
         modelBuilder.Entity<Ticket>(entity =>

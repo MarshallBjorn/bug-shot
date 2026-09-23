@@ -14,6 +14,7 @@ import {
   renameProject,
 } from '../api/projects'
 import { useAuth } from '../auth/AuthContext'
+import { useProjects } from '../projects/ProjectsContext'
 import type { Project } from '../types'
 
 type Pending =
@@ -40,6 +41,8 @@ function AdminProjectsPage() {
   const { user } = useAuth()
   // maintainer zmienia ustawienia swoich projektow a zakladanie i kasowanie zostaje dla administratora
   const isAdmin = Boolean(user?.isAdmin)
+  // nawigacja i role na zgloszeniach czytaja wspolna liste wiec kazda zmiana musi ja odswiezyc
+  const { reload: reloadShared } = useProjects()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -85,6 +88,7 @@ function AdminProjectsPage() {
       const project = await createProject(trimmedName, trimmedKey)
 
       setProjects((current) => [...current, project].sort((a, b) => a.name.localeCompare(b.name)))
+      reloadShared()
       setName('')
       setKey('')
     } catch (cause) {
@@ -130,6 +134,7 @@ function AdminProjectsPage() {
 
         const updated = await renameProject(project.id, value)
         setProjects((current) => current.map((p) => (p.id === project.id ? updated : p)))
+        reloadShared()
         return
       }
 
@@ -138,6 +143,7 @@ function AdminProjectsPage() {
       setProjects((current) =>
         current.map((p) => (p.id === project.id ? { ...p, origins: [...p.origins, added] } : p)),
       )
+      reloadShared()
     })
   }
 
@@ -151,6 +157,7 @@ function AdminProjectsPage() {
     await run(async () => {
       await deleteProject(project.id)
       setProjects((current) => current.filter((p) => p.id !== project.id))
+      reloadShared()
     })
   }
 
@@ -163,6 +170,7 @@ function AdminProjectsPage() {
           p.id === project.id ? { ...p, origins: p.origins.filter((o) => o.id !== originId) } : p,
         ),
       )
+      reloadShared()
     })
   }
 
