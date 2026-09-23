@@ -180,22 +180,42 @@ gunzip -c /tmp/dump.sql.gz | docker compose --env-file .env.prod \
 
 ## Upgrade path
 
+**Domyslnie: automatycznie przez CI/CD.** Merge do `main` z commitem
+`feat:`/`fix:` → `release.yaml` wylicza wersje, retaguje obrazy, tworzy tag `v*`
+i **sam dispatchuje** `deploy-prod.yaml`, ktory robi rolling deploy na VPS
+(sync plikow repo do taga + `docker pull` obrazow `:<ver>` + healthcheck + smoke
++ auto-rollback). Pelny opis: [pipeline.md](pipeline.md).
+
+VPS **nie wymaga juz recznego `git pull`** — krok deployu sam robi na serwerze
+`git fetch --tags` + `git checkout -f v<version>`, synchronizujac compose,
+`nginx.conf` i entrypointy do dokladnie deployowanej wersji (`.env.prod` i inne
+pliki nietrackowane zostaja nietkniete).
+
+Reczny deploy istniejacej wersji (np. gdy chcesz cofnac/wymusic konkretny tag):
+```bash
+gh workflow run deploy-prod.yaml -f version=0.0.2
+```
+
+Awaryjny deploy bezposrednio na VPS (gdy CI niedostepne):
 ```bash
 cd /opt/apps/bugshot
-git pull
+git fetch --tags && git checkout -f v<version>
+export BACKEND_IMAGE=ghcr.io/<owner>/bugshot-backend:<version>
+export FRONTEND_IMAGE=ghcr.io/<owner>/bugshot-frontend:<version>
+export BACKUP_IMAGE=ghcr.io/<owner>/bugshot-backup:<version>
 docker compose --env-file .env.prod \
   -f docker-compose.yml -f docker-compose.prod.yml \
-  build --pull
-
+  pull backend frontend backup
 docker compose --env-file .env.prod \
   -f docker-compose.yml -f docker-compose.prod.yml \
-  up -d --remove-orphans
-
-# Weryfikacja
+  up -d --no-build --remove-orphans
 docker compose ps
 ```
 
-Rollback: obrazy taggowane semver, `git checkout <prev-tag>` → rebuild → up. Postgres migracje wsteczne — check EF migrations przed downgrade.
+Rollback: automatyczny przy porazce smoke, albo recznie przez `rollback.yaml`
+(`gh workflow run rollback.yaml -f version=<prev> -f environment=prod`). Obrazy
+sa taggowane semver w GHCR, wiec rollback nie wymaga rebuildu. Postgres migracje
+wsteczne — sprawdz EF migrations przed downgrade.
 
 ## Troubleshooting — realne przypadki
 
