@@ -174,6 +174,7 @@ beforeEach(() => {
   searchParams.delete('search')
   searchParams.delete('sort')
   searchParams.delete('limit')
+  searchParams.delete('page')
 })
 
 afterEach(() => {
@@ -229,6 +230,33 @@ describe('TicketListPage', () => {
     expect(setSearchParams.mock.calls[0][1]).toEqual({
       replace: false,
     })
+  })
+
+  it('strona wklejona pelnym adresem wraca do paska znormalizowana', () => {
+    searchParams.set('page', 'http://127.0.0.1:5500/')
+    searchParams.set('status', 'New')
+    tickets.mockReturnValue(result([]))
+
+    render(<TicketListPage />)
+
+    const updater = setSearchParams.mock.calls[0][0] as (
+      previous: URLSearchParams,
+    ) => URLSearchParams
+
+    const next = updater(new URLSearchParams(searchParams))
+
+    expect(next.get('page')).toBe('127.0.0.1:5500')
+    expect(next.get('status')).toBe('New')
+    expect(setSearchParams.mock.calls[0][1]).toEqual({ replace: true })
+  })
+
+  it('znormalizowana strona nie rusza paska', () => {
+    searchParams.set('page', '127.0.0.1:5500')
+    tickets.mockReturnValue(result([]))
+
+    render(<TicketListPage />)
+
+    expect(setSearchParams).not.toHaveBeenCalled()
   })
 
   it('pokazuje tabele i doladowanie dla wynikow', () => {

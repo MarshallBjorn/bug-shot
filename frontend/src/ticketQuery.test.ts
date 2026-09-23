@@ -4,6 +4,7 @@ import {
   defaultSort,
   isFiltered,
   matchesQuery,
+  normalizePage,
   parseTicketQuery,
   ticketQueryToParams,
   type TicketQuery,
@@ -115,6 +116,28 @@ describe('dopasowanie zgloszenia do filtra', () => {
     expect(matchesQuery(ticket(), { ...base, search: 'KOSZYK' })).toBe(true)
     expect(matchesQuery(ticket(), { ...base, search: 'ACME.example' })).toBe(true)
     expect(matchesQuery(ticket(), { ...base, search: 'faktura' })).toBe(false)
+  })
+})
+
+// te same przypadki co PageAddressTests w backendzie
+describe('normalizacja adresu strony', () => {
+  it.each([
+    ['https://Sklep.example/Koszyk?utm_source=newsletter#opinie', 'sklep.example/koszyk'],
+    ['https://sklep.example/szukaj?q=buty', 'sklep.example/szukaj'],
+    ['https://sklep.example/', 'sklep.example'],
+    ['http://127.0.0.1:5500/cart/', '127.0.0.1:5500/cart'],
+    ['https://sklep.example/produkt#opinie?x=1', 'sklep.example/produkt'],
+    [' https://sklep.example/kontakt ', 'sklep.example/kontakt'],
+    ['', ''],
+  ])('%s', (url, expected) => {
+    expect(normalizePage(url)).toBe(expected)
+  })
+
+  it('zgloszenie z kanalu live pasuje do filtra wpisanego pelnym adresem', () => {
+    const query = parseTicketQuery(new URLSearchParams('page=http://127.0.0.1:5500/'))
+
+    expect(query.page).toBe('127.0.0.1:5500')
+    expect(matchesQuery(ticket({ page: '127.0.0.1:5500' }), query)).toBe(true)
   })
 })
 

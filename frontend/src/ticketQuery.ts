@@ -94,6 +94,21 @@ function parseDate(value: string | null): string {
   return datePattern.test(trimmed) && !Number.isNaN(Date.parse(trimmed)) ? trimmed : ''
 }
 
+// kopia PageAddress.Normalize z backendu bo zgloszenie z kanalu live porownujemy juz w panelu
+export function normalizePage(url: string): string {
+  let value = url.trim()
+
+  const cut = value.search(/[?#]/)
+
+  if (cut >= 0) value = value.slice(0, cut)
+
+  const scheme = value.indexOf('://')
+
+  if (scheme >= 0) value = value.slice(scheme + 3)
+
+  return value.replace(/\/+$/, '').toLowerCase()
+}
+
 export function parseTicketQuery(params: URLSearchParams): TicketQuery {
   const sort = params.get('sort')
 
@@ -106,7 +121,7 @@ export function parseTicketQuery(params: URLSearchParams): TicketQuery {
   return {
     statuses: parseStatuses(params.get('status')),
     search: params.get('search')?.trim() ?? '',
-    page: params.get('page')?.trim() ?? '',
+    page: normalizePage(params.get('page') ?? ''),
     browser: params.get('browser')?.trim() ?? '',
     os: params.get('os')?.trim() ?? '',
     device: params.get('device')?.trim() ?? '',

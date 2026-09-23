@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import ActiveFilters from '../components/ActiveFilters'
 import LiveStatus from '../components/LiveStatus'
@@ -46,6 +46,16 @@ function TicketListPage() {
     },
     [setSearchParams],
   )
+
+  // strona wklejona pelnym adresem wraca do paska w postaci z drzewka zeby link i zapisany filtr byly jednakowe
+  // reszta parametrow zostaje jak jest bo szukanie przycinaloby spacje w trakcie pisania
+  const rawPage = searchParams.get('page')
+
+  useEffect(() => {
+    if (rawPage !== null && rawPage !== query.page) {
+      updateQuery({ page: query.page }, true)
+    }
+  }, [rawPage, query.page, updateQuery])
 
   const empty = tickets.items.length === 0
 
