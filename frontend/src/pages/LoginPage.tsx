@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Bug } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { FormEvent } from 'react'
-import { Navigate, useLocation } from 'react-router'
+import { Navigate, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../auth/AuthContext'
+import { setupRequired } from '../auth/session'
 import ThemeToggle from '../components/ThemeToggle'
 
 function readReturnPath(state: unknown) {
@@ -17,10 +18,26 @@ function readReturnPath(state: unknown) {
 function LoginPage() {
   const { status, logIn } = useAuth()
   const { state } = useLocation()
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+
+  // instancja bez zadnego konta nie ma czym sie zalogowac wiec prowadzimy prosto do kreatora
+  useEffect(() => {
+    if (status !== 'anonymous') return
+
+    let active = true
+
+    void setupRequired().then((required) => {
+      if (active && required) navigate('/setup', { replace: true })
+    })
+
+    return () => {
+      active = false
+    }
+  }, [navigate, status])
 
   if (status === 'checking') {
     return <p>Sprawdzanie sesji...</p>

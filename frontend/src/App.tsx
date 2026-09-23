@@ -3,9 +3,11 @@ import { Route, Routes } from 'react-router'
 import AppLayout from './components/AppLayout'
 import RequireAdmin from './components/RequireAdmin'
 import RequireAuth from './components/RequireAuth'
+import RequireProjectManager from './components/RequireProjectManager'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
+import SetPasswordPage from './pages/SetPasswordPage'
 import TicketDetailsPage from './pages/TicketDetailsPage'
 import TicketListPage from './pages/TicketListPage'
 
@@ -14,6 +16,10 @@ const ProjectAnalyticsPage = lazy(() => import('./pages/ProjectAnalyticsPage'))
 const AdminProjectsPage = lazy(() => import('./pages/AdminProjectsPage'))
 const AdminSanitizationRulesPage = lazy(() => import('./pages/AdminSanitizationRulesPage'))
 const AdminProjectNotificationsPage = lazy(() => import('./pages/AdminProjectNotificationsPage'))
+const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'))
+const AccountPage = lazy(() => import('./pages/AccountPage'))
+// kreator widzi tylko ten kto stawia instancje, raz w jej zyciu
+const SetupPage = lazy(() => import('./pages/SetupPage'))
 
 function Loading() {
   return <p className="text-sm text-muted-foreground">Ładowanie widoku...</p>
@@ -23,6 +29,15 @@ function App() {
   return (
     <Routes>
       <Route path="login" element={<LoginPage />} />
+      <Route
+        path="setup"
+        element={
+          <Suspense fallback={<Loading />}>
+            <SetupPage />
+          </Suspense>
+        }
+      />
+      <Route path="set-password" element={<SetPasswordPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
           <Route index element={<HomePage />} />
@@ -36,7 +51,15 @@ function App() {
               </Suspense>
             }
           />
-          <Route element={<RequireAdmin />}>
+          <Route
+            path="account"
+            element={
+              <Suspense fallback={<Loading />}>
+                <AccountPage />
+              </Suspense>
+            }
+          />
+          <Route element={<RequireProjectManager />}>
             <Route
               path="admin/projects"
               element={
@@ -50,6 +73,16 @@ function App() {
               element={
                 <Suspense fallback={<Loading />}>
                   <AdminProjectNotificationsPage />
+                </Suspense>
+              }
+            />
+          </Route>
+          <Route element={<RequireAdmin />}>
+            <Route
+              path="admin/users"
+              element={
+                <Suspense fallback={<Loading />}>
+                  <AdminUsersPage />
                 </Suspense>
               }
             />

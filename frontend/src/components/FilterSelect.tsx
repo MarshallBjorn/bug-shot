@@ -1,6 +1,7 @@
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Check, ChevronDown, Search } from 'lucide-react'
 import { cn } from 'cn'
+import { fold } from '../fold'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Select,
@@ -62,16 +63,6 @@ function FilterSelect({ label, value, options, onChange, searchable, className }
   )
 }
 
-// porownanie bez wielkosci liter i ogonkow bo nazwy projektow wpisuje sie jak leci
-// l z kreska nie rozklada sie w NFD wiec idzie osobno
-function fold(text: string) {
-  return text
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .replace(/ł/g, 'l')
-}
-
 interface SearchableSelectProps {
   labelId: string
   value: string
@@ -85,24 +76,31 @@ function SearchableSelect({ labelId, value, options, onChange }: SearchableSelec
   const [open, setOpen] = useState(false)
   const [phrase, setPhrase] = useState('')
   const [active, setActive] = useState(0)
+  // lista zamykana po wyborze trzyma stare pozycje do konca animacji
+  // bo rodzic potrafi od razu usunac wybrana pozycje i mignelby pusty wynik
+  const [closing, setClosing] = useState<SelectOption[] | null>(null)
   const listRef = useRef<HTMLUListElement>(null)
+
+  const shown = open ? options : (closing ?? options)
 
   const matches = useMemo(() => {
     const needle = fold(phrase.trim())
 
-    return needle ? options.filter((option) => fold(option.label).includes(needle)) : options
-  }, [options, phrase])
+    return needle ? shown.filter((option) => fold(option.label).includes(needle)) : shown
+  }, [shown, phrase])
 
   const selected = options.find((option) => option.value === value)
 
   function openChange(next: boolean) {
     setOpen(next)
+    setClosing(null)
     setPhrase('')
     // lista startuje na wybranej pozycji zeby strzalki szly od niej
     setActive(Math.max(0, options.findIndex((option) => option.value === value)))
   }
 
   function pick(option: SelectOption) {
+    setClosing(options)
     onChange(option.value)
     setOpen(false)
   }

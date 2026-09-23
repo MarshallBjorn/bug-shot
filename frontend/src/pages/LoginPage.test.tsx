@@ -3,9 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import LoginPage from './LoginPage'
 import { ThemeProvider } from '../theme/ThemeProvider'
 import { useAuth } from '../auth/AuthContext'
+import { setupRequired } from '../auth/session'
 
 const navigateStates = vi.hoisted(() => ({
   state: null as unknown,
+  navigate: vi.fn(),
+}))
+
+vi.mock('../auth/session', () => ({
+  setupRequired: vi.fn(),
 }))
 
 vi.mock('../auth/AuthContext', () => ({
@@ -29,6 +35,7 @@ vi.mock('react-router', () => ({
   useLocation: () => ({
     state: navigateStates.state,
   }),
+  useNavigate: () => navigateStates.navigate,
 }))
 
 const mockedUseAuth = vi.mocked(useAuth)
@@ -44,6 +51,7 @@ function renderLogin() {
 beforeEach(() => {
   vi.clearAllMocks()
   navigateStates.state = null
+  vi.mocked(setupRequired).mockResolvedValue(false)
 })
 
 afterEach(() => {
@@ -162,5 +170,39 @@ describe('LoginPage', () => {
     renderLogin()
 
     expect(screen.getByRole('button', { name: /^Motyw:/ })).toBeDefined()
+  })
+
+  it('instancja bez kont prowadzi do kreatora', async () => {
+    vi.mocked(setupRequired).mockResolvedValue(true)
+
+    mockedUseAuth.mockReturnValue({
+      status: 'anonymous',
+      user: null,
+      logIn: vi.fn(),
+      logOut: vi.fn(),
+    })
+
+    renderLogin()
+
+    await vi.waitFor(() => {
+      expect(navigateStates.navigate).toHaveBeenCalledWith('/setup', { replace: true })
+    })
+  })
+
+  it('instancja z kontem zostaje przy logowaniu', async () => {
+    mockedUseAuth.mockReturnValue({
+      status: 'anonymous',
+      user: null,
+      logIn: vi.fn(),
+      logOut: vi.fn(),
+    })
+
+    renderLogin()
+
+    await vi.waitFor(() => {
+      expect(setupRequired).toHaveBeenCalled()
+    })
+
+    expect(navigateStates.navigate).not.toHaveBeenCalled()
   })
 })
