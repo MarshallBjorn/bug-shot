@@ -66,9 +66,11 @@ public class PasswordPolicyTests
 
     // MVC waliduje rekord po parametrach konstruktora a ten sam atrybut na property konczy sie 500
     [Theory]
-    [InlineData(typeof(CreateUserRequest), "Password")]
     [InlineData(typeof(CreateUserRequest), "Email")]
-    [InlineData(typeof(ResetPasswordRequest), "Password")]
+    [InlineData(typeof(SetupRequest), "Email")]
+    [InlineData(typeof(SetupRequest), "Password")]
+    [InlineData(typeof(SetPasswordRequest), "Password")]
+    [InlineData(typeof(ChangePasswordRequest), "NewPassword")]
     [InlineData(typeof(LoginRequest), "Email")]
     [InlineData(typeof(LoginRequest), "Password")]
     public void ParametrKonstruktoraNiesieWalidacje(Type contract, string name)
@@ -83,9 +85,11 @@ public class PasswordPolicyTests
     }
 
     [Theory]
-    [InlineData(typeof(CreateUserRequest), "Password")]
     [InlineData(typeof(CreateUserRequest), "Email")]
-    [InlineData(typeof(ResetPasswordRequest), "Password")]
+    [InlineData(typeof(SetupRequest), "Email")]
+    [InlineData(typeof(SetupRequest), "Password")]
+    [InlineData(typeof(SetPasswordRequest), "Password")]
+    [InlineData(typeof(ChangePasswordRequest), "NewPassword")]
     [InlineData(typeof(LoginRequest), "Email")]
     [InlineData(typeof(LoginRequest), "Password")]
     public void PropertyNieNiesieWalidacji(Type contract, string name)

@@ -4,11 +4,14 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
+using BugShot.Api.Notifications.Email;
 using BugShot.Api.Security;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BugShot.Api.Tests;
 
@@ -421,30 +424,10 @@ public class AuthEndpointsTests : IDisposable
     }
 
     [Fact]
-    public async Task ZalozoneKontoMozeSieZalogowac()
-    {
-        var admin = await Read(await Login(client, AdminEmail, AdminPassword));
-
-        var created = await Send(
-            HttpMethod.Post,
-            "/api/v1/users",
-            admin.AccessToken,
-            new { email = "NOWY@Bug-Shot.test", password = "wystarczajaco-dlugie-haslo", isAdmin = false });
-
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-
-        // adres trafia do bazy malymi literami wiec logowanie dziala niezaleznie od wielkosci liter
-        var session = await Read(await Login(client, "Nowy@bug-shot.TEST", "wystarczajaco-dlugie-haslo"));
-
-        Assert.Equal("nowy@bug-shot.test", session.User.Email);
-        Assert.False(session.User.IsAdmin);
-    }
-
-    [Fact]
     public async Task DrugieKontoNaTenSamAdresJestOdrzucane()
     {
         var admin = await Read(await Login(client, AdminEmail, AdminPassword));
-        var body = new { email = "duplikat@bug-shot.test", password = "wystarczajaco-dlugie-haslo", isAdmin = false };
+        var body = new { email = "duplikat@bug-shot.test", isAdmin = false };
 
         Assert.Equal(
             HttpStatusCode.Created,
@@ -456,24 +439,6 @@ public class AuthEndpointsTests : IDisposable
     }
 
     [Fact]
-    public async Task ZaKrotkieHasloNieZakladaKonta()
-    {
-        var admin = await Read(await Login(client, AdminEmail, AdminPassword));
-
-        var response = await Send(
-            HttpMethod.Post,
-            "/api/v1/users",
-            admin.AccessToken,
-            new { email = "krotkie@bug-shot.test", password = "krotkie", isAdmin = false });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-
-        using var db = TestDatabase.OpenContext();
-
-        Assert.False(await db.Users.AnyAsync(u => u.Email == "krotkie@bug-shot.test"));
-    }
-
-    [Fact]
     public async Task ZwyklyUzytkownikNieZakladaKont()
     {
         var developer = await CreateDeveloper();
@@ -482,29 +447,9 @@ public class AuthEndpointsTests : IDisposable
             HttpMethod.Post,
             "/api/v1/users",
             developer.AccessToken,
-            new { email = "ktos@bug-shot.test", password = "wystarczajaco-dlugie-haslo", isAdmin = true });
+            new { email = "ktos@bug-shot.test", isAdmin = true });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ResetHaslaUniewazniaStareHasloISesje()
-    {
-        var developer = await CreateDeveloper();
-        var developerRefresh = CookieValue(await Login(client, DeveloperEmail, AdminPassword));
-        var admin = await Read(await Login(client, AdminEmail, AdminPassword));
-
-        var reset = await Send(
-            HttpMethod.Post,
-            $"/api/v1/users/{developer.User.Id}/reset-password",
-            admin.AccessToken,
-            new { password = "zupelnie-nowe-dlugie-haslo" });
-
-        Assert.Equal(HttpStatusCode.NoContent, reset.StatusCode);
-
-        Assert.Equal(HttpStatusCode.Unauthorized, (await Login(client, DeveloperEmail, AdminPassword)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await Refresh(client, developerRefresh)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await Login(client, DeveloperEmail, "zupelnie-nowe-dlugie-haslo")).StatusCode);
     }
 
     [Fact]
@@ -530,7 +475,7 @@ public class AuthEndpointsTests : IDisposable
             (await Send(HttpMethod.Get, "/api/v1/users", drugi.AccessToken)).StatusCode);
 
         // bez tego wylaczony administrator zakladal sobie nowe konto i wracal nim po wygasnieciu tokena
-        var body = new { email = "tylne-drzwi@bug-shot.test", password = "konto-po-wylaczeniu", isAdmin = true };
+        var body = new { email = "tylne-drzwi@bug-shot.test", isAdmin = true };
 
         Assert.Equal(
             HttpStatusCode.Unauthorized,
@@ -642,6 +587,7 @@ public class AuthEndpointsTests : IDisposable
             builder.UseSetting(AdminSeeder.PasswordVariable, AdminPassword);
             builder.UseSetting("Cors:WidgetOrigins:0", AllowedOrigin);
             builder.UseSetting("Cors:DashboardOrigins:0", "http://localhost:5173");
+            builder.ConfigureTestServices(services => services.AddSingleton<IEmailSender>(new RecordingEmailSender()));
         }
     }
 }
