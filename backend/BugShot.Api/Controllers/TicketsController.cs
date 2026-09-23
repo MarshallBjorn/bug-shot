@@ -288,6 +288,9 @@ public class TicketsController(
 
         await db.SaveChangesAsync(cancellationToken);
 
+        // licznik komentarzy siedzi w wierszu listy a detal w innej karcie tez chce zobaczyc nowy wpis
+        await NotifyChanged(ticket, cancellationToken);
+
         return CreatedAtAction(
             nameof(GetComments),
             new { id },
@@ -556,18 +559,7 @@ public class TicketsController(
             return entry.State == EntityState.Detached ? NotFound() : VersionConflict(ticket);
         }
 
-        // wiersz na liscie niesie liczniki wiec zmiana statusu musi je odczytac zeby panel ich nie wyzerowal
-        var counters = await db.Tickets
-            .AsNoTracking()
-            .Where(t => t.Id == ticket.Id)
-            .Select(t => new
-            {
-                Comments = t.Comments.Count,
-                Screenshot = t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot)
-            })
-            .SingleAsync(cancellationToken);
-
-        await notifier.Changed(ticket.ProjectId, ListItem(ticket, counters.Comments, counters.Screenshot));
+        await NotifyChanged(ticket, cancellationToken);
 
         return Ok(StatusResponse(ticket));
     }
@@ -599,6 +591,22 @@ public class TicketsController(
         ticket.UpdatedAt,
         commentCount,
         hasScreenshot);
+
+    // wiersz na liscie niesie liczniki wiec kazda zmiana musi je odczytac zeby panel ich nie wyzerowal
+    private async Task NotifyChanged(Ticket ticket, CancellationToken cancellationToken)
+    {
+        var counters = await db.Tickets
+            .AsNoTracking()
+            .Where(t => t.Id == ticket.Id)
+            .Select(t => new
+            {
+                Comments = t.Comments.Count,
+                Screenshot = t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot)
+            })
+            .SingleAsync(cancellationToken);
+
+        await notifier.Changed(ticket.ProjectId, ListItem(ticket, counters.Comments, counters.Screenshot));
+    }
 
     private static TicketStatusResponse StatusResponse(Ticket ticket) => new(
         ticket.Id,

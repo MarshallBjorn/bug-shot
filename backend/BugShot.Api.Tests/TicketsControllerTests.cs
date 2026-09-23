@@ -1576,6 +1576,46 @@ public class TicketsControllerTests
         Assert.Empty(notifier.Events);
     }
 
+    [Fact]
+    public async Task KomentarzIdzieDoKanaluLiveZNowymLicznikiem()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var notifier = new RecordingTicketNotifier();
+        var controller = NewController(db, notifier: notifier);
+
+        await controller.AddComment(
+            ticket.Id,
+            new CreateTicketCommentRequest("tester", "Pierwszy komentarz"),
+            CancellationToken.None);
+
+        var sent = Assert.Single(notifier.Events);
+
+        Assert.Equal("changed", sent.Event);
+        Assert.Equal(ticket.ProjectId, sent.ProjectId);
+        Assert.Equal(ticket.Id, sent.TicketId);
+        Assert.Equal(1, sent.Ticket!.CommentCount);
+    }
+
+    [Fact]
+    public async Task KomentarzDoTombstoneNieWysylaZdarzenia()
+    {
+        using var db = NewContext();
+        var ticket = await NewTicket(db);
+        var notifier = new RecordingTicketNotifier();
+        var controller = NewController(db, notifier: notifier);
+
+        await controller.Delete(ticket.Id, CancellationToken.None);
+        notifier.Events.Clear();
+
+        await controller.AddComment(
+            ticket.Id,
+            new CreateTicketCommentRequest("tester", "Za pozno"),
+            CancellationToken.None);
+
+        Assert.Empty(notifier.Events);
+    }
+
     // drugie kasowanie niczego nie zapisuje wiec nie ma o czym powiadamiac
     [Fact]
     public async Task KasowanieIdzieDoKanaluLiveTylkoRaz()

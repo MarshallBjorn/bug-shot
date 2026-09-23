@@ -444,7 +444,7 @@ Rzeczy, których nie widać z sygnatury endpointu:
 - sortowanie po `reportedAt` schodzi na `receivedAt` tam gdzie `reportedAt` jest puste. Bez tego zgłoszenia bez czasu z przeglądarki lądowały na końcu listy przy `asc` i na początku przy `desc`, niezależnie od daty pokazanej w tabeli. Kursor porównuje się z tą samą wartością, po której idzie `ORDER BY`, więc zgłoszenia bez `reportedAt` nie wypadają z paginacji
 - każde sortowanie domyka się identyfikatorem ticketu. Bez tego zgłoszenia o równych znacznikach czasu mają dowolną kolejność i potrafią powtórzyć się na dwóch stronach albo nie trafić na żadną
 
-Paginacja komentarzy została przy numerach stron. Lista komentarzy jednego zgłoszenia jest krótka i nie ma nad nią kanału live, więc kursor niczego by tam nie kupił.
+Paginacja komentarzy została przy numerach stron. Lista komentarzy jednego zgłoszenia jest krótka, a kanał live nie niesie samych komentarzy, tylko sygnał do ponownego pobrania, więc kursor niczego by tam nie kupił.
 
 ### GET /projects/{projectId}/pages
 
@@ -502,12 +502,14 @@ Klient subskrybuje projekt wywołaniem `Subscribe` z jego identyfikatorem, a wyp
 | Zdarzenie | Ładunek | Kiedy |
 |---|---|---|
 | `TicketCreated` | pozycja listy | widget przysłał nowe zgłoszenie |
-| `TicketChanged` | pozycja listy | `PATCH /tickets/{id}/status` faktycznie zmienił status, albo `POST /tickets/{id}/attachments` zapisał zrzut |
+| `TicketChanged` | pozycja listy | `PATCH /tickets/{id}/status` faktycznie zmienił status, `POST /tickets/{id}/comments` dopisał komentarz albo `POST /tickets/{id}/attachments` zapisał zrzut |
 | `TicketDeleted` | identyfikator | `DELETE /tickets/{id}` zrobił tombstone |
 
 Ładunek dwóch pierwszych ma dokładnie ten sam kształt co wiersz listy, więc panel podmienia go u siebie bez dodatkowego `GET`. Hub serializuje po swojemu, niezależnie od ustawień kontrolerów, więc konwerter enumów jest mu podany osobno. Bez tego ten sam status wychodziłby stringiem z REST i liczbą z kanału.
 
 Wysyłka załącznika nadaje `TicketChanged`, choć nie rusza statusu. Powód jest w kolejności żądań: zrzut wchodzi osobnym `POST` po utworzeniu zgłoszenia, więc `TicketCreated` niesie wiersz z `hasScreenshot` równym `false` i bez tego drugiego zdarzenia panel do przeładowania pokazywałby zgłoszenie ze zrzutem jako pozbawione zrzutu. Nadaje tylko zapis zrzutu. Sam log konsoli nie, bo wiersz listy go nie pokazuje.
+
+Komentarz nadaje `TicketChanged` z nowym `commentCount`, bo bez tego licznik na liście i filtr `hasComments` rozjeżdżały się do przeładowania. Ładunek to tylko pozycja listy, więc detal zgłoszenia po zdarzeniu ze swoim identyfikatorem pobiera się od nowa razem z komentarzami. Panel trzyma jedno połączenie na projekt, a korzystają z niego lista, drzewo stron w panelu bocznym i detal.
 
 Zdarzenia lecą po zatwierdzeniu zapisu i tylko wtedy, gdy zapis coś zmienił: powtórka `Idempotency-Key`, ustawienie tego samego statusu i drugie kasowanie tombstone nie nadają nic. Nieudana wysyłka zostawia ostrzeżenie w logu i nie wywraca żądania, bo dane są już w bazie.
 
