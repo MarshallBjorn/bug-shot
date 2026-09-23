@@ -16,4 +16,6 @@ public class Project : ICreatedAt
     public ICollection<Ticket> Tickets { get; set; } = [];
 
     public ICollection<SanitizationRule> SanitizationRules { get; set; } = [];
+
+    public ICollection<ProjectMember> Members { get; set; } = [];
 }

@@ -27,6 +27,10 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
 
     public DbSet<UserRefreshToken> UserRefreshTokens => Set<UserRefreshToken>();
 
+    public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
+
+    public DbSet<UserToken> UserTokens => Set<UserToken>();
+
     public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
 
     public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
@@ -83,6 +87,8 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
         modelBuilder.HasPostgresEnum<NotificationChannelType>();
         modelBuilder.HasPostgresEnum<NotificationEventType>();
         modelBuilder.HasPostgresEnum<NotificationDeliveryStatus>();
+        modelBuilder.HasPostgresEnum<ProjectRole>();
+        modelBuilder.HasPostgresEnum<UserTokenPurpose>();
 
         modelBuilder.Entity<Project>(entity =>
         {
@@ -503,6 +509,36 @@ public class BugShotDbContext(DbContextOptions<BugShotDbContext> options) : DbCo
             entity.HasOne(t => t.User)
                 .WithMany(u => u.RefreshTokens)
                 .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserToken>(entity =>
+        {
+            entity.HasIndex(t => t.TokenHash).IsUnique();
+
+            entity.HasIndex(t => t.UserId);
+
+            entity.HasOne(t => t.User)
+                .WithMany(u => u.Tokens)
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ProjectMember>(entity =>
+        {
+            entity.HasKey(m => new { m.ProjectId, m.UserId });
+
+            // lista projektow konta idzie po uzytkowniku a klucz zaczyna sie od projektu
+            entity.HasIndex(m => m.UserId);
+
+            entity.HasOne(m => m.Project)
+                .WithMany(p => p.Members)
+                .HasForeignKey(m => m.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(m => m.User)
+                .WithMany(u => u.Memberships)
+                .HasForeignKey(m => m.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
