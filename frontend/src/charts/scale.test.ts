@@ -32,6 +32,21 @@ describe('podzialka osi', () => {
   it('maly zakres idzie krokiem jednostkowym', () => {
     expect(axisTicks(2)).toEqual([0, 1, 2])
     expect(axisTicks(0)).toEqual([0, 1])
+    expect(axisTicks(1)).toEqual([0, 1])
+    expect(axisTicks(3)).toEqual([0, 1, 2, 3])
+  })
+
+  it('krok zawsze jest calkowity', () => {
+    expect(axisTicks(5)).toEqual([0, 2, 4, 6])
+    expect(axisTicks(7)).toEqual([0, 2, 4, 6, 8])
+    expect(axisTicks(9)).toEqual([0, 5, 10])
+
+    for (let max = 0; max <= 200; max += 1) {
+      const ticks = axisTicks(max)
+
+      expect(ticks.every(Number.isInteger)).toBe(true)
+      expect(ticks[ticks.length - 1]).toBeGreaterThanOrEqual(max)
+    }
   })
 })
 

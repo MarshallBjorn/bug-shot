@@ -18,22 +18,20 @@ export function niceCeiling(value: number): number {
   return 10 * magnitude
 }
 
+// krok podzialki jest calkowity bo na osi licznikow ulamek zgloszenia nic nie znaczy
+// gora osi to pierwsza wielokrotnosc kroku nad maksimum wiec podzialka nie zawsze ma count odcinkow
 export function axisTicks(max: number, count = 4): number[] {
-  const top = niceCeiling(max)
-  const ticks: number[] = []
+  const raw = niceCeiling(max / count)
+  // ponizej jedynki krok bylby ulamkiem a jedyny ulamkowy krok powyzej to 2.5 wiec idzie na 5
+  const step = raw <= 1 ? 1 : Number.isInteger(raw) ? raw : raw * 2
+  const top = Math.max(1, Math.ceil(max / step)) * step
 
-  for (let index = 0; index <= count; index += 1) {
-    ticks.push((top / count) * index)
-  }
-
-  // ulamki na osi liczb calkowitych tylko myla, wiec przy malych wartosciach schodzimy na krok jednostkowy
-  return top <= count ? Array.from({ length: top + 1 }, (_, index) => index) : ticks
+  return Array.from({ length: top / step + 1 }, (_, index) => index * step)
 }
 
-export function scaleY(value: number, max: number, height: number): number {
-  const top = niceCeiling(max)
-
-  return top === 0 ? height : height - (value / top) * height
+// top przychodzi z ostatniej kreski podzialki zeby linie i kreski liczyly sie od tej samej gory
+export function scaleY(value: number, top: number, height: number): number {
+  return top <= 0 ? height : height - (value / top) * height
 }
 
 export function scaleX(index: number, count: number, width: number): number {
