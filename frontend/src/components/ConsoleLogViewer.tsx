@@ -169,14 +169,15 @@ function ConsoleLogViewer({ text, initialLevel = null }: ConsoleLogViewerProps) 
           </div>
         </div>
 
-        <FilterSelect label="Źródło" value={source} onChange={setSource}>
-          <option value="">Wszystkie</option>
-          {sources.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </FilterSelect>
+        <FilterSelect
+          label="Źródło"
+          value={source}
+          options={[
+            { value: '', label: 'Wszystkie' },
+            ...sources.map((option) => ({ value: option, label: option })),
+          ]}
+          onChange={setSource}
+        />
 
         <label className="flex min-w-48 flex-1 flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Szukaj w logu</span>

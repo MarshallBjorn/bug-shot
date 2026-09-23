@@ -80,9 +80,12 @@ describe('viewer logu konsoli', () => {
   it('filtr zrodla wystawia tylko zrodla z logu', () => {
     render(<ConsoleLogViewer text={log} />)
 
-    const select = screen.getByRole('combobox', { name: 'Źródło' })
+    // jsdom nie ma API wskaznika ani przewijania z ktorych korzysta lista Radixa
+    Element.prototype.hasPointerCapture ??= () => false
+    Element.prototype.scrollIntoView ??= () => {}
 
-    fireEvent.change(select, { target: { value: 'console.warn' } })
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Źródło' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByRole('option', { name: 'console.warn' }), { key: 'Enter' })
 
     expect(screen.getByText('1 z 3 wpisów')).toBeDefined()
   })

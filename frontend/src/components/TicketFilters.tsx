@@ -8,7 +8,9 @@ import { formatStatus } from '../format'
 import { browserOptions, deviceOptions, formatDevice, osOptions } from '../environmentOptions'
 import { ticketSorts, ticketStatuses, type TicketQuery, type TicketSort } from '../ticketQuery'
 import type { TicketStatus } from '../types'
-import FilterSelect from './FilterSelect'
+import FilterSelect, { type SelectOption } from './FilterSelect'
+
+const all: SelectOption = { value: '', label: 'Wszystkie' }
 
 const sortLabels: Record<TicketSort, string> = {
   'receivedAt:desc': 'Przyjęte, od najnowszych',
@@ -139,7 +141,7 @@ function TicketFilters({ query, onChange, searchRef }: TicketFiltersProps) {
         {/* fokus na panelu a nie na pierwszym selekcie bo ten po kliknieciu mysza swieci obwodka */}
         <PopoverContent
           align="start"
-          className="w-80 space-y-3"
+          className="w-88 space-y-3"
           onOpenAutoFocus={(event) => {
             event.preventDefault()
             ;(event.currentTarget as HTMLElement).focus()
@@ -148,60 +150,51 @@ function TicketFilters({ query, onChange, searchRef }: TicketFiltersProps) {
           <FilterSelect
             label="Przeglądarka"
             value={query.browser}
+            options={[all, ...browserOptions.map((option) => ({ value: option, label: option }))]}
             onChange={(browser) => onChange({ browser })}
-          >
-            <option value="">Wszystkie</option>
-            {browserOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </FilterSelect>
+          />
 
           <div className="grid grid-cols-2 gap-3">
-            <FilterSelect label="System" value={query.os} onChange={(os) => onChange({ os })}>
-              <option value="">Wszystkie</option>
-              {osOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </FilterSelect>
+            <FilterSelect
+              label="System"
+              value={query.os}
+              options={[all, ...osOptions.map((option) => ({ value: option, label: option }))]}
+              onChange={(os) => onChange({ os })}
+            />
 
             <FilterSelect
               label="Urządzenie"
               value={query.device}
+              options={[
+                all,
+                ...deviceOptions.map((option) => ({ value: option, label: formatDevice(option) })),
+              ]}
               onChange={(device) => onChange({ device })}
-            >
-              <option value="">Wszystkie</option>
-              {deviceOptions.map((option) => (
-                <option key={option} value={option}>
-                  {formatDevice(option)}
-                </option>
-              ))}
-            </FilterSelect>
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <FilterSelect
               label="Zrzut ekranu"
               value={flagValue(query.hasScreenshot)}
+              options={[
+                { value: '', label: 'Bez znaczenia' },
+                { value: 'true', label: 'Ze zrzutem' },
+                { value: 'false', label: 'Bez zrzutu' },
+              ]}
               onChange={(value) => onChange({ hasScreenshot: parseFlagValue(value) })}
-            >
-              <option value="">Bez znaczenia</option>
-              <option value="true">Ze zrzutem</option>
-              <option value="false">Bez zrzutu</option>
-            </FilterSelect>
+            />
 
             <FilterSelect
               label="Komentarze"
               value={flagValue(query.hasComments)}
+              options={[
+                { value: '', label: 'Bez znaczenia' },
+                { value: 'true', label: 'Skomentowane' },
+                { value: 'false', label: 'Bez komentarzy' },
+              ]}
               onChange={(value) => onChange({ hasComments: parseFlagValue(value) })}
-            >
-              <option value="">Bez znaczenia</option>
-              <option value="true">Skomentowane</option>
-              <option value="false">Bez komentarzy</option>
-            </FilterSelect>
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -230,14 +223,9 @@ function TicketFilters({ query, onChange, searchRef }: TicketFiltersProps) {
       <FilterSelect
         label="Sortowanie"
         value={query.sort}
+        options={ticketSorts.map((sort) => ({ value: sort, label: sortLabels[sort] }))}
         onChange={(sort) => onChange({ sort: sort as TicketSort })}
-      >
-        {ticketSorts.map((sort) => (
-          <option key={sort} value={sort}>
-            {sortLabels[sort]}
-          </option>
-        ))}
-      </FilterSelect>
+      />
     </form>
   )
 }

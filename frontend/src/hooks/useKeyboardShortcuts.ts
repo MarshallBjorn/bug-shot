@@ -5,7 +5,7 @@ export interface Shortcut {
   onPress: () => void
 }
 
-const overlays = '[role="dialog"], [role="alertdialog"], [role="menu"]'
+const overlays = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]'
 
 // skrot nie moze wystrzelic gdy ktos pisze w polu ani gdy trzyma modyfikator
 // bo wtedy nalezy do przegladarki albo do systemu

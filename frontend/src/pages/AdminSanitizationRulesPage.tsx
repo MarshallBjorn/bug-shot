@@ -29,6 +29,7 @@ const noAnswer: RulesAnswer = { filter: null, rules: [], error: null }
 function AdminSanitizationRulesPage() {
   const fieldId = useId()
   const [projects, setProjects] = useState<Project[]>([])
+  const projectOptions = projects.map((project) => ({ value: project.id, label: project.name }))
   const [projectFilter, setProjectFilter] = useState('')
 
   const [answer, setAnswer] = useState<RulesAnswer>(noAnswer)
@@ -171,14 +172,13 @@ function AdminSanitizationRulesPage() {
 
       <form className="space-y-3 rounded-lg border bg-card p-4" onSubmit={handleTest}>
         <div className="grid gap-3 sm:grid-cols-2">
-          <FilterSelect label="Zakres" value={scopeProjectId} onChange={setScopeProjectId}>
-            <option value="">Globalna</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </FilterSelect>
+          <FilterSelect
+            label="Zakres"
+            value={scopeProjectId}
+            options={[{ value: '', label: 'Globalna' }, ...projectOptions]}
+            onChange={setScopeProjectId}
+            searchable
+          />
 
           <div className="space-y-1.5">
             <Label htmlFor={`${fieldId}-pattern`}>Wzorzec (wyrażenie regularne)</Label>
@@ -254,16 +254,11 @@ function AdminSanitizationRulesPage() {
       <FilterSelect
         label="Pokaż reguły dla projektu"
         value={projectFilter}
+        options={[{ value: '', label: 'Wszystkie' }, ...projectOptions]}
         onChange={setProjectFilter}
         className="sm:max-w-xs"
-      >
-        <option value="">Wszystkie</option>
-        {projects.map((project) => (
-          <option key={project.id} value={project.id}>
-            {project.name}
-          </option>
-        ))}
-      </FilterSelect>
+        searchable
+      />
 
       {error && (
         <p
