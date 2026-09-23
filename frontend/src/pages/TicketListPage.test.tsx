@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TicketListPage from './TicketListPage'
 import { useTickets, type Tickets } from '../hooks/useTickets'
 import { useTicketStream } from '../hooks/useTicketStream'
+import { changeTicketStatus } from '../api/tickets'
 
-const { setSearchParams, searchParams } = vi.hoisted(() => ({
+const { setSearchParams, searchParams, navigate } = vi.hoisted(() => ({
   setSearchParams: vi.fn(),
   searchParams: new URLSearchParams(),
+  navigate: vi.fn(),
 }))
 
 vi.mock('react-router', () => ({
@@ -19,6 +21,26 @@ vi.mock('react-router', () => ({
   }) => <a href={to}>{children}</a>,
   useParams: () => ({ projectId: 'project-1' }),
   useSearchParams: () => [searchParams, setSearchParams],
+  useNavigate: () => navigate,
+}))
+
+const access = vi.hoisted(() => ({ role: 'Member' as string | null }))
+
+vi.mock('../projects/ProjectsContext', () => ({
+  useProjectRole: () => access.role,
+}))
+
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    status: 'authenticated',
+    user: { id: 'u1', email: 'bartek@bug-shot.local', isAdmin: true, isActive: true },
+    logIn: vi.fn(),
+    logOut: vi.fn(),
+  }),
+}))
+
+vi.mock('../api/tickets', () => ({
+  changeTicketStatus: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('../hooks/useTickets', () => ({
@@ -38,7 +60,7 @@ vi.mock('../components/TicketFilters', () => ({
   }) => (
     <button
       type="button"
-      onClick={() => onChange({ status: 'Resolved' })}
+      onClick={() => onChange({ statuses: ['Resolved'] })}
     >
       Mock filtr
     </button>
@@ -50,13 +72,26 @@ vi.mock('../components/TicketTable', () => ({
     projectId,
     items,
     listSearch,
+    focusedIndex,
+    statusMenuId,
+    onPickStatus,
   }: {
     projectId: string
-    items: Array<{ id: string }>
+    items: Array<{ id: string; status: string }>
     listSearch: string
+    focusedIndex?: number
+    statusMenuId?: string | null
+    onPickStatus?: (ticket: { id: string }, status: string) => void
   }) => (
     <div data-testid="ticket-table">
       {projectId}:{items.length}:{listSearch}
+      <span data-testid="table-focused">{focusedIndex}</span>
+      <span data-testid="table-menu">{statusMenuId ?? ''}</span>
+      {onPickStatus && (
+        <button type="button" onClick={() => onPickStatus(items[0], 'InProgress')}>
+          Mock zmiana statusu
+        </button>
+      )}
     </div>
   ),
 }))
@@ -108,10 +143,17 @@ function ticket(id: string) {
     id,
     description: `Ticket ${id}`,
     pageUrl: 'https://example.test',
+    page: 'example.test',
+    browserName: 'Chrome',
+    osName: 'Windows',
+    deviceType: 'desktop',
     status: 'New' as const,
     reportedAt: null,
     receivedAt: '2026-09-14T10:00:00+00:00',
     updatedAt: '2026-09-14T10:00:00+00:00',
+    commentCount: 0,
+    hasScreenshot: false,
+    hasConsoleLog: false,
   }
 }
 
@@ -136,11 +178,13 @@ function result(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  access.role = 'Member'
 
   searchParams.delete('status')
   searchParams.delete('search')
   searchParams.delete('sort')
   searchParams.delete('limit')
+  searchParams.delete('page')
 })
 
 afterEach(() => {
@@ -153,7 +197,7 @@ describe('TicketListPage', () => {
 
     render(<TicketListPage />)
 
-    expect(screen.getByText('Ładowanie...')).toBeDefined()
+    expect(screen.getByText('Ładowanie zgłoszeń')).toBeDefined()
     expect(screen.queryByTestId('ticket-table')).toBeNull()
   })
 
@@ -196,6 +240,33 @@ describe('TicketListPage', () => {
     expect(setSearchParams.mock.calls[0][1]).toEqual({
       replace: false,
     })
+  })
+
+  it('strona wklejona pelnym adresem wraca do paska znormalizowana', () => {
+    searchParams.set('page', 'http://127.0.0.1:5500/')
+    searchParams.set('status', 'New')
+    tickets.mockReturnValue(result([]))
+
+    render(<TicketListPage />)
+
+    const updater = setSearchParams.mock.calls[0][0] as (
+      previous: URLSearchParams,
+    ) => URLSearchParams
+
+    const next = updater(new URLSearchParams(searchParams))
+
+    expect(next.get('page')).toBe('127.0.0.1:5500')
+    expect(next.get('status')).toBe('New')
+    expect(setSearchParams.mock.calls[0][1]).toEqual({ replace: true })
+  })
+
+  it('znormalizowana strona nie rusza paska', () => {
+    searchParams.set('page', '127.0.0.1:5500')
+    tickets.mockReturnValue(result([]))
+
+    render(<TicketListPage />)
+
+    expect(setSearchParams).not.toHaveBeenCalled()
   })
 
   it('pokazuje tabele i doladowanie dla wynikow', () => {
@@ -245,22 +316,12 @@ describe('TicketListPage', () => {
 
     render(<TicketListPage />)
 
-    expect(useTicketStream).toHaveBeenCalledWith('project-1', {
+    expect(useTicketStream).toHaveBeenCalledWith({
       onEvent: state.apply,
       onReconnected: state.reload,
     })
 
     expect(screen.getByRole('status').textContent).toBe('Kanał live aktywny')
-  })
-
-  it('prowadzi do analityki projektu', () => {
-    tickets.mockReturnValue(result())
-
-    render(<TicketListPage />)
-
-    expect(
-      screen.getByRole('link', { name: 'Analityka' }).getAttribute('href'),
-    ).toBe('/projects/project-1/analytics')
   })
 
   it('oznacza tabele jako stale podczas odswiezania wyniku', () => {
@@ -276,7 +337,7 @@ describe('TicketListPage', () => {
     const { container } = render(<TicketListPage />)
 
     expect(
-      container.querySelector('.is-stale'),
+      container.querySelector('[aria-busy="true"]'),
     ).not.toBeNull()
   })
 
@@ -300,5 +361,108 @@ describe('TicketListPage', () => {
     expect(next.get('status')).toBe('Resolved')
     expect(next.get('search')).toBe('koszyk')
     expect(next.get('limit')).toBe('50')
+  })
+
+  describe('skroty klawiszowe', () => {
+    // fireEvent owija zdarzenie w act, wiec stan zdazy sie odswiezyc przed asercja
+    function press(key: string) {
+      fireEvent.keyDown(document.body, { key })
+    }
+
+    it('j i k przesuwaja podswietlenie w granicach listy', () => {
+      tickets.mockReturnValue(result([ticket('ticket-1'), ticket('ticket-2')]))
+
+      render(<TicketListPage />)
+
+      expect(screen.getByTestId('table-focused').textContent).toBe('-1')
+
+      press('j')
+      expect(screen.getByTestId('table-focused').textContent).toBe('0')
+
+      press('j')
+      expect(screen.getByTestId('table-focused').textContent).toBe('1')
+
+      // koniec listy nie przewija sie dalej
+      press('j')
+      expect(screen.getByTestId('table-focused').textContent).toBe('1')
+
+      press('k')
+      expect(screen.getByTestId('table-focused').textContent).toBe('0')
+
+      press('k')
+      expect(screen.getByTestId('table-focused').textContent).toBe('0')
+    })
+
+    it('x otwiera menu statusu podswietlonego zgloszenia', () => {
+      tickets.mockReturnValue(result([ticket('ticket-1'), ticket('ticket-2')]))
+
+      render(<TicketListPage />)
+
+      press('x')
+      expect(screen.getByTestId('table-menu').textContent).toBe('')
+
+      press('j')
+      press('x')
+
+      expect(screen.getByTestId('table-menu').textContent).toBe('ticket-1')
+    })
+
+    it('enter otwiera podswietlone zgloszenie i niesie filtry powrotu', () => {
+      tickets.mockReturnValue(result([ticket('ticket-1')]))
+
+      render(<TicketListPage />)
+
+      press('Enter')
+      expect(navigate).not.toHaveBeenCalled()
+
+      press('j')
+      press('Enter')
+
+      expect(navigate).toHaveBeenCalledWith('/projects/project-1/tickets/ticket-1', {
+        state: { listSearch: searchParams.toString() },
+      })
+    })
+
+    it('pomoc otwiera sie pod znakiem zapytania', () => {
+      tickets.mockReturnValue(result([ticket('ticket-1')]))
+
+      render(<TicketListPage />)
+
+      press('?')
+
+      expect(screen.getByRole('heading', { name: 'Skróty klawiszowe' })).toBeDefined()
+    })
+  })
+
+  it('zmiana statusu z listy idzie z adresem zalogowanego', async () => {
+    tickets.mockReturnValue(result([ticket('ticket-1')]))
+
+    render(<TicketListPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock zmiana statusu' }))
+
+    await vi.waitFor(() => {
+      expect(changeTicketStatus).toHaveBeenCalledWith(
+        'ticket-1',
+        'InProgress',
+        'bartek@bug-shot.local',
+      )
+    })
+  })
+
+  it('rola tylko do odczytu nie dostaje zmiany statusu ani skrotu x', () => {
+    access.role = 'Viewer'
+    tickets.mockReturnValue(result([ticket('ticket-1')]))
+
+    render(<TicketListPage />)
+
+    expect(screen.queryByRole('button', { name: 'Mock zmiana statusu' })).toBeNull()
+
+    // ten sam przebieg przy roli member otwiera menu, patrz test skrotow wyzej
+    fireEvent.keyDown(document.body, { key: 'j' })
+    fireEvent.keyDown(document.body, { key: 'x' })
+
+    expect(screen.getByTestId('table-focused').textContent).toBe('0')
+    expect(screen.getByTestId('table-menu').textContent).toBe('')
   })
 })

@@ -17,6 +17,9 @@ erDiagram
     TICKET ||--o{ TICKET_STATUS_CHANGE : "ma"
     TICKET ||--o{ SANITIZATION_LOG : "ma"
     USER ||--o{ USER_REFRESH_TOKEN : "ma"
+    USER ||--o{ USER_TOKEN : "ma"
+    USER ||--o{ PROJECT_MEMBER : "ma"
+    PROJECT ||--o{ PROJECT_MEMBER : "ma"
 
     PROJECT {
         uuid id PK
@@ -114,7 +117,7 @@ erDiagram
     USER {
         uuid id PK
         varchar email UK
-        varchar password_hash
+        varchar password_hash "null dopoki zaproszone konto nie ustawi hasla"
         boolean is_admin
         boolean is_active
         timestamptz created_at
@@ -127,6 +130,23 @@ erDiagram
         timestamptz expires_at
         timestamptz used_at "null dopoki nie zuzyty"
         timestamptz revoked_at "null dopoki wazny"
+        timestamptz created_at
+    }
+
+    USER_TOKEN {
+        uuid id PK
+        uuid user_id FK
+        user_token_purpose purpose
+        bytea token_hash
+        timestamptz expires_at
+        timestamptz used_at "null dopoki nie zuzyty"
+        timestamptz created_at
+    }
+
+    PROJECT_MEMBER {
+        uuid project_id PK, FK
+        uuid user_id PK, FK
+        project_role role
         timestamptz created_at
     }
 ```
@@ -145,6 +165,8 @@ JSON w API używa `camelCase`. Warstwy są niezależne, więc kolumna `page_url`
 |---|---|---|
 | `ticket_status` | `new`, `in_progress`, `resolved`, `rejected`, `deleted` | `New`, `InProgress`, `Resolved`, `Rejected`, `Deleted` |
 | `attachment_kind` | `screenshot`, `user_upload`, `console_log` | `Screenshot`, `UserUpload`, `ConsoleLog` |
+| `project_role` | `viewer`, `member`, `maintainer` | `Viewer`, `Member`, `Maintainer` |
+| `user_token_purpose` | `invitation`, `password_reset` | `Invitation`, `PasswordReset` |
 
 Dodanie nowej wartości wymaga migracji z `ALTER TYPE ... ADD VALUE`. Zmiana nazwy istniejącej jest kosztowniejsza i wymaga osobnej migracji.
 
@@ -164,6 +186,9 @@ Postać w JSON bierze się z atrybutu `JsonConverter` przy samym typie, a nie z 
 - unikalny `users(email)`
 - unikalny `user_refresh_tokens(token_hash)`
 - `user_refresh_tokens(user_id)`
+- unikalny `user_tokens(token_hash)`
+- `user_tokens(user_id)`
+- `project_members(user_id)`, bo klucz główny zaczyna się od projektu
 
 ### Czas
 
@@ -202,7 +227,8 @@ Domyślnie każdy endpoint wymaga tokena, wyjątki wylicza sekcja `Uwierzytelnia
 | Endpoint | Stan | Opis |
 |---|---|---|
 | `POST /tickets` | działa | zgłoszenie z widgetu, zwraca `uploadToken`, patrz niżej |
-| `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtr po statusie, szukanie, paginacja kursorowa |
+| `GET /projects/{projectId}/tickets` | działa | lista dla dashboardu, filtry składane, szukanie, paginacja kursorowa |
+| `GET /projects/{projectId}/pages` | działa | strony projektu z licznikami zgłoszeń per status, do drzewa w panelu |
 | `GET /projects/{projectId}/analytics` | działa | analityka projektu w zakresie 7d, 30d, 90d albo all |
 | `GET /tickets/{id}` | działa | szczegóły z załącznikami, licznikiem komentarzy i historią statusów |
 | `POST /tickets/{id}/attachments` | działa | multipart, autoryzacja przez `uploadToken`, tombstone daje 409 |
@@ -210,21 +236,31 @@ Domyślnie każdy endpoint wymaga tokena, wyjątki wylicza sekcja `Uwierzytelnia
 | `DELETE /tickets/{id}` | działa | tombstone ticketu i usunięcie danych/załączników |
 | `POST /tickets/{id}/comments` | działa | dodanie komentarza, autor do 128 znaków, treść do 5000, puste i same białe znaki odrzucane, tombstone daje 409 |
 | `GET /tickets/{id}/comments` | działa | lista komentarzy z paginacją |
-| `GET /attachments/{id}/download` | działa | plik załącznika, wyłącznie dla zalogowanych |
+| `GET /attachments/{id}/download` | działa | plik załącznika, dla roli `viewer` w projekcie zgłoszenia |
 | `POST /auth/login` | działa | e-mail i hasło w zamian za access token i cookie z refreshem |
 | `POST /auth/refresh` | działa | rotacja tokena odświeżającego z cookie |
 | `POST /auth/logout` | działa | unieważnia token z cookie i czyści cookie |
 | `GET /auth/me` | działa | konto właściciela tokena |
-| `GET /users` | działa | lista kont, tylko dla administratora |
-| `POST /users` | działa | nowe konto, tylko dla administratora |
+| `POST /auth/password` | działa | zmiana własnego hasła, wymaga obecnego |
+| `GET /auth/setup` | działa | czy instancja czeka na pierwsze konto, bez tokena |
+| `POST /auth/setup` | działa | pierwsze konto administratora tokenem z logu API, bez tokena |
+| `POST /auth/account-token` | działa | e-mail i rodzaj linku z maila, bez tokena |
+| `POST /auth/set-password` | działa | hasło z linku z maila i od razu sesja, bez tokena |
+| `GET /users` | działa | lista kont ze stanem i projektami, tylko dla administratora |
+| `POST /users` | działa | zaproszenie mailem, bez hasła, tylko dla administratora |
+| `PATCH /users/{id}` | działa | nadanie albo odebranie administratora, tylko dla administratora |
+| `PUT /users/{id}/projects` | działa | pełna lista projektów konta z rolami, tylko dla administratora |
 | `PATCH /users/{id}/deactivate` | działa | wyłączenie konta, tylko dla administratora |
-| `POST /users/{id}/reset-password` | działa | ustawienie nowego hasła, tylko dla administratora |
-| `GET /projects` | działa | lista projektów z originami, tylko dla administratora |
-| `POST /projects` | działa | nowy projekt, zajęty klucz kończy się błędem walidacji |
-| `PATCH /projects/{id}` | działa | zmiana nazwy projektu, klucz jest niezmienny |
-| `DELETE /projects/{id}` | działa | zablokowane, dopóki projekt ma zgłoszenia |
-| `POST /projects/{id}/origins` | działa | dodanie dozwolonego originu projektu |
-| `DELETE /projects/{id}/origins/{originId}` | działa | usunięcie originu projektu |
+| `PATCH /users/{id}/activate` | działa | ponowne włączenie konta, tylko dla administratora |
+| `POST /users/{id}/invitation` | działa | ponowne zaproszenie, stary link przestaje działać, tylko dla administratora |
+| `POST /users/{id}/reset-password` | działa | link do zmiany hasła mailem, tylko dla administratora |
+| `DELETE /users/{id}` | działa | usunięcie konta, które nie przyjęło zaproszenia, tylko dla administratora |
+| `GET /projects` | działa | projekty dostępne dla konta z originami i rolą konta |
+| `POST /projects` | działa | nowy projekt, zajęty klucz kończy się błędem walidacji, tylko dla administratora |
+| `PATCH /projects/{id}` | działa | zmiana nazwy projektu, klucz jest niezmienny, dla `maintainer` |
+| `DELETE /projects/{id}` | działa | zablokowane, dopóki projekt ma zgłoszenia, tylko dla administratora |
+| `POST /projects/{id}/origins` | działa | dodanie dozwolonego originu projektu, dla `maintainer` |
+| `DELETE /projects/{id}/origins/{originId}` | działa | usunięcie originu projektu, dla `maintainer` |
 | `GET /sanitization-rules` | działa | lista reguł, opcjonalny filtr `projectId` dolicza reguły globalne |
 | `POST /sanitization-rules` | działa | nowa reguła globalna (`projectId` puste) albo projektowa |
 | `PATCH /sanitization-rules/{id}` | działa | zmiana wzorca i zamiennika |
@@ -345,11 +381,26 @@ Nagłówek `If-Match` jest wymagany i niesie `rowVersion` z ostatniego `GET /tic
 
 Każda zmiana dopisuje wpis w `ticket_status_changes` z `from_status`, `to_status`, `changed_by` i `changed_at`. Wysłanie statusu, który ticket już ma, nie jest zmianą: kończy się `200` z niezmienionym `rowVersion` i nie zostawia śladu w historii.
 
+Status idzie mapą przejść, nie dowolnym skokiem:
+
+| Z | W |
+|---|---|
+| `New` | `InProgress`, `Rejected` |
+| `InProgress` | `Resolved`, `Rejected` |
+| `Resolved` | `InProgress` |
+| `Rejected` | `InProgress` |
+
+Mapa jest jawna, bo kolejność statusów nie wynika z ich wartości. Powód jest jeden: historia ma opisywać pracę nad zgłoszeniem, a `New` prosto na `Resolved` mówi tylko, że ktoś kliknął w niewłaściwe miejsce. Ponowne otwarcie wraca do `InProgress`, a nie do `New`, bo zgłoszenie już raz przeszło przez triaż. Przesuwa to przy okazji czas do rozwiązania, co opisuje sekcja analityki.
+
+Przejście poza mapą kończy się `400` z `ProblemDetails`, którego `errors.Status` wylicza dozwolone cele, na przykład `Ticket in status New can only change to InProgress, Rejected.` Walidacja leci po sprawdzeniu `If-Match` i po tombstone, więc nieaktualna wersja dalej wygrywa z niedozwolonym przejściem.
+
+`Deleted` nie jest celem żadnego przejścia i nie ma z niego wyjścia. Kasowanie wchodzi wyłącznie przez `DELETE /tickets/{id}`, a `GET /tickets/{id}` oddaje w `allowedStatuses` tę samą mapę przyłożoną do aktualnego stanu na serwerze, więc panel nie musi jej zgadywać ani trzymać własnej kopii.
+
 Kody błędów:
 
 | Kod | Kiedy |
 |---|---|
-| 400 | brak `status` albo `changedBy`, nieznana wartość statusu, `status` równy `Deleted` |
+| 400 | brak `status` albo `changedBy`, nieznana wartość statusu, `status` równy `Deleted`, przejście poza mapą |
 | 404 | nie ma takiego zgłoszenia |
 | 409 | `If-Match` nie zgadza się z aktualnym `rowVersion`, albo ticket jest tombstone |
 | 428 | brak nagłówka `If-Match` |
@@ -392,17 +443,63 @@ Kursor jest nieprzezroczysty. Niesie w sobie klucz sortowania ostatniego wiersza
 
 Kursor należy do sortowania, z którym powstał, i sortowanie siedzi w jego treści. Podany przy innym `sort` kończy się `400`, bo warunek `WHERE` liczony w innej skali cicho oddałby złe wyniki. Zepsuty albo obcy kursor też kończy się `400`. Filtry są poza kursorem: `status` i `search` tylko zawężają zbiór, więc kursor działa na nich dalej poprawnie.
 
+### Filtry listy
+
+Filtry są składane i wszystkie zawężają ten sam zbiór:
+
+| Parametr | Znaczenie |
+|---|---|
+| `status` | lista po przecinku, `status=New,InProgress`. Pojedyncza wartość działa jak wcześniej. Nieznana kończy się `400` |
+| `page` | znormalizowany adres strony, na przykład `page=acme.example/cart` |
+| `browser`, `os`, `device` | rozpoznane nazwy, na przykład `browser=Chrome`, `os=Windows`, `device=mobile` |
+| `hasScreenshot` | `true` zawęża do zgłoszeń ze zrzutem, `false` do tych bez |
+| `hasComments` | `true` zawęża do skomentowanych, `false` do nieskomentowanych |
+| `dateFrom`, `dateTo` | przedział po `received_at`, domknięty z lewej i otwarty z prawej |
+| `search` | fraza w opisie i adresie strony |
+
+Kursor tego nie dotyka. Filtry tylko zawężają zbiór, więc `nextCursor` policzony przy jednym zestawie działa dalej przy innym i format kursora nie zmienia się wraz z nimi.
+
+Trzy rzeczy warte odnotowania:
+
+- `page` przechodzi tę samą normalizację co przy przyjęciu zgłoszenia, więc do filtra da się wkleić pełny link razem z `?utm=...` i `#fragment`. `page=https://Acme.example/Cart?utm_source=mail` trafi w te same zgłoszenia co `page=acme.example/cart`
+- `browser`, `os` i `device` porównują się bez rozróżniania wielkości liter, choć zapisane wartości są kanoniczne. Te parametry częściej powstają z ręcznie edytowanego adresu niż z kliknięcia w panelu
+- `dateFrom` równe albo późniejsze od `dateTo` kończy się `400`. Granice są instantami, a nie datami: dni kalendarzowe wylicza panel w strefie użytkownika, bo serwer nie zna jego strefy, a lista nie ma parametru `tz` jak analityka
+
 ### Zachowania listy
 
 Rzeczy, których nie widać z sygnatury endpointu:
 
 - bez podanego `status` lista pomija tickety skasowane, bo tombstone nie ma czego pokazać. Jawne `status=Deleted` je zwróci
 - `search` szuka po opisie i po adresie strony, bez rozróżniania wielkości liter
+- wiersz listy niesie `page`, `browserName`, `osName`, `deviceType`, `commentCount`, `hasScreenshot` i `hasConsoleLog`. Liczniki idą podzapytaniami na stronę wyniku, więc koszt trzyma się rozmiaru strony, a nie całej listy. Rozpoznane nazwy są w wierszu dlatego, że panel musi umieć sprawdzić każdy filtr na zgłoszeniu przysłanym kanałem live
+- ten sam kształt wiersza leci kanałem live, więc każdy nowy filtr musi mieć odpowiednik po stronie panelu. Bez tego zgłoszenie z kanału wpadłoby na listę, na której filtr nie daje mu prawa się znaleźć
+- wskaźniki `hasScreenshot` i `hasConsoleLog` przy świeżym zgłoszeniu są chwilę nieprawdziwe. Załączniki wchodzą osobnym żądaniem po `POST /tickets`, więc zdarzenie `TicketCreated` zna zgłoszenie jeszcze bez plików. Zapis zrzutu albo logu nadaje `TicketChanged` i koryguje wiersz
+- `GET /tickets/{id}` dokłada do tego `page` oraz `environment` z rozpoznaną przeglądarką, systemem, urządzeniem, viewportem, językiem i strefą. Kolumny były w bazie od migracji `AddTicketClientDetails`, ale nie wychodziły nigdzie poza analitykę
 - `sort` przyjmuje `receivedAt:desc`, `receivedAt:asc`, `reportedAt:desc` i `reportedAt:asc`. Nierozpoznana wartość wpada w domyślne `receivedAt:desc`
 - sortowanie po `reportedAt` schodzi na `receivedAt` tam gdzie `reportedAt` jest puste. Bez tego zgłoszenia bez czasu z przeglądarki lądowały na końcu listy przy `asc` i na początku przy `desc`, niezależnie od daty pokazanej w tabeli. Kursor porównuje się z tą samą wartością, po której idzie `ORDER BY`, więc zgłoszenia bez `reportedAt` nie wypadają z paginacji
 - każde sortowanie domyka się identyfikatorem ticketu. Bez tego zgłoszenia o równych znacznikach czasu mają dowolną kolejność i potrafią powtórzyć się na dwóch stronach albo nie trafić na żadną
 
-Paginacja komentarzy została przy numerach stron. Lista komentarzy jednego zgłoszenia jest krótka i nie ma nad nią kanału live, więc kursor niczego by tam nie kupił.
+Paginacja komentarzy została przy numerach stron. Lista komentarzy jednego zgłoszenia jest krótka, a kanał live nie niesie samych komentarzy, tylko sygnał do ponownego pobrania, więc kursor niczego by tam nie kupił.
+
+### GET /projects/{projectId}/pages
+
+Strony projektu z licznikami zgłoszeń, pod drzewo w panelu. Dostępne dla każdego zalogowanego, tak samo jak lista.
+
+```json
+{
+  "items": [
+    { "page": "sklep.example/koszyk", "total": 2479, "new": 392, "inProgress": 411, "resolved": 1349, "rejected": 327 }
+  ]
+}
+```
+
+`limit` domyślnie 200 i jest przycinany do 1000. Kolejność idzie po liczbie zgłoszeń malejąco, a przy równej liczbie po adresie, żeby wynik był powtarzalny.
+
+Grupowanie nie normalizuje niczego w locie. `page` jest wyliczane przy przyjęciu zgłoszenia przez te same reguły co w analityce, więc `?utm=...` i `#fragment` są ucięte na długo przed agregacją. Filtr `page` na liście przechodzi tę samą normalizację, więc wartość z tej odpowiedzi wkleja się wprost w adres listy.
+
+Skasowane zgłoszenia nie wchodzą. Tombstone traci adres razem z opisem, więc wpadłyby wszystkie do jednej grupy z pustym `page`, a ta jest odfiltrowana.
+
+Nie ma tu paginacji kursorowej. Liczba różnych stron jednego projektu jest rzędu dziesiątek, a nie dziesiątek tysięcy, więc `limit` wystarcza.
 
 ### GET /projects/{projectId}/analytics
 
@@ -429,19 +526,25 @@ Definicje, które nie wynikają z nazw:
 
 Metryki liczą się zapytaniami SQL na indeksie `tickets(project_id, received_at)` i indeksach historii, komentarzy i załączników. Kolumna `page` nie ma indeksu, bo adres do 2048 znaków może nie zmieścić się w limicie wiersza indeksu btree.
 
+Pomiar na 10 000 zgłoszeniach z `make seed SEED_COUNT=10000` mówi, że indeks i tak nic by nie kupił. `GET /pages` schodzi w 6 ms na ciepło i 23 ms na zimno, a plan to `Seq Scan` plus `HashAggregate` w 4 ms. Grupowanie czyta prawie wszystkie wiersze projektu, więc planista wybrałby skan sekwencyjny nawet mając indeks. Filtr `page` na liście mieści się w 14 ms. Dopiero rzędy wielkości wyżej warto wrócić do tematu, i wtedy raczej indeksem po `md5(page)` niż po samej kolumnie.
+
 ## Kanał live
 
 Panel trzyma otwarty kanał na `/api/v1/hubs/tickets` (SignalR) i dostaje zmiany bez odpytywania API. Adres siedzi pod tym samym prefiksem wersji co reszta API, bo kanał niesie te same kontrakty co `v1`. Przy okazji proxy przed API ma jedną regułę do przepuszczenia, a nie dwie.
 
-Klient subskrybuje projekt wywołaniem `Subscribe` z jego identyfikatorem, a wypisuje się przez `Unsubscribe`. Zdarzenia idą wyłącznie do grupy tego projektu. Grupa odcina ruch, a nie dostęp: każde zalogowane konto i tak widzi wszystkie projekty tej instancji.
+Klient subskrybuje projekt wywołaniem `Subscribe` z jego identyfikatorem, a wypisuje się przez `Unsubscribe`. Zdarzenia idą wyłącznie do grupy tego projektu. `Subscribe` sprawdza dostęp tak samo jak REST i projekt bez roli konta kończy się `HubException`. Sprawdzenie dzieje się tylko przy zapisie do grupy, więc konto, któremu odebrano projekt, słucha dalej do rozłączenia.
 
 | Zdarzenie | Ładunek | Kiedy |
 |---|---|---|
 | `TicketCreated` | pozycja listy | widget przysłał nowe zgłoszenie |
-| `TicketChanged` | pozycja listy | `PATCH /tickets/{id}/status` faktycznie zmienił status |
+| `TicketChanged` | pozycja listy | `PATCH /tickets/{id}/status` faktycznie zmienił status, `POST /tickets/{id}/comments` dopisał komentarz albo `POST /tickets/{id}/attachments` zapisał zrzut lub log konsoli |
 | `TicketDeleted` | identyfikator | `DELETE /tickets/{id}` zrobił tombstone |
 
 Ładunek dwóch pierwszych ma dokładnie ten sam kształt co wiersz listy, więc panel podmienia go u siebie bez dodatkowego `GET`. Hub serializuje po swojemu, niezależnie od ustawień kontrolerów, więc konwerter enumów jest mu podany osobno. Bez tego ten sam status wychodziłby stringiem z REST i liczbą z kanału.
+
+Wysyłka załącznika nadaje `TicketChanged`, choć nie rusza statusu. Powód jest w kolejności żądań: zrzut i log wchodzą osobnym `POST` po utworzeniu zgłoszenia, więc `TicketCreated` niesie wiersz z `hasScreenshot` i `hasConsoleLog` równymi `false` i bez tego drugiego zdarzenia panel do przeładowania pokazywałby zgłoszenie bez znaczników. Same załączniki użytkownika nic nie nadają, bo wiersz listy ich nie pokazuje.
+
+Komentarz nadaje `TicketChanged` z nowym `commentCount`, bo bez tego licznik na liście i filtr `hasComments` rozjeżdżały się do przeładowania. Ładunek to tylko pozycja listy, więc detal zgłoszenia po zdarzeniu ze swoim identyfikatorem pobiera się od nowa razem z komentarzami. Panel trzyma jedno połączenie na projekt, a korzystają z niego lista, drzewo stron w panelu bocznym i detal.
 
 Zdarzenia lecą po zatwierdzeniu zapisu i tylko wtedy, gdy zapis coś zmienił: powtórka `Idempotency-Key`, ustawienie tego samego statusu i drugie kasowanie tombstone nie nadają nic. Nieudana wysyłka zostawia ostrzeżenie w logu i nie wywraca żądania, bo dane są już w bazie.
 
@@ -455,10 +558,12 @@ Dziś API chodzi w jednym egzemplarzu i hub trzyma grupy w pamięci procesu. Prz
 
 Panel chroni JWT. Zasada jest odwrócona względem listy wyjątków: autoryzacja jest wymagana domyślnie i to endpoint musi powiedzieć, że jej nie chce. Nowa trasa dodana bez namysłu jest wtedy zamknięta, a nie otwarta.
 
-Bez tokena działa dokładnie pięć tras:
+Bez tokena działają tylko te trasy:
 
 - `POST /tickets` i `POST /tickets/{id}/attachments`, bo woła je widget z cudzej domeny i nie ma skąd wziąć konta. Chroni je `projectKey`, `Origin` i jednorazowy `uploadToken`
 - `/auth/login`, `/auth/refresh` i `/auth/logout`, bo to jest właśnie zakładanie i zamykanie sesji. Wylogowanie jest anonimowe celowo, żeby działało też z wygasłym access tokenem
+- `GET` i `POST /auth/setup`, bo pierwsze konto powstaje, zanim jest czym się zalogować. Chroni je jednorazowy token z logu API
+- `/auth/account-token` i `/auth/set-password`, bo osoba z linku z maila nie ma jeszcze hasła. Chroni je jednorazowy token z linku
 
 Kanał live pod `/api/v1/hubs/tickets` też wymaga tokena, tylko przyjmuje go z query stringa, patrz sekcja `Kanał live`.
 
@@ -471,7 +576,7 @@ Poza tą listą otwarte są jeszcze `/openapi/v1.json` i `/swagger`, ale wyłąc
 | access | 15 minut | nagłówek `Authorization: Bearer` |
 | refresh | 7 dni | cookie `bugshot_refresh`, `HttpOnly` |
 
-Access token nosi `sub` z identyfikatorem konta, `email` oraz `role` równe `admin` dla administratorów. Podpis to HS256 kluczem z `JWT_SIGNING_KEY`. Bez tej zmiennej API nie wstaje, bo klucz podpisu nie jest ustawieniem opcjonalnym. Tolerancja na rozjazd zegarów jest wyłączona, więc kwadrans to naprawdę kwadrans.
+Access token nosi `sub` z identyfikatorem konta, `email` oraz `role` równe `admin` dla administratorów. Claim `role` jest przy każdym żądaniu podmieniany na bieżące `is_admin` z bazy, więc odebranie administratora działa od następnego żądania, a nie po wygaśnięciu tokena. Role w projektach w tokenie nie siedzą wcale. Podpis to HS256 kluczem z `JWT_SIGNING_KEY`. Bez tej zmiennej API nie wstaje, bo klucz podpisu nie jest ustawieniem opcjonalnym. Tolerancja na rozjazd zegarów jest wyłączona, więc kwadrans to naprawdę kwadrans.
 
 Cookie z refreshem ma `HttpOnly`, `Secure`, `SameSite=Lax` i `Path=/api/v1/auth`. `Lax` wystarcza, bo panel i API są same-site zarówno lokalnie jak i za wspólnym proxy, a przy okazji zamyka CSRF. Ścieżka ogranicza wysyłanie cookie do tych endpointów, które je czytają.
 
@@ -485,25 +590,61 @@ Każde `POST /auth/refresh` zużywa token i wystawia nowy. W bazie leży sam SHA
 
 Token zużyty albo unieważniony, podany po raz drugi, kończy się `401` i unieważnieniem wszystkich sesji tego konta. Wyjątkiem jest powtórka w ciągu 30 sekund od zużycia: dostaje `401`, ale bez zamykania sesji, bo to zwykle ta sama karta wysłała żądanie dwa razy, a nie ktoś obcy z ukradzionym tokenem.
 
-Dezaktywacja konta i reset hasła też unieważniają wszystkie jego tokeny. Bez tego wyłączone konto zostawałoby w panelu do końca ważności refresha.
+Dezaktywacja konta i ustawienie hasła z linku też unieważniają wszystkie jego tokeny. Bez tego wyłączone konto zostawałoby w panelu do końca ważności refresha. Zmiana własnego hasła przez `POST /auth/password` zamyka pozostałe sesje, a bieżąca, rozpoznana po cookie, działa dalej.
 
 Sam access token to za mało, żeby przejść dalej: przy każdym żądaniu sprawdzane jest, czy konto nadal jest aktywne. Bez tego wyłączone konto pracowałoby jeszcze kwadrans, do wygaśnięcia tokena, który dostało przed wyłączeniem.
 
 ### Konta
 
-`users` trzyma `email`, `password_hash`, `is_admin` i `is_active`. Każdy zalogowany widzi wszystkie projekty tej instancji, podziału uprawnień na projekty nie ma.
+`users` trzyma `email`, `password_hash`, `is_admin` i `is_active`. `is_admin` oznacza administratora instancji: zakłada konta i projekty, zarządza regułami sanityzacji i ma w każdym projekcie prawa `maintainer`. Dostęp pozostałych kont do projektów opisuje sekcja `Dostęp do projektów`.
+
+Konto jest w jednym z trzech stanów, które `GET /users` zwraca jako `state`: `Invited` bez hasła, `Active` z hasłem i `Disabled` po wyłączeniu, niezależnie od hasła.
 
 Hasła idą przez bcrypt z kosztem 12. bcrypt liczy tylko pierwsze 72 bajty, więc dłuższe hasło jest odrzucane przy walidacji zamiast po cichu skracane. Minimum to 12 znaków.
 
 Nieznany adres, złe hasło i konto wyłączone dają identyczne `401` z tym samym opisem. Przy nieznanym adresie i tak liczony jest hash na stałej wartości, żeby czas odpowiedzi nie zdradzał, które konta istnieją.
 
-Pierwsze konto powstaje przy starcie API z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, wyłącznie gdy tabela `users` jest pusta. Skasowany administrator nie wraca więc przy każdym restarcie. Brak którejś ze zmiennych zostawia ostrzeżenie w logu i nie tworzy konta, czyli do panelu nie da się wejść, ale API wstaje.
+Wszystkie trasy `/users` są tylko dla `is_admin`. Administrator nie może wyłączyć własnego konta ani odebrać sobie roli, bo ostatni administrator zamknąłby się na zewnątrz. Wystarcza blokada na samego siebie: zmieniający zawsze zostaje aktywnym administratorem, więc instancja nie zostanie bez żadnego. Usunąć da się tylko konto, które nie przyjęło zaproszenia. Konto z hasłem wisi na historii zmian, więc zostaje i najwyżej się je wyłącza.
 
-`POST /users`, `PATCH /users/{id}/deactivate` i `POST /users/{id}/reset-password` są tylko dla `is_admin`. Administrator nie może wyłączyć własnego konta, bo ostatni administrator zamknąłby się na zewnątrz. Ekranu do tego w panelu jeszcze nie ma, konta zakłada się żądaniem.
+### Pierwsze konto
+
+Są dwie drogi i obie działają tylko na pustej tabeli `users`, więc skasowany administrator nie wraca przy restarcie.
+
+`ADMIN_EMAIL` i `ADMIN_PASSWORD` zakładają konto przy starcie API. Z tej drogi korzystają compose do developmentu, testy e2e i deploy.
+
+Bez którejś z tych zmiennych API wypisuje w logu ostrzeżenie z jednorazowym tokenem, a panel pod `/login` przekierowuje na `/setup`. Tam podaje się token, e-mail i hasło, a `POST /auth/setup` zakłada administratora i od razu otwiera sesję. Token żyje w pamięci procesu i działa raz: zły token daje `403`, instancja z kontem `409`, a po restarcie API w logu jest nowy token. Log jest jedynym miejscem, które widzi wyłącznie ten, kto stawia instancję, dlatego token trafia właśnie tam.
+
+### Zaproszenia i linki
+
+`POST /users` nie przyjmuje hasła. Konto powstaje bez niego, z rolą administratora i projektami z żądania, a na podany adres idzie mail z linkiem ważnym 72 godziny. Link do zmiany hasła z `POST /users/{id}/reset-password` jest ważny godzinę, a dotychczasowe hasło i sesje działają do czasu ustawienia nowego. Oba idą tą samą ścieżką i różnią się tylko treścią maila i ważnością.
+
+Link prowadzi do `/set-password#<token>` w panelu. Adres panelu API bierze z nagłówka `Origin` żądania administratora, o ile jest na liście `Cors:DashboardOrigins`, a bez nagłówka z pierwszej pozycji tej listy, więc nie trzeba osobnej zmiennej. Token siedzi we fragmencie, bo ten nie jest wysyłany do serwera i nie trafia do logów proxy. Z tego samego powodu panel wysyła go w ciele `POST`, a nie w adresie. W bazie leży sam SHA-256 tokena.
+
+Mail wychodzi przez `IEmailSender` z powiadomień, synchronicznie, bo administrator ma od razu wiedzieć, czy się udało. Gdy SMTP odmówi, konto i link i tak powstają, a odpowiedź niesie `emailSent: false` i `link` do przekazania innym kanałem. Przy udanej wysyłce `link` jest pusty.
+
+Nowy link tego samego rodzaju unieważnia poprzedni. Ustawienie hasła zużywa link jednym atomowym `UPDATE`, usuwa pozostałe niewykorzystane linki konta i zamyka jego sesje. Wyłączenie konta usuwa jego niewykorzystane linki. Nieznany, zużyty i wygasły link oraz link wyłączonego konta dają to samo `404`.
+
+Zaproszone konto bez hasła przy logowaniu odpowiada tak samo jak nieznany adres.
+
+### Dostęp do projektów
+
+`project_members` przypina konto do projektu z jedną z trzech ról, gdzie wyższa zawiera niższą:
+
+| Rola | Może |
+|---|---|
+| `viewer` | czytać zgłoszenia, komentarze, załączniki, strony i analitykę, słuchać kanału live |
+| `member` | do tego zmieniać status, komentować i kasować zgłoszenia |
+| `maintainer` | do tego zmieniać nazwę projektu, originy oraz kanały i szablony powiadomień |
+
+Administrator ma w każdym projekcie prawa `maintainer` bez wpisu w tabeli. Zakładanie i kasowanie projektów oraz reguły sanityzacji, także projektowe, zostają tylko dla niego. Członków projektu ustawia wyłącznie administrator, przez `POST /users` i `PUT /users/{id}/projects`.
+
+Rola jest sprawdzana w bazie przy każdym żądaniu, więc zmiana dostępu działa od następnego żądania bez nowego tokena. Sprawdza ją filtr `[ProjectAccess]` przy akcji. Projekt bierze z trasy wprost albo przez zgłoszenie lub załącznik. Projekt bez roli konta odpowiada `404` tak samo jak nieistniejący, żeby nie zdradzać, co jest w instancji. Za niska rola w widocznym projekcie daje `403`.
+
+Migracja `AddProjectMembers` dała każdemu istniejącemu kontu, które nie jest administratorem, rolę `member` we wszystkich istniejących projektach, bo do tej pory każde konto widziało wszystko i obrabiało zgłoszenia.
 
 ### Projekty
 
-`GET /projects` jest dla każdego zalogowanego, bo z tej listy dashboard wybiera projekt. Konta nie są przypisane do projektów, więc zalogowany i tak widzi zgłoszenia każdego z nich. `POST`, `PATCH` i `DELETE /projects` oraz zarządzanie originami są tylko dla `is_admin`, tak samo jak `sanitization-rules` niżej.
+`GET /projects` zwraca tylko projekty, do których konto ma rolę, razem z polem `role`, z którego panel wie, jakie akcje pokazać. Administrator dostaje wszystkie z rolą `Maintainer`. `POST` i `DELETE /projects` są tylko dla `is_admin`, a zmiana nazwy i originy dla roli `maintainer`, patrz `Dostęp do projektów`.
 
 Klucz projektu jest wpięty w widget na cudzej stronie, więc jest niezmienny po utworzeniu: `PATCH /projects/{id}` zmienia tylko nazwę. Zajęty klucz przy `POST /projects` kończy się błędem walidacji na polu `key`, tą samą ścieżką co inne błędy walidacji w tym API. Dotyczy to też dwóch równoległych żądań z tym samym kluczem, drugie nie kończy się błędem bazy.
 
@@ -581,7 +722,7 @@ Migracja tworzy jeden projekt, żeby dało się cokolwiek wywołać lokalnie.
 
 Origin odpowiada adresowi, pod którym uruchamia się lokalnie widget.
 
-Konto administratora nie jest częścią migracji, bo hash hasła nie jest wartością znaną w czasie kompilacji. Powstaje przy starcie API z `ADMIN_EMAIL` i `ADMIN_PASSWORD`, opis w sekcji `Uwierzytelnianie`.
+Konto administratora nie jest częścią migracji, bo hash hasła nie jest wartością znaną w czasie kompilacji. Powstaje przy starcie API z `ADMIN_EMAIL` i `ADMIN_PASSWORD` albo w kreatorze `/setup`, opis w sekcji `Pierwsze konto`.
 
 W środowisku `Development` migracje wykonują się przy starcie API. Poza nim schemat zakłada się przez `make migrate`.
 
@@ -589,9 +730,10 @@ W środowisku `Development` migracje wykonują się przy starcie API. Poza nim s
 
 - `author`, `changedBy` i `deletedBy` przychodzą dalej z ciała żądania albo są wpisane na sztywno, więc można podać się za kogokolwiek. Uwierzytelnianie już jest, więc docelowo mają pochodzić z tokena. To osobna zmiana kontraktu `POST /comments`, `PATCH /status` i `DELETE`
 - rate limit na `/auth/login`. Idzie razem z rate limitem na `POST /tickets`, bo to jeden mechanizm
+- zapomniane hasło z ekranu logowania. Czeka na ten sam rate limit, bo bez niego to otwarta skrzynka do wysyłania maili na dowolny adres z listy kont
+- ustawianie członków projektu przez `maintainer`. Dziś robi to tylko administrator
 - systemowe logowanie i audyt poza `sanitization_logs`. Miejsca wpięcia zostawiamy w kodzie, żeby dało się to dopiąć bez przepisywania warstwy
 - odesłanie do sanityzacji i walidacji plików w głównym `README`
-- twarda maszyna stanów przejść między statusami
 - Redis jako cache przed Postgresem
 
 ## Notifications

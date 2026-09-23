@@ -15,16 +15,19 @@ namespace BugShot.Api.Controllers;
 [Route("api/v1/projects")]
 [EnableCors(CorsPolicies.Dashboard)]
 [Produces(MediaTypeNames.Application.Json)]
-public class ProjectsController(BugShotDbContext db) : ControllerBase
+public class ProjectsController(BugShotDbContext db, ProjectAccess access) : ControllerBase
 {
-    /// <summary>Zwraca wszystkie projekty razem z ich originami.</summary>
-    /// <remarks>Dla kazdego zalogowanego, dashboard wybiera z tej listy projekt.</remarks>
+    /// <summary>Zwraca projekty dostepne dla konta razem z ich originami i rola konta.</summary>
+    /// <remarks>Dla kazdego zalogowanego, dashboard wybiera z tej listy projekt. Administrator widzi wszystkie.</remarks>
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<ProjectResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<IReadOnlyList<ProjectResponse>>> GetList(CancellationToken cancellationToken)
     {
-        var projects = await db.Projects
+        var isAdmin = User.IsAdmin();
+        var userId = User.UserId();
+
+        var projects = await access.Visible(User)
             .AsNoTracking()
             .OrderBy(p => p.Name)
             .Select(p => new ProjectResponse(
@@ -32,7 +35,10 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
                 p.Name,
                 p.Key,
                 p.CreatedAt,
-                p.Origins.Select(o => new ProjectOriginResponse(o.Id, o.Origin)).ToList()))
+                p.Origins.Select(o => new ProjectOriginResponse(o.Id, o.Origin)).ToList(),
+                isAdmin
+                    ? ProjectRole.Maintainer
+                    : p.Members.Where(m => m.UserId == userId).Select(m => m.Role).Single()))
             .ToListAsync(cancellationToken);
 
         return Ok(projects);
@@ -76,9 +82,9 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     }
 
     /// <summary>Zmienia nazwe projektu.</summary>
-    /// <remarks>Tylko dla administratora. Klucz jest wpiety w widget wiec zostaje niezmienny.</remarks>
+    /// <remarks>Dla maintainera projektu i administratora. Klucz jest wpiety w widget wiec zostaje niezmienny.</remarks>
     [HttpPatch("{id:guid}")]
-    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
+    [ProjectAccess(ProjectRole.Maintainer, routeKey: "id")]
     [ProducesResponseType<ProjectResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -141,11 +147,11 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
 
     /// <summary>Dodaje dozwolony origin projektu.</summary>
     /// <remarks>
-    /// Tylko dla administratora. Origin to sam schemat http albo https z hostem i opcjonalnym portem.
+    /// Dla maintainera projektu i administratora. Origin to sam schemat http albo https z hostem i opcjonalnym portem.
     /// Powtorzony origin tego samego projektu konczy sie na 409.
     /// </remarks>
     [HttpPost("{id:guid}/origins")]
-    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
+    [ProjectAccess(ProjectRole.Maintainer, routeKey: "id")]
     [ProducesResponseType<ProjectOriginResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -194,9 +200,9 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
     }
 
     /// <summary>Usuwa origin projektu.</summary>
-    /// <remarks>Tylko dla administratora.</remarks>
+    /// <remarks>Dla maintainera projektu i administratora.</remarks>
     [HttpDelete("{id:guid}/origins/{originId:guid}")]
-    [Authorize(Roles = AccessTokenIssuer.AdminRole)]
+    [ProjectAccess(ProjectRole.Maintainer, routeKey: "id")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -255,5 +261,7 @@ public class ProjectsController(BugShotDbContext db) : ControllerBase
         project.Name,
         project.Key,
         project.CreatedAt,
-        project.Origins.Select(o => new ProjectOriginResponse(o.Id, o.Origin)).ToList());
+        project.Origins.Select(o => new ProjectOriginResponse(o.Id, o.Origin)).ToList(),
+        // zakladac i edytowac projekt moze tylko ktos z prawami maintainera
+        ProjectRole.Maintainer);
 }

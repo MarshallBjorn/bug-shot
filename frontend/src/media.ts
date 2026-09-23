@@ -21,6 +21,13 @@ export async function downloadAttachment(attachmentId: string, fileName: string)
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
+// log konsoli czytamy jako tekst a nie blob, bo viewer parsuje go po linii
+export async function fetchAttachmentText(attachmentId: string, signal?: AbortSignal) {
+  const response = await apiRequest(`/api/v1/attachments/${attachmentId}/download`, signal)
+
+  return response.text()
+}
+
 export function isImage(contentType: string) {
   return contentType.startsWith('image/')
 }

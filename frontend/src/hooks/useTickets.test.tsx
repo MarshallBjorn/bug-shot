@@ -1,12 +1,12 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TicketEvent } from '../live/ticketEvents'
-import { defaultLimit, type TicketQuery } from '../ticketQuery'
+import { defaultLimit, type TicketQuery, emptyQuery } from '../ticketQuery'
 import type { CursorPage, TicketListItem } from '../types'
 import { useTickets } from './useTickets'
 
 const query: TicketQuery = {
-  status: null,
+  ...emptyQuery,
   search: '',
   sort: 'receivedAt:desc',
   limit: defaultLimit,
@@ -17,10 +17,17 @@ function ticket(id: string, patch: Partial<TicketListItem> = {}): TicketListItem
     id,
     description: `Zgloszenie ${id}`,
     pageUrl: 'https://acme.example/cart',
+    page: 'acme.example/cart',
+    browserName: 'Chrome',
+    osName: 'Windows',
+    deviceType: 'desktop',
     status: 'New',
     reportedAt: null,
     receivedAt: '2026-09-09T10:00:00+00:00',
     updatedAt: '2026-09-09T10:00:00+00:00',
+    commentCount: 0,
+    hasScreenshot: false,
+    hasConsoleLog: false,
     ...patch,
   }
 }
@@ -140,7 +147,7 @@ describe('lista zgloszen na kursorze', () => {
 
     await waitFor(() => expect(screen.getByText('a')).toBeDefined())
 
-    view.rerender(<Probe filter={{ ...query, status: 'Resolved' }} />)
+    view.rerender(<Probe filter={{ ...query, statuses: ['Resolved'] }} />)
 
     // stara lista zostaje dopoki nie przyjdzie nowa
     expect(screen.getByText('a')).toBeDefined()

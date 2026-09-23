@@ -47,6 +47,7 @@ const project = {
   key: 'ACME',
   createdAt: '2026-09-14T10:00:00Z',
   origins: [],
+  role: 'Maintainer' as const,
 }
 
 const emailChannel = {

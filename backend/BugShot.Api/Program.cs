@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json.Serialization;
 using BugShot.Api;
 using BugShot.Api.Attachments;
@@ -102,13 +103,29 @@ builder.Services
                 var db = context.HttpContext.RequestServices.GetRequiredService<BugShotDbContext>();
                 var userId = context.Principal!.UserId();
 
-                var active = await db.Users
+                var account = await db.Users
                     .AsNoTracking()
-                    .AnyAsync(u => u.Id == userId && u.IsActive, context.HttpContext.RequestAborted);
+                    .Where(u => u.Id == userId && u.IsActive)
+                    .Select(u => new { u.IsAdmin })
+                    .SingleOrDefaultAsync(context.HttpContext.RequestAborted);
 
-                if (!active)
+                if (account is null)
                 {
                     context.Fail("Account is no longer active.");
+                    return;
+                }
+
+                // z tego samego powodu rola admina idzie z bazy a nie z chwili logowania
+                var identity = (ClaimsIdentity)context.Principal!.Identity!;
+
+                foreach (var claim in identity.FindAll(AccessTokenIssuer.RoleClaim).ToList())
+                {
+                    identity.RemoveClaim(claim);
+                }
+
+                if (account.IsAdmin)
+                {
+                    identity.AddClaim(new Claim(AccessTokenIssuer.RoleClaim, AccessTokenIssuer.AdminRole));
                 }
             }
         };
@@ -137,10 +154,16 @@ builder.Services.AddDbContext<BugShotDbContext>(options => options
         npgsql.MapEnum<NotificationChannelType>("notification_channel_type");
         npgsql.MapEnum<NotificationEventType>("notification_event_type");
         npgsql.MapEnum<NotificationDeliveryStatus>("notification_delivery_status");
+        npgsql.MapEnum<ProjectRole>("project_role");
+        npgsql.MapEnum<UserTokenPurpose>("user_token_purpose");
     })
     .UseSnakeCaseNamingConvention());
 
 builder.Services.AddScoped<ISanitizationService, SanitizationService>();
+builder.Services.AddScoped<ProjectAccess>();
+builder.Services.AddScoped<AccountLinks>();
+builder.Services.AddSingleton<SetupToken>();
+builder.Services.AddSingleton(new DashboardOrigins(dashboardOrigins));
 builder.Services.AddSingleton<INotificationWorkerSignal, NotificationWorkerSignal>();
 builder.Services.AddHostedService<NotificationDispatcherHostedService>();
 builder.Services.AddScoped<INotificationEnqueuer, NotificationEnqueuer>();
@@ -178,6 +201,7 @@ using (var scope = app.Services.CreateScope())
     await AdminSeeder.EnsureAdmin(
         db,
         app.Configuration,
+        app.Services.GetRequiredService<SetupToken>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(AdminSeeder)));
 }
 

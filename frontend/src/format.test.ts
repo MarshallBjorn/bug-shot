@@ -5,6 +5,7 @@ import {
   formatFileSize,
   formatResultCount,
   formatStatus,
+  formatRelativeTime,
 } from './format'
 
 describe('formatStatus', () => {
@@ -65,5 +66,24 @@ describe('formatDateTime', () => {
 
   it('formatuje poprawną datę', () => {
     expect(formatDateTime('2026-01-15T12:30:00.000Z')).not.toBe('-')
+  })
+})
+
+describe('czas relatywny', () => {
+  const now = new Date('2026-09-17T12:00:00Z')
+
+  it('skaluje jednostke do odstepu', () => {
+    expect(formatRelativeTime('2026-09-17T11:59:30Z', now)).toBe('30 sekund temu')
+    expect(formatRelativeTime('2026-09-17T11:30:00Z', now)).toBe('30 minut temu')
+    expect(formatRelativeTime('2026-09-17T06:00:00Z', now)).toBe('6 godzin temu')
+    expect(formatRelativeTime('2026-09-14T12:00:00Z', now)).toBe('3 dni temu')
+    expect(formatRelativeTime('2026-08-27T12:00:00Z', now)).toBe('3 tygodnie temu')
+    expect(formatRelativeTime('2026-05-17T12:00:00Z', now)).toBe('4 miesiące temu')
+    expect(formatRelativeTime('2024-09-17T12:00:00Z', now)).toBe('2 lata temu')
+  })
+
+  it('brak wartosci i zepsuta data daja kreske', () => {
+    expect(formatRelativeTime(null, now)).toBe('-')
+    expect(formatRelativeTime('nie data', now)).toBe('-')
   })
 })

@@ -56,3 +56,39 @@ export function formatFileSize(bytes: number) {
 export function formatDateTime(value: string | null) {
   return value ? dateTimeFormat.format(new Date(value)) : '-'
 }
+
+const relativeFormat = new Intl.RelativeTimeFormat('pl-PL', { numeric: 'auto' })
+
+const relativeSteps: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+  ['second', 60],
+  ['minute', 60],
+  ['hour', 24],
+  ['day', 7],
+  ['week', 4.35],
+  ['month', 12],
+]
+
+// lista pokazuje czas skrocony a dokladny zostaje w tytule, bo przy skanowaniu liczy sie rzad wielkosci
+export function formatRelativeTime(value: string | null, now: Date = new Date()) {
+  if (!value) {
+    return '-'
+  }
+
+  const stamp = new Date(value)
+
+  if (Number.isNaN(stamp.getTime())) {
+    return '-'
+  }
+
+  let amount = (stamp.getTime() - now.getTime()) / 1000
+
+  for (const [unit, span] of relativeSteps) {
+    if (Math.abs(amount) < span) {
+      return relativeFormat.format(Math.round(amount), unit)
+    }
+
+    amount /= span
+  }
+
+  return relativeFormat.format(Math.round(amount), 'year')
+}

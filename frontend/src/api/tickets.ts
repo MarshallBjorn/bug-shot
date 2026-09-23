@@ -1,4 +1,4 @@
-import { ticketQueryToParams, type TicketQuery } from '../ticketQuery'
+import { ticketQueryToApiParams, type TicketQuery } from '../ticketQuery'
 import type {
   CursorPage,
   PagedResult,
@@ -15,7 +15,7 @@ export function getTickets(
   cursor: string | null,
   signal?: AbortSignal,
 ) {
-  const params = ticketQueryToParams(query)
+  const params = ticketQueryToApiParams(query)
 
   if (cursor) {
     params.set('cursor', cursor)
@@ -83,4 +83,16 @@ export function updateTicketStatus(
       'If-Match': rowVersion,
     },
   )
+}
+
+// lista nie niesie rowVersion bo token wspolbieznosci w kazdym wierszu tylko by sie starzal
+// zmiana z listy pobiera wiec swieza wersje i dopiero na niej robi zapis
+export async function changeTicketStatus(
+  ticketId: string,
+  status: TicketStatus,
+  changedBy: string,
+) {
+  const ticket = await getTicket(ticketId)
+
+  return updateTicketStatus(ticketId, status, ticket.rowVersion, changedBy)
 }

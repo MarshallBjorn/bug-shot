@@ -26,6 +26,8 @@ public class SanitizationRulesControllerTests
                 npgsql.MapEnum<NotificationChannelType>("notification_channel_type");
                 npgsql.MapEnum<NotificationEventType>("notification_event_type");
                 npgsql.MapEnum<NotificationDeliveryStatus>("notification_delivery_status");
+                npgsql.MapEnum<ProjectRole>("project_role");
+                npgsql.MapEnum<UserTokenPurpose>("user_token_purpose");
             })
             .UseSnakeCaseNamingConvention()
             .Options;

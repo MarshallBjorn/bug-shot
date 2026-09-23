@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AnalyticsRange, ProjectAnalytics } from '../api/analytics'
@@ -71,10 +71,21 @@ describe('ProjectAnalyticsPage', () => {
     expect(screen.getByText('poprzednio 200 (+29,5%)')).toBeTruthy()
     expect(screen.getByText('3 dni')).toBeTruthy()
     expect(screen.getByText('52,3%')).toBeTruthy()
-    expect(screen.getByText('W trakcie')).toBeTruthy()
-    expect(screen.getByText('sklep.example/koszyk')).toBeTruthy()
-    expect(screen.getByText('Inne')).toBeTruthy()
-    expect(screen.getByText('Telefon')).toBeTruthy()
+    // sekcje ze slupkami trzymaja tabele w zwinietym details, wiec etykieta jest dwa razy
+    const statuses = within(screen.getByRole('list', { name: 'Statusy' }))
+    expect(statuses.getByText('W trakcie')).toBeTruthy()
+
+    expect(
+      within(screen.getByRole('list', { name: 'Najczęstsze strony' })).getByText(
+        'sklep.example/koszyk',
+      ),
+    ).toBeTruthy()
+    expect(
+      within(screen.getByRole('list', { name: 'Przeglądarki' })).getByText('Inne'),
+    ).toBeTruthy()
+    expect(
+      within(screen.getByRole('list', { name: 'Urządzenia' })).getByText('Telefon'),
+    ).toBeTruthy()
     expect(screen.getByText('globalna')).toBeTruthy()
     expect(screen.getAllByText('Brak danych w tym zakresie.')).toHaveLength(1)
 
@@ -146,8 +157,9 @@ describe('ProjectAnalyticsPage', () => {
     renderPage()
     await screen.findByText('259')
 
-    const section = screen.getByRole('heading', { name: 'Najczęstsze strony' }).parentElement!
-    fireEvent.click(section.querySelector('button')!)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Pobierz CSV: Najczęstsze strony' }),
+    )
 
     expect(clicked).toHaveBeenCalledOnce()
     expect(await created.mock.calls[0][0].text()).toContain('Strona,Zgłoszenia\r\nsklep.example/koszyk,61')

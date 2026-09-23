@@ -4,6 +4,7 @@ using BugShot.Api.Sanitization;
 using BugShot.Api.Attachments;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
+using BugShot.Api.Live;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -21,7 +22,8 @@ namespace BugShot.Api.Controllers;
 public class TicketAttachmentsController(
     BugShotDbContext db,
     AttachmentStorageOptions storage,
-    ISanitizationService sanitization) : ControllerBase
+    ISanitizationService sanitization,
+    ITicketNotifier notifier) : ControllerBase
 {
     /// <summary>Przyjmuje zalaczniki do zgloszenia.</summary>
     /// <remarks>
@@ -198,6 +200,13 @@ public class TicketAttachmentsController(
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 
+            // zrzut i log wchodza osobnym zadaniem po utworzeniu zgloszenia wiec wiersz na liscie wie o nich
+            // dopiero teraz. Bez tego panel do przeladowania pokazywalby zgloszenie bez znacznikow
+            if (saved.Any(a => a.Kind is AttachmentKind.Screenshot or AttachmentKind.ConsoleLog))
+            {
+                await NotifyAttachments(projectId, ticketId, cancellationToken);
+            }
+
             return StatusCode(StatusCodes.Status201Created, saved
                 .Select(a => new TicketAttachmentResponse(a.Id, a.Kind, a.FileName, a.ContentType, a.SizeBytes))
                 .ToList());
@@ -207,6 +216,31 @@ public class TicketAttachmentsController(
             Discard(written);
             throw;
         }
+    }
+
+    private async Task NotifyAttachments(Guid projectId, Guid ticketId, CancellationToken cancellationToken)
+    {
+        var item = await db.Tickets
+            .AsNoTracking()
+            .Where(t => t.Id == ticketId)
+            .Select(t => new TicketListItem(
+                t.Id,
+                t.Description,
+                t.PageUrl,
+                t.Page,
+                t.BrowserName,
+                t.OsName,
+                t.DeviceType,
+                t.Status,
+                t.ReportedAt,
+                t.ReceivedAt,
+                t.UpdatedAt,
+                t.Comments.Count,
+                t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot),
+                t.Attachments.Any(a => a.Kind == AttachmentKind.ConsoleLog)))
+            .SingleAsync(cancellationToken);
+
+        await notifier.Changed(projectId, item);
     }
 
     // pojedynczy update zamiast odczytu i zapisu bo dwa rownolegle zadania moga trafic w ten sam token

@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BugShot.Api.Security;
 
-// pierwszy uzytkownik musi wziac sie skads zanim istnieje ekran do zakladania kont
+// pierwsze konto bierze sie z env a bez env z kreatora w panelu
 public static class AdminSeeder
 {
     public const string EmailVariable = "ADMIN_EMAIL";
@@ -14,6 +14,7 @@ public static class AdminSeeder
     public static async Task EnsureAdmin(
         BugShotDbContext db,
         IConfiguration configuration,
+        SetupToken setup,
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
@@ -28,10 +29,12 @@ public static class AdminSeeder
 
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
+            // log to jedyne miejsce ktore widzi tylko ten kto stawia instancje
             logger.LogWarning(
-                "Brak {EmailVariable} albo {PasswordVariable} wiec konto administratora nie powstalo i nie da sie zalogowac do panelu",
+                "Brak {EmailVariable} albo {PasswordVariable} wiec pierwsze konto administratora zaklada sie w panelu pod /setup tokenem {SetupToken}",
                 EmailVariable,
-                PasswordVariable);
+                PasswordVariable,
+                setup.Open());
 
             return;
         }

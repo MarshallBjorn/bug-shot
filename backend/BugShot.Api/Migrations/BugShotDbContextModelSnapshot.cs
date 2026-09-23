@@ -25,7 +25,9 @@ namespace BugShot.Api.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "notification_channel_type", new[] { "email", "webhook" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "notification_delivery_status", new[] { "pending", "sending", "sent", "failed", "throttled" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "notification_event_type", new[] { "ticket_created", "comment_added", "status_changed" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "project_role", new[] { "viewer", "member", "maintainer" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "ticket_status", new[] { "new", "in_progress", "resolved", "rejected", "deleted" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "user_token_purpose", new[] { "invitation", "password_reset" });
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("BugShot.Api.Models.NotificationChannel", b =>
@@ -307,6 +309,33 @@ namespace BugShot.Api.Migrations
                             Key = "demo",
                             Name = "Projekt demo"
                         });
+                });
+
+            modelBuilder.Entity("BugShot.Api.Models.ProjectMember", b =>
+                {
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<ProjectRole>("Role")
+                        .HasColumnType("project_role")
+                        .HasColumnName("role");
+
+                    b.HasKey("ProjectId", "UserId")
+                        .HasName("pk_project_members");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_project_members_user_id");
+
+                    b.ToTable("project_members", (string)null);
                 });
 
             modelBuilder.Entity("BugShot.Api.Models.ProjectOrigin", b =>
@@ -814,7 +843,6 @@ namespace BugShot.Api.Migrations
                         .HasColumnName("is_admin");
 
                     b.Property<string>("PasswordHash")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("password_hash");
@@ -874,6 +902,51 @@ namespace BugShot.Api.Migrations
                     b.ToTable("user_refresh_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("BugShot.Api.Models.UserToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<UserTokenPurpose>("Purpose")
+                        .HasColumnType("user_token_purpose")
+                        .HasColumnName("purpose");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_tokens");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_user_tokens_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_user_tokens_user_id");
+
+                    b.ToTable("user_tokens", (string)null);
+                });
+
             modelBuilder.Entity("BugShot.Api.Models.NotificationChannel", b =>
                 {
                     b.HasOne("BugShot.Api.Models.Project", "Project")
@@ -925,6 +998,27 @@ namespace BugShot.Api.Migrations
                         .HasConstraintName("fk_notification_templates_projects_project_id");
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("BugShot.Api.Models.ProjectMember", b =>
+                {
+                    b.HasOne("BugShot.Api.Models.Project", "Project")
+                        .WithMany("Members")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_members_projects_project_id");
+
+                    b.HasOne("BugShot.Api.Models.User", "User")
+                        .WithMany("Memberships")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_members_users_user_id");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("BugShot.Api.Models.ProjectOrigin", b =>
@@ -1043,6 +1137,18 @@ namespace BugShot.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("BugShot.Api.Models.UserToken", b =>
+                {
+                    b.HasOne("BugShot.Api.Models.User", "User")
+                        .WithMany("Tokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_tokens_users_user_id");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("BugShot.Api.Models.NotificationChannel", b =>
                 {
                     b.Navigation("Deliveries");
@@ -1050,6 +1156,8 @@ namespace BugShot.Api.Migrations
 
             modelBuilder.Entity("BugShot.Api.Models.Project", b =>
                 {
+                    b.Navigation("Members");
+
                     b.Navigation("Origins");
 
                     b.Navigation("SanitizationRules");
@@ -1072,7 +1180,11 @@ namespace BugShot.Api.Migrations
 
             modelBuilder.Entity("BugShot.Api.Models.User", b =>
                 {
+                    b.Navigation("Memberships");
+
                     b.Navigation("RefreshTokens");
+
+                    b.Navigation("Tokens");
                 });
 #pragma warning restore 612, 618
         }

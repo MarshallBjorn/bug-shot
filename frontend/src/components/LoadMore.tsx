@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+import { Button } from '@/components/ui/button'
 import { formatResultCount } from '../format'
 
 interface LoadMoreProps {
@@ -5,10 +7,12 @@ interface LoadMoreProps {
   total: number | null
   hasMore: boolean
   busy: boolean
+  // po bledzie automat stoi bo ponawialby zapytanie w petli a przycisk zostaje do recznej proby
+  paused?: boolean
   onLoadMore: () => void
 }
 
-// bez licznika zostaje sama liczba załadowanych, bo backend podaje total tylko na żądanie
+// bez licznika zostaje sama liczba zaladowanych, bo backend podaje total tylko na zadanie
 function summary(loaded: number, total: number | null, hasMore: boolean) {
   if (!hasMore) {
     return `Koniec listy, ${formatResultCount(total ?? loaded)}`
@@ -17,13 +21,40 @@ function summary(loaded: number, total: number | null, hasMore: boolean) {
   return total === null ? `Pokazano ${formatResultCount(loaded)}` : `Pokazano ${loaded} z ${total}`
 }
 
-function LoadMore({ loaded, total, hasMore, busy, onLoadMore }: LoadMoreProps) {
+// kolejna strona schodzi zanim uzytkownik dojedzie do konca a przycisk zostaje dla klawiatury
+function LoadMore({ loaded, total, hasMore, busy, paused = false, onLoadMore }: LoadMoreProps) {
+  const sentinel = useRef<HTMLElement>(null)
+  const auto = hasMore && !busy && !paused
+
+  useEffect(() => {
+    const node = sentinel.current
+
+    if (!auto || !node || typeof IntersectionObserver === 'undefined') {
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) onLoadMore()
+      },
+      { rootMargin: '400px 0px' },
+    )
+
+    observer.observe(node)
+
+    return () => observer.disconnect()
+  }, [auto, onLoadMore])
+
   return (
-    <nav className="load-more" aria-label="Doładowanie listy">
+    <nav
+      ref={sentinel}
+      aria-label="Doładowanie listy"
+      className="flex flex-wrap items-center gap-3 pt-3 text-xs text-muted-foreground"
+    >
       {hasMore && (
-        <button type="button" disabled={busy} onClick={onLoadMore}>
+        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onLoadMore}>
           {busy ? 'Ładowanie...' : 'Załaduj więcej'}
-        </button>
+        </Button>
       )}
 
       <span aria-live="polite">{summary(loaded, total, hasMore)}</span>

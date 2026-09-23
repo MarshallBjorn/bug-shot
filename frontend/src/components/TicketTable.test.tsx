@@ -11,10 +11,17 @@ function ticket(
     id: 'ticket-1',
     description: 'Koszyk gubi produkty',
     pageUrl: 'https://acme.example/cart',
+    page: 'acme.example/cart',
+    browserName: 'Chrome',
+    osName: 'Windows',
+    deviceType: 'desktop',
     status: 'New',
     reportedAt: null,
     receivedAt: '2026-09-14T10:00:00+00:00',
     updatedAt: '2026-09-14T10:00:00+00:00',
+    commentCount: 0,
+    hasScreenshot: false,
+    hasConsoleLog: false,
     ...patch,
   }
 }
@@ -42,6 +49,16 @@ describe('TicketTable', () => {
     expect(screen.getByRole('columnheader', { name: 'Zgłoszono' })).toBeDefined()
     expect(screen.getByRole('link', { name: 'Koszyk gubi produkty' })).toBeDefined()
     expect(screen.getByText('Nowe')).toBeDefined()
+  })
+
+  it('pokazuje znaczniki zrzutu i logu konsoli tylko gdy sa', () => {
+    renderTable([
+      ticket({ id: '1', description: 'Z oboma', hasScreenshot: true, hasConsoleLog: true }),
+      ticket({ id: '2', description: 'Bez niczego' }),
+    ])
+
+    expect(screen.getAllByText('Ma zrzut ekranu')).toHaveLength(1)
+    expect(screen.getAllByText('Ma log konsoli')).toHaveLength(1)
   })
 
   it('renderuje wiele ticketow', () => {

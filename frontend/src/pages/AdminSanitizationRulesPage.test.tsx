@@ -1,5 +1,5 @@
 ﻿import React from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AdminSanitizationRulesPage from './AdminSanitizationRulesPage'
 import {
@@ -51,6 +51,7 @@ const project = {
   key: 'ACME',
   createdAt: '2026-09-14T10:00:00Z',
   origins: [],
+  role: 'Maintainer' as const,
 }
 
 const rule = {
@@ -194,11 +195,6 @@ describe('AdminSanitizationRulesPage', () => {
   })
 
   it('przelacza, edytuje i usuwa regule', async () => {
-    vi.spyOn(window, 'prompt')
-      .mockReturnValueOnce('token=\\S+')
-      .mockReturnValueOnce('token=***')
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
-
     render(<AdminSanitizationRulesPage />)
     await screen.findByText('secret=\\w+')
 
@@ -210,21 +206,38 @@ describe('AdminSanitizationRulesPage', () => {
       expect(mockedToggle).toHaveBeenCalledWith('r1', false)
     })
 
+    // wzorzec i zamiennik to jedna decyzja, wiec dialog pyta o oba naraz
     fireEvent.click(screen.getByRole('button', { name: 'Edytuj' }))
 
+    const dialog = within(screen.getByRole('dialog'))
+
+    expect(dialog.getByLabelText('Wzorzec')).toHaveProperty('value', 'secret=\\w+')
+
+    fireEvent.change(dialog.getByLabelText('Wzorzec'), { target: { value: 'token=\\S+' } })
+    fireEvent.change(dialog.getByLabelText('Zamiennik'), { target: { value: 'token=***' } })
+    fireEvent.click(dialog.getByRole('button', { name: 'Zapisz regułę' }))
+
     await vi.waitFor(() => {
-      expect(mockedUpdate).toHaveBeenCalledWith(
-        'r1',
-        'token=\\S+',
-        'token=***',
-      )
+      expect(mockedUpdate).toHaveBeenCalledWith('r1', 'token=\\S+', 'token=***')
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Usuń' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń regułę' }))
 
     await vi.waitFor(() => {
       expect(mockedDelete).toHaveBeenCalledWith('r1')
     })
+  })
+
+  it('blad akcji wychodzi komunikatem na stronie', async () => {
+    mockedToggle.mockRejectedValueOnce(new Error('HTTP 409'))
+
+    render(<AdminSanitizationRulesPage />)
+    await screen.findByText('secret=\\w+')
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Wyłącz regułę' }))
+
+    expect(await screen.findByText('HTTP 409')).toBeDefined()
   })
 })
 

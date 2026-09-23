@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { TicketEvent } from '../live/ticketEvents'
-import { defaultLimit, type TicketQuery } from '../ticketQuery'
+import { defaultLimit, type TicketQuery, emptyQuery } from '../ticketQuery'
 import type { TicketListItem } from '../types'
 import { initialTicketListState, ticketListReducer, type TicketListState } from './ticketListState'
 
 const query: TicketQuery = {
-  status: null,
+  ...emptyQuery,
   search: '',
   sort: 'receivedAt:desc',
   limit: defaultLimit,
@@ -16,10 +16,17 @@ function ticket(id: string, patch: Partial<TicketListItem> = {}): TicketListItem
     id,
     description: `Zgloszenie ${id}`,
     pageUrl: 'https://acme.example/cart',
+    page: 'acme.example/cart',
+    browserName: 'Chrome',
+    osName: 'Windows',
+    deviceType: 'desktop',
     status: 'New',
     reportedAt: null,
     receivedAt: '2026-09-09T10:00:00+00:00',
     updatedAt: '2026-09-09T10:00:00+00:00',
+    commentCount: 0,
+    hasScreenshot: false,
+    hasConsoleLog: false,
     ...patch,
   }
 }
@@ -128,7 +135,7 @@ describe('zdarzenia kanalu live', () => {
 
   it('nowe zgloszenie spoza filtra nie wchodzi na liste', () => {
     const before = state([ticket('a')])
-    const filter = { ...query, status: 'Resolved' as const }
+    const filter = { ...query, statuses: ['Resolved' as const] }
 
     expect(live(before, { type: 'created', ticket: ticket('nowe') }, filter)).toBe(before)
   })
@@ -149,7 +156,7 @@ describe('zdarzenia kanalu live', () => {
   })
 
   it('zmiana wypychajaca poza filtr zdejmuje wiersz z listy i obniza licznik', () => {
-    const filter = { ...query, status: 'New' as const }
+    const filter = { ...query, statuses: ['New' as const] }
     const next = live(
       state([ticket('a'), ticket('b')], { total: 7 }),
       { type: 'changed', ticket: ticket('a', { status: 'Resolved' }) },

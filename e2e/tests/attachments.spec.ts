@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { demoProjectId } from '../e2e.config'
-import { openSignedIn, reportFromWidget, signIn, ticketsPath } from './helpers'
+import { openSignedIn, reportFromWidget, screenshotImage, signIn, ticketsPath } from './helpers'
 
 test.describe('zalaczniki za tokenem', () => {
   test('zalogowany widzi zrzut w szczegolach zgloszenia', async ({ page, request }) => {
@@ -11,7 +11,7 @@ test.describe('zalaczniki za tokenem', () => {
 
     await expect(page.getByRole('heading', { name: 'Zgloszenie ze zrzutem' })).toBeVisible()
 
-    const screenshot = page.locator('.attachments img')
+    const screenshot = screenshotImage(page)
 
     await expect(screenshot).toBeVisible()
 
@@ -22,7 +22,12 @@ test.describe('zalaczniki za tokenem', () => {
       .toBeGreaterThan(0)
   })
 
-  test('log konsoli schodzi z serwera dopiero po kliknieciu', async ({ page, request }) => {
+  // blok logu na detalu pokazuje liczniki per poziom, wiec tresc musi zejsc razem z widokiem
+  // otwarcie viewera korzysta z tego co juz jest i nie odpytuje serwera drugi raz
+  test('log konsoli schodzi raz razem z widokiem i wystarcza viewerowi', async ({
+    page,
+    request,
+  }) => {
     const { ticketId, consoleLogId } = await reportFromWidget(request, 'Zgloszenie z logiem')
 
     const pobrania: string[] = []
@@ -35,17 +40,18 @@ test.describe('zalaczniki za tokenem', () => {
 
     await openSignedIn(page, `${ticketsPath()}/${ticketId}`)
 
-    // zrzut musi wejsc na strone od razu wiec czekamy az sie ustoi
-    await expect(page.locator('.attachments img')).toBeVisible()
+    await expect(screenshotImage(page)).toBeVisible()
+    await expect(page.getByRole('button', { name: /Otwórz pełny log konsoli/ })).toBeVisible()
 
-    expect(pobrania).toHaveLength(0)
+    const poWejsciu = pobrania.length
 
-    const [pobrany] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByRole('button', { name: 'Pobierz log konsoli' }).click(),
-    ])
+    expect(poWejsciu).toBeGreaterThan(0)
 
-    expect(pobrany.suggestedFilename()).toBe('konsola.txt')
+    await page.getByRole('button', { name: /Otwórz pełny log konsoli/ }).click()
+
+    await expect(page.getByRole('list', { name: 'Wpisy logu konsoli' })).toBeVisible()
+
+    expect(pobrania).toHaveLength(poWejsciu)
   })
 })
 

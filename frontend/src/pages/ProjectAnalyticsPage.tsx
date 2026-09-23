@@ -1,4 +1,8 @@
-import { Link, useParams, useSearchParams } from 'react-router'
+import { useParams, useSearchParams } from 'react-router'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import HorizontalBars, { type BarDatum } from '../components/charts/HorizontalBars'
+import TimelineChart from '../components/charts/TimelineChart'
 import {
   analyticsRanges,
   defaultAnalyticsRange,
@@ -23,6 +27,15 @@ const deviceLabels: Record<string, string> = {
   mobile: 'Telefon',
   tablet: 'Tablet',
   unknown: 'Nieznane',
+}
+
+// statusy maja zastrzezona palete, wiec nie ida jednym hue jak zwykla seria
+const statusTones: Record<string, string> = {
+  New: 'var(--color-primary)',
+  InProgress: 'var(--color-warning)',
+  Resolved: 'var(--color-success)',
+  Rejected: 'var(--color-destructive)',
+  Deleted: 'var(--color-muted-foreground)',
 }
 
 const numberFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 1 })
@@ -67,39 +80,67 @@ interface AnalyticsTableProps {
   fileName: string
   header: string[]
   rows: CsvValue[][]
+  // slupki sa skrotem do porownania, a tabela zostaje jako pelny odczyt i zrodlo CSV
+  bars?: BarDatum[]
 }
 
-function AnalyticsTable({ title, fileName, header, rows }: AnalyticsTableProps) {
+function AnalyticsTable({ title, fileName, header, rows, bars }: AnalyticsTableProps) {
+  const table = (
+    <table className="w-full border-collapse text-sm">
+      <thead>
+        <tr className="border-b">
+          {header.map((column) => (
+            <th key={column} scope="col" className="py-1.5 pr-3 text-left font-medium text-muted-foreground">
+              {column}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, rowIndex) => (
+          <tr key={rowIndex} className="border-b last:border-0">
+            {row.map((cell, cellIndex) => (
+              <td key={cellIndex} className="py-1.5 pr-3 align-top">
+                {cell ?? ''}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+
   return (
-    <section className="analytics-section">
-      <div className="list-heading">
-        <h3>{title}</h3>
-        <button type="button" disabled={rows.length === 0} onClick={() => downloadCsv(fileName, toCsv(header, rows))}>
+    <section className="space-y-3 rounded-lg border bg-card p-4">
+      <div className="flex items-center gap-3">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="ml-auto h-7 px-2 text-xs"
+          aria-label={`Pobierz CSV: ${title}`}
+          disabled={rows.length === 0}
+          onClick={() => downloadCsv(fileName, toCsv(header, rows))}
+        >
           Pobierz CSV
-        </button>
+        </Button>
       </div>
 
       {rows.length === 0 ? (
-        <p>Brak danych w tym zakresie.</p>
+        <p className="text-sm text-muted-foreground">Brak danych w tym zakresie.</p>
+      ) : bars ? (
+        <>
+          <HorizontalBars data={bars} caption={title} />
+          <details className="text-sm">
+            <summary className="cursor-pointer text-xs text-muted-foreground">
+              Pokaż jako tabelę
+            </summary>
+            <div className="pt-2">{table}</div>
+          </details>
+        </>
       ) : (
-        <table className="ticket-table">
-          <thead>
-            <tr>
-              {header.map((column) => (
-                <th key={column}>{column}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                {row.map((cell, cellIndex) => (
-                  <td key={cellIndex}>{cell ?? ''}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        table
       )}
     </section>
   )
@@ -123,12 +164,13 @@ function AnalyticsSummary({ analytics }: { analytics: ProjectAnalytics }) {
   ]
 
   return (
-    <dl className="stat-tiles">
+    <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {tiles.map((tile) => (
-        <div key={tile.label}>
-          <dt>{tile.label}</dt>
-          <dd className="stat-value">{tile.value}</dd>
-          <dd className="stat-note">{tile.note}</dd>
+        <div key={tile.label} className="rounded-lg border bg-card px-4 py-3">
+          <dt className="text-xs text-muted-foreground">{tile.label}</dt>
+          {/* liczba wiodaca bez tabular-nums, bo rowne szerokosci cyfr robia w duzym stopniu dziury */}
+          <dd className="text-2xl font-semibold tracking-tight">{tile.value}</dd>
+          <dd className="text-xs text-muted-foreground">{tile.note}</dd>
         </div>
       ))}
     </dl>
@@ -155,24 +197,30 @@ function ProjectAnalyticsPage() {
   const file = (section: string) => `analityka-${section}-${range}${includeToday ? '' : '-bez-dzisiaj'}.csv`
 
   return (
-    <>
-      <div className="list-heading">
-        <h2>Analityka</h2>
-        <Link to={`/projects/${projectId}/tickets`}>Zgłoszenia</Link>
-      </div>
+    <div className="space-y-4">
+      <h2 className="text-xl font-semibold tracking-tight">Analityka</h2>
 
-      <div className="analytics-controls">
-        <div className="analytics-ranges" role="group" aria-label="Zakres">
+      {/* filtry ida jednym rzedem nad wykresami, nie w karcie wykresu */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-1" role="group" aria-label="Zakres">
           {analyticsRanges.map((value) => (
-            <button key={value} type="button" aria-pressed={value === range} onClick={() => updateView(value, includeToday)}>
+            <Button
+              key={value}
+              type="button"
+              variant={value === range ? 'default' : 'outline'}
+              size="sm"
+              aria-pressed={value === range}
+              onClick={() => updateView(value, includeToday)}
+            >
               {rangeLabels[value]}
-            </button>
+            </Button>
           ))}
         </div>
 
-        <label>
+        <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
+            className="size-4 accent-primary"
             checked={includeToday}
             onChange={(event) => updateView(range, event.target.checked)}
           />
@@ -180,26 +228,58 @@ function ProjectAnalyticsPage() {
         </label>
       </div>
 
-      {error && <p role="alert">Nie udało się pobrać analityki. {error}</p>}
+      {error && (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          Nie udało się pobrać analityki. {error}
+        </p>
+      )}
 
-      {!analytics && loading && <p>Ładowanie...</p>}
+      {!analytics && loading && (
+        <div className="space-y-3" aria-busy="true">
+          <span className="sr-only">Ładowanie analityki</span>
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {[0, 1, 2, 3].map((tile) => (
+              <Skeleton key={tile} className="h-20" />
+            ))}
+          </div>
+          <Skeleton className="h-52" />
+        </div>
+      )}
 
       {analytics && (
-        <div className={loading ? 'is-stale' : undefined} aria-busy={loading}>
+        <div className={loading ? 'opacity-60' : undefined} aria-busy={loading}>
           <AnalyticsSummary analytics={analytics} />
 
-          <div className="analytics-sections">
+          <section className="mt-4 space-y-2 rounded-lg border bg-card p-4">
+            <h3 className="text-sm font-semibold">
+              {analytics.bucket === 'week'
+                ? 'Nowe i rozwiązane w tygodniach'
+                : 'Nowe i rozwiązane w dniach'}
+            </h3>
+            <TimelineChart points={analytics.timeline} bucket={analytics.bucket} />
+          </section>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <AnalyticsTable
               title="Statusy"
               fileName={file('statusy')}
               header={['Status', 'Zgłoszenia']}
               rows={analytics.statuses.map((item) => [formatStatus(item.status), item.count])}
+              bars={analytics.statuses.map((item) => ({
+                label: formatStatus(item.status),
+                value: item.count,
+                tone: statusTones[item.status],
+              }))}
             />
             <AnalyticsTable
               title="Najczęstsze strony"
               fileName={file('strony')}
               header={['Strona', 'Zgłoszenia']}
               rows={analytics.topPages.map((item) => [item.page, item.count])}
+              bars={analytics.topPages.map((item) => ({ label: item.page, value: item.count }))}
             />
             <AnalyticsTable
               title="Strony z przyrostem"
@@ -212,18 +292,24 @@ function ProjectAnalyticsPage() {
               fileName={file('przegladarki')}
               header={['Przeglądarka', 'Zgłoszenia']}
               rows={nameRows(analytics.browsers)}
+              bars={analytics.browsers.map((item) => ({ label: formatName(item.name), value: item.count }))}
             />
             <AnalyticsTable
               title="Systemy"
               fileName={file('systemy')}
               header={['System', 'Zgłoszenia']}
               rows={nameRows(analytics.operatingSystems)}
+              bars={analytics.operatingSystems.map((item) => ({ label: formatName(item.name), value: item.count }))}
             />
             <AnalyticsTable
               title="Urządzenia"
               fileName={file('urzadzenia')}
               header={['Urządzenie', 'Zgłoszenia']}
               rows={nameRows(analytics.devices, (name) => deviceLabels[name] ?? name)}
+              bars={analytics.devices.map((item) => ({
+                label: deviceLabels[item.name] ?? item.name,
+                value: item.count,
+              }))}
             />
             <AnalyticsTable
               title="Sanityzacja"
@@ -237,7 +323,7 @@ function ProjectAnalyticsPage() {
               ])}
             />
             <AnalyticsTable
-              title={analytics.bucket === 'week' ? 'Nowe i rozwiązane w tygodniach' : 'Nowe i rozwiązane w dniach'}
+              title={analytics.bucket === 'week' ? 'Nowe i rozwiązane, tygodnie' : 'Nowe i rozwiązane, dni'}
               fileName={file('w-czasie')}
               header={[analytics.bucket === 'week' ? 'Tydzień od' : 'Dzień', 'Nowe', 'Rozwiązane']}
               rows={analytics.timeline.map((point) => [point.date, point.created, point.resolved])}
@@ -245,7 +331,7 @@ function ProjectAnalyticsPage() {
           </div>
         </div>
       )}
-    </>
+    </div>
   )
 }
 

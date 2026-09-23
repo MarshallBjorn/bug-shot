@@ -4,14 +4,16 @@ import {
   defaultSort,
   isFiltered,
   matchesQuery,
+  normalizePage,
   parseTicketQuery,
   ticketQueryToParams,
   type TicketQuery,
+  emptyQuery,
 } from './ticketQuery'
 import type { TicketListItem } from './types'
 
 const base: TicketQuery = {
-  status: null,
+  ...emptyQuery,
   search: '',
   sort: 'receivedAt:desc',
   limit: defaultLimit,
@@ -22,10 +24,17 @@ function ticket(patch: Partial<TicketListItem> = {}): TicketListItem {
     id: 't1',
     description: 'Koszyk gubi produkty',
     pageUrl: 'https://acme.example/cart',
+    page: 'acme.example/cart',
+    browserName: 'Chrome',
+    osName: 'Windows',
+    deviceType: 'desktop',
     status: 'New',
     reportedAt: null,
     receivedAt: '2026-09-09T10:00:00+00:00',
     updatedAt: '2026-09-09T10:00:00+00:00',
+    commentCount: 0,
+    hasScreenshot: false,
+    hasConsoleLog: false,
     ...patch,
   }
 }
@@ -37,7 +46,8 @@ describe('parametry listy', () => {
     )
 
     expect(query).toEqual({
-      status: 'Resolved',
+      ...emptyQuery,
+      statuses: ['Resolved'],
       search: 'koszyk',
       sort: 'reportedAt:asc',
       limit: 50,
@@ -63,7 +73,7 @@ describe('parametry listy', () => {
   it('nieznany status i sortowanie wracaja do domyslnych', () => {
     const query = parseTicketQuery(new URLSearchParams('status=Nieznany&sort=cokolwiek'))
 
-    expect(query.status).toBeNull()
+    expect(query.statuses).toEqual([])
     expect(query.sort).toBe('receivedAt:desc')
   })
 
@@ -75,7 +85,8 @@ describe('parametry listy', () => {
   it('serializuje wszystkie niestandardowe wartosci', () => {
     expect(
       ticketQueryToParams({
-        status: 'Resolved',
+        ...emptyQuery,
+        statuses: ['Resolved'],
         search: 'login bug',
         sort: 'reportedAt:asc',
         limit: 50,
@@ -96,7 +107,7 @@ describe('dopasowanie zgloszenia do filtra', () => {
   })
 
   it('filtr statusu przepuszcza tylko swoj status', () => {
-    const query = { ...base, status: 'Resolved' as const }
+    const query = { ...base, statuses: ['Resolved' as const] }
 
     expect(matchesQuery(ticket({ status: 'Resolved' }), query)).toBe(true)
     expect(matchesQuery(ticket({ status: 'New' }), query)).toBe(false)
@@ -109,9 +120,31 @@ describe('dopasowanie zgloszenia do filtra', () => {
   })
 })
 
+// te same przypadki co PageAddressTests w backendzie
+describe('normalizacja adresu strony', () => {
+  it.each([
+    ['https://Sklep.example/Koszyk?utm_source=newsletter#opinie', 'sklep.example/koszyk'],
+    ['https://sklep.example/szukaj?q=buty', 'sklep.example/szukaj'],
+    ['https://sklep.example/', 'sklep.example'],
+    ['http://127.0.0.1:5500/cart/', '127.0.0.1:5500/cart'],
+    ['https://sklep.example/produkt#opinie?x=1', 'sklep.example/produkt'],
+    [' https://sklep.example/kontakt ', 'sklep.example/kontakt'],
+    ['', ''],
+  ])('%s', (url, expected) => {
+    expect(normalizePage(url)).toBe(expected)
+  })
+
+  it('zgloszenie z kanalu live pasuje do filtra wpisanego pelnym adresem', () => {
+    const query = parseTicketQuery(new URLSearchParams('page=http://127.0.0.1:5500/'))
+
+    expect(query.page).toBe('127.0.0.1:5500')
+    expect(matchesQuery(ticket({ page: '127.0.0.1:5500' }), query)).toBe(true)
+  })
+})
+
 describe('isFiltered', () => {
   it('rozpoznaje filtr statusu i wyszukiwania', () => {
-    expect(isFiltered({ ...base, status: 'Resolved' })).toBe(true)
+    expect(isFiltered({ ...base, statuses: ['Resolved'] })).toBe(true)
     expect(isFiltered({ ...base, search: 'bug' })).toBe(true)
   })
 

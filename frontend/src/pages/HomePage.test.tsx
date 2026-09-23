@@ -43,17 +43,16 @@ describe('HomePage', () => {
     expect(screen.queryByRole('link', { name: 'Zarządzaj projektami' })).toBeNull()
   })
 
-  it('daje adminowi przejscie do zarzadzania projektami nad lista', async () => {
+  // przejscie do zarzadzania projektami stoi w nawigacji panelu, drugi raz nad lista tylko dublowalo
+  it('adminowi tez nie dubluje przejscia do zarzadzania projektami', async () => {
     getProjects.mockResolvedValue([
       { id: 'p1', name: 'Sklep', key: 'sklep', createdAt: '2026-09-14T10:00:00Z', origins: [] },
     ])
 
     renderAs(true)
 
-    const manage = await screen.findByRole('link', { name: 'Zarządzaj projektami' })
-
-    expect(manage.getAttribute('href')).toBe('/admin/projects')
-    expect(screen.getByRole('link', { name: 'Sklep' })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: 'Sklep' })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Zarządzaj projektami' })).toBeNull()
   })
 
   it('bez projektow odsyla admina do panelu a dewelopera nie', async () => {
@@ -75,5 +74,21 @@ describe('HomePage', () => {
     renderAs(false)
 
     expect((await screen.findByRole('alert')).textContent).toContain('HTTP 500')
+  })
+
+  it('mowi dlaczego wrocil ze strony administracyjnej', async () => {
+    getProjects.mockResolvedValue([])
+    useAuth.mockReturnValue({ user: { email: 'ktos@bug-shot.test', isAdmin: false } })
+
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: '/', state: { notice: 'Ta sekcja jest dostępna tylko dla administratora.' } }]}
+      >
+        <HomePage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('status')).toBeDefined()
+    expect(screen.getByText('Ta sekcja jest dostępna tylko dla administratora.')).toBeDefined()
   })
 })

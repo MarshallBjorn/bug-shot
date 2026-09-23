@@ -1,3 +1,5 @@
+using BugShot.Api.Models;
+
 namespace BugShot.Api.Contracts;
 
 public record ProjectOriginResponse(Guid Id, string Origin);
@@ -7,4 +9,5 @@ public record ProjectResponse(
     string Name,
     string Key,
     DateTimeOffset CreatedAt,
-    IReadOnlyList<ProjectOriginResponse> Origins);
+    IReadOnlyList<ProjectOriginResponse> Origins,
+    ProjectRole Role);

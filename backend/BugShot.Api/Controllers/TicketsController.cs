@@ -12,6 +12,7 @@ using BugShot.Api.Live;
 using BugShot.Api.Models;
 using BugShot.Api.Notifications;
 using BugShot.Api.Security;
+using BugShot.Api.Tickets;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
@@ -191,6 +192,7 @@ public class TicketsController(
     /// <remarks>Skasowane zgloszenie odpowiada 200 ze statusem Deleted i pustymi polami.</remarks>
     [HttpGet("{id:guid}")]
     [EnableCors(CorsPolicies.Dashboard)]
+    [ProjectAccess(ProjectRole.Viewer, ProjectAccessScope.Ticket, "id")]
     [ProducesResponseType<TicketDetails>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -207,7 +209,17 @@ public class TicketsController(
                 t.Project.Key,
                 t.Description,
                 t.PageUrl,
+                t.Page,
                 t.UserAgent,
+                new TicketClientEnvironment(
+                    t.BrowserName,
+                    t.OsName,
+                    t.DeviceType,
+                    t.ViewportWidth,
+                    t.ViewportHeight,
+                    t.DevicePixelRatio,
+                    t.Language,
+                    t.TimeZone),
                 t.Status,
                 t.ReportedAt,
                 t.ReceivedAt,
@@ -243,13 +255,16 @@ public class TicketsController(
                     .ToList()))
             .SingleOrDefaultAsync(cancellationToken);
 
-        return ticket is null ? NotFound() : Ok(ticket);
+        return ticket is null
+            ? NotFound()
+            : Ok(ticket with { AllowedStatuses = TicketStatusTransitions.From(ticket.Status) });
     }
 
     /// <summary>Dopisuje komentarz do zgloszenia.</summary>
     /// <remarks>Skasowane zgloszenie konczy sie na 409 bo nie ma juz czego komentowac.</remarks>
     [HttpPost("{id:guid}/comments")]
     [EnableCors(CorsPolicies.Dashboard)]
+    [ProjectAccess(ProjectRole.Member, ProjectAccessScope.Ticket, "id")]
     [ProducesResponseType<TicketCommentResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -295,6 +310,9 @@ public class TicketsController(
         await db.SaveChangesAsync(cancellationToken);
             notificationWorkerSignal.Signal();
 
+        // licznik komentarzy siedzi w wierszu listy a detal w innej karcie tez chce zobaczyc nowy wpis
+        await NotifyChanged(ticket, cancellationToken);
+
         return CreatedAtAction(
             nameof(GetComments),
             new { id },
@@ -312,6 +330,7 @@ public class TicketsController(
     /// <param name="pageSize">Rozmiar strony przycinany do 100.</param>
     [HttpGet("{id:guid}/comments")]
     [EnableCors(CorsPolicies.Dashboard)]
+    [ProjectAccess(ProjectRole.Viewer, ProjectAccessScope.Ticket, "id")]
     [ProducesResponseType<PagedResult<TicketCommentResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -365,6 +384,7 @@ public class TicketsController(
     /// </remarks>
     [HttpDelete("{id:guid}")]
     [EnableCors(CorsPolicies.Dashboard)]
+    [ProjectAccess(ProjectRole.Member, ProjectAccessScope.Ticket, "id")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -460,9 +480,13 @@ public class TicketsController(
     /// Wymaga naglowka If-Match z rowVersion z ostatniego odczytu. Brak naglowka konczy sie na 428.
     /// Nieaktualna wersja konczy sie na 409 i niczego nie zapisuje.
     /// Kazda zmiana zostawia wpis w historii statusow.
+    /// Status idzie mapa przejsc. New przechodzi w InProgress albo Rejected InProgress w Resolved albo Rejected
+    /// a Resolved i Rejected wracaja do InProgress. Przejscie poza mapa konczy sie na 400.
+    /// Wyslanie statusu ktory ticket juz ma nie jest zmiana i nie zostawia sladu w historii.
     /// </remarks>
     [HttpPatch("{id:guid}/status")]
     [EnableCors(CorsPolicies.Dashboard)]
+    [ProjectAccess(ProjectRole.Member, ProjectAccessScope.Ticket, "id")]
     [ProducesResponseType<TicketStatusResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -517,6 +541,20 @@ public class TicketsController(
             return Ok(StatusResponse(ticket));
         }
 
+        // stan idzie mapa przejsc a nie dowolnym skokiem bo historia ma opisywac prace nad zgloszeniem
+        if (!TicketStatusTransitions.IsAllowed(ticket.Status, newStatus))
+        {
+            var allowed = TicketStatusTransitions.From(ticket.Status);
+
+            ModelState.AddModelError(
+                nameof(request.Status),
+                allowed.Count == 0
+                    ? $"Ticket in status {ticket.Status} cannot change status."
+                    : $"Ticket in status {ticket.Status} can only change to {string.Join(", ", allowed)}.");
+
+            return ValidationProblem(ModelState);
+        }
+
         var fromStatus = ticket.Status;
         ticket.Status = newStatus;
 
@@ -556,7 +594,7 @@ public class TicketsController(
             return entry.State == EntityState.Detached ? NotFound() : VersionConflict(ticket);
         }
 
-        await notifier.Changed(ticket.ProjectId, ListItem(ticket));
+        await NotifyChanged(ticket, cancellationToken);
 
         return Ok(StatusResponse(ticket));
     }
@@ -572,14 +610,46 @@ public class TicketsController(
     }
 
     // kanal live niesie ten sam ksztalt co lista wiec panel podmienia wiersz bez dodatkowego GET
-    private static TicketListItem ListItem(Ticket ticket) => new(
+    // licznikow nie ma w encji wiec wolajacy podaje je jawnie
+    // swieze zgloszenie nie ma jeszcze ani komentarza ani zalacznika bo te wchodza osobnym zadaniem
+    private static TicketListItem ListItem(
+        Ticket ticket,
+        int commentCount = 0,
+        bool hasScreenshot = false,
+        bool hasConsoleLog = false) => new(
         ticket.Id,
         ticket.Description,
         ticket.PageUrl,
+        ticket.Page,
+        ticket.BrowserName,
+        ticket.OsName,
+        ticket.DeviceType,
         ticket.Status,
         ticket.ReportedAt,
         ticket.ReceivedAt,
-        ticket.UpdatedAt);
+        ticket.UpdatedAt,
+        commentCount,
+        hasScreenshot,
+        hasConsoleLog);
+
+    // wiersz na liscie niesie liczniki wiec kazda zmiana musi je odczytac zeby panel ich nie wyzerowal
+    private async Task NotifyChanged(Ticket ticket, CancellationToken cancellationToken)
+    {
+        var counters = await db.Tickets
+            .AsNoTracking()
+            .Where(t => t.Id == ticket.Id)
+            .Select(t => new
+            {
+                Comments = t.Comments.Count,
+                Screenshot = t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot),
+                ConsoleLog = t.Attachments.Any(a => a.Kind == AttachmentKind.ConsoleLog)
+            })
+            .SingleAsync(cancellationToken);
+
+        await notifier.Changed(
+            ticket.ProjectId,
+            ListItem(ticket, counters.Comments, counters.Screenshot, counters.ConsoleLog));
+    }
 
     private static TicketStatusResponse StatusResponse(Ticket ticket) => new(
         ticket.Id,

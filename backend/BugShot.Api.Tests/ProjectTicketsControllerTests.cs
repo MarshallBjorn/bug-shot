@@ -93,6 +93,10 @@ public class ProjectTicketsControllerTests
         return problem.StatusCode ?? 0;
     }
 
+    // numer statusu nadaje fabryka problemow w pelnym pipeline wiec nagi kontroler oddaje sam opis bledu
+    private static IDictionary<string, string[]> ValidationErrors(ActionResult<CursorPage<TicketListItem>> result) =>
+        Assert.IsType<ValidationProblemDetails>(Assert.IsType<ObjectResult>(result.Result).Value).Errors;
+
     [Fact]
     public async Task SortowanieRosnacoUstawiaZgloszenieBezReportedAtPoDacieZListy()
     {
@@ -247,13 +251,13 @@ public class ProjectTicketsControllerTests
         var pierwsza = Page(await controller.GetList(
             projectId,
             CancellationToken.None,
-            status: TicketStatus.New,
+            status: "New",
             limit: 2));
 
         var druga = Page(await controller.GetList(
             projectId,
             CancellationToken.None,
-            status: TicketStatus.New,
+            status: "New",
             cursor: pierwsza.NextCursor,
             limit: 2));
 
@@ -326,7 +330,7 @@ public class ProjectTicketsControllerTests
         var poStatusie = Page(await controller.GetList(
             projectId,
             CancellationToken.None,
-            status: TicketStatus.New,
+            status: "New",
             limit: 1,
             withTotal: true));
 
@@ -425,6 +429,263 @@ public class ProjectTicketsControllerTests
 
         Assert.Equal(["rowne 1", "rowne 2"], pierwsza.Items.Select(i => i.Description));
         Assert.Equal(["rowne 3", "rowne 4"], druga.Items.Select(i => i.Description));
+        Assert.Null(druga.NextCursor);
+    }
+
+    // osobny seed bo filtry potrzebuja adresu przegladarki zalacznika i komentarza a nie tylko czasu
+    private static async Task<(BugShotDbContext Db, Guid ProjectId)> SeedFiltersAsync()
+    {
+        var db = NewContext();
+        var project = await db.Projects.SingleAsync(p => p.Key == "demo");
+        var baseTime = new DateTimeOffset(2026, 9, 10, 8, 0, 0, TimeSpan.Zero);
+
+        Ticket Build(string description, string page, string browser, string os, string device, TicketStatus status) => new()
+        {
+            ProjectId = project.Id,
+            Description = description,
+            PageUrl = $"https://{page}?utm_source=mail",
+            Page = page,
+            UserAgent = "Mozilla/5.0",
+            BrowserName = browser,
+            OsName = os,
+            DeviceType = device,
+            Status = status
+        };
+
+        var koszyk = Build("koszyk gubi produkty", "acme.example/cart", "Chrome", "Windows", "desktop", TicketStatus.New);
+        var kasa = Build("blad na kasie", "acme.example/checkout", "Firefox", "Linux", "desktop", TicketStatus.InProgress);
+        var stopka = Build("literowka w stopce", "acme.example/cart", "Safari", "iOS", "mobile", TicketStatus.Resolved);
+
+        db.Tickets.AddRange(koszyk, kasa, stopka);
+        await db.SaveChangesAsync();
+
+        koszyk.ReceivedAt = baseTime;
+        kasa.ReceivedAt = baseTime.AddDays(1);
+        stopka.ReceivedAt = baseTime.AddDays(2);
+
+        db.TicketAttachments.Add(new TicketAttachment
+        {
+            TicketId = koszyk.Id,
+            Kind = AttachmentKind.Screenshot,
+            Uri = "/attachments/zrzut.png",
+            FileName = "zrzut.png",
+            ContentType = "image/png",
+            SizeBytes = 128
+        });
+
+        db.TicketAttachments.Add(new TicketAttachment
+        {
+            TicketId = kasa.Id,
+            Kind = AttachmentKind.ConsoleLog,
+            Uri = "/attachments/console.log",
+            FileName = "console.log",
+            ContentType = "text/plain",
+            SizeBytes = 64
+        });
+
+        db.TicketComments.Add(new TicketComment
+        {
+            TicketId = kasa.Id,
+            Author = "bartek",
+            Body = "sprawdzam"
+        });
+
+        await db.SaveChangesAsync();
+
+        return (db, project.Id);
+    }
+
+    [Fact]
+    public async Task StatusPrzyjmujeListePoPrzecinku()
+    {
+        var (db, projectId) = await SeedFiltersAsync();
+        using var _ = db;
+
+        var controller = new ProjectTicketsController(db);
+
+        var page = Page(await controller.GetList(
+            projectId,
+            CancellationToken.None,
+            status: "New,Resolved",
+            withTotal: true));
+
+        Assert.Equal(2, page.Total);
+
+        Assert.Equal(
+            ["koszyk gubi produkty", "literowka w stopce"],
+            page.Items.Select(i => i.Description).OrderBy(d => d, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task NieznanyStatusDaje400()
+    {
+        var (db, projectId) = await SeedFiltersAsync();
+        using var _ = db;
+
+        var controller = new ProjectTicketsController(db);
+
+        var result = await controller.GetList(projectId, CancellationToken.None, status: "New,Wymyslony");
+
+        Assert.Contains("status", ValidationErrors(result).Keys);
+    }
+
+    [Fact]
+    public async Task FiltrStronyPrzyjmujePelnyAdresZZapytaniem()
+    {
+        var (db, projectId) = await SeedFiltersAsync();
+        using var _ = db;
+
+        var controller = new ProjectTicketsController(db);
+
+        // adres przechodzi ta sama normalizacje co przy przyjeciu wiec utm i kotwica nie psuja filtra
+        var page = Page(await controller.GetList(
+            projectId,
+            CancellationToken.None,
+            page: "https://Acme.example/Cart?utm_source=mail#top",
+            withTotal: true));
+
+        Assert.Equal(2, page.Total);
+        Assert.All(page.Items, item => Assert.Equal("acme.example/cart", item.Page));
+    }
+
+    [Fact]
+    public async Task FiltryPrzegladarkiSystemuIUrzadzeniaZawezajaLacznie()
+    {
+        var (db, projectId) = await SeedFiltersAsync();
+        using var _ = db;
+
+        var controller = new ProjectTicketsController(db);
+
+        var page = Page(await controller.GetList(
+            projectId,
+            CancellationToken.None,
+            browser: "safari",
+            os: "iOS",
+            device: "mobile",
+            withTotal: true));
+
+        Assert.Equal(1, page.Total);
+        Assert.Equal("literowka w stopce", Assert.Single(page.Items).Description);
+    }
+
+    [Fact]
+    public async Task FiltryZrzutuIKomentarzyDzialajaWObieStrony()
+    {
+        var (db, projectId) = await SeedFiltersAsync();
+        using var _ = db;
+
+        var controller = new ProjectTicketsController(db);
+
+        var zeZrzutem = Page(await controller.GetList(
+            projectId,
+            CancellationToken.None,
+            hasScreenshot: true,
+            withTotal: true));
+
+        var bezZrzutu = Page(await controller.GetList(
+            projectId,
+            CancellationToken.None,
+            hasScreenshot: false,
+            withTotal: true));
+
+        var zKomentarzem = Page(await controller.GetList(
+            projectId,
+            CancellationToken.None,
+            hasComments: true,
+            withTotal: true));
+
+        Assert.Equal(1, zeZrzutem.Total);
+        Assert.Equal("koszyk gubi produkty", Assert.Single(zeZrzutem.Items).Description);
+        Assert.Equal(2, bezZrzutu.Total);
+        Assert.Equal(1, zKomentarzem.Total);
+        Assert.Equal("blad na kasie", Assert.Single(zKomentarzem.Items).Description);
+    }
+
+    [Fact]
+    public async Task ZakresDatObejmujePoczatekAleNieKoniec()
+    {
+        var (db, projectId) = await SeedFiltersAsync();
+        using var _ = db;
+
+        var controller = new ProjectTicketsController(db);
+
+        var page = Page(await controller.GetList(
+            projectId,
+            CancellationToken.None,
+            dateFrom: new DateTimeOffset(2026, 9, 11, 0, 0, 0, TimeSpan.Zero),
+            dateTo: new DateTimeOffset(2026, 9, 12, 0, 0, 0, TimeSpan.Zero),
+            withTotal: true));
+
+        Assert.Equal(1, page.Total);
+        Assert.Equal("blad na kasie", Assert.Single(page.Items).Description);
+    }
+
+    [Fact]
+    public async Task OdwroconyZakresDatDaje400()
+    {
+        var (db, projectId) = await SeedFiltersAsync();
+        using var _ = db;
+
+        var controller = new ProjectTicketsController(db);
+
+        var result = await controller.GetList(
+            projectId,
+            CancellationToken.None,
+            dateFrom: new DateTimeOffset(2026, 9, 12, 0, 0, 0, TimeSpan.Zero),
+            dateTo: new DateTimeOffset(2026, 9, 11, 0, 0, 0, TimeSpan.Zero));
+
+        Assert.Contains("dateFrom", ValidationErrors(result).Keys);
+    }
+
+    [Fact]
+    public async Task WierszListyNiesieStroneLicznikiIZrzut()
+    {
+        var (db, projectId) = await SeedFiltersAsync();
+        using var _ = db;
+
+        var controller = new ProjectTicketsController(db);
+
+        var page = Page(await controller.GetList(projectId, CancellationToken.None));
+
+        var koszyk = Assert.Single(page.Items, i => i.Description == "koszyk gubi produkty");
+        var kasa = Assert.Single(page.Items, i => i.Description == "blad na kasie");
+
+        Assert.Equal("acme.example/cart", koszyk.Page);
+        Assert.Equal("Chrome", koszyk.BrowserName);
+        Assert.Equal("Windows", koszyk.OsName);
+        Assert.Equal("desktop", koszyk.DeviceType);
+        Assert.True(koszyk.HasScreenshot);
+        Assert.False(koszyk.HasConsoleLog);
+        Assert.Equal(0, koszyk.CommentCount);
+
+        Assert.False(kasa.HasScreenshot);
+        Assert.True(kasa.HasConsoleLog);
+        Assert.Equal(1, kasa.CommentCount);
+    }
+
+    [Fact]
+    public async Task KursorTrzymaSieFiltraStronyMiedzyStronami()
+    {
+        var (db, projectId) = await SeedFiltersAsync();
+        using var _ = db;
+
+        var controller = new ProjectTicketsController(db);
+
+        var pierwsza = Page(await controller.GetList(
+            projectId,
+            CancellationToken.None,
+            page: "acme.example/cart",
+            limit: 1));
+
+        var druga = Page(await controller.GetList(
+            projectId,
+            CancellationToken.None,
+            page: "acme.example/cart",
+            cursor: pierwsza.NextCursor,
+            limit: 1));
+
+        Assert.Equal("literowka w stopce", Assert.Single(pierwsza.Items).Description);
+        Assert.Equal("koszyk gubi produkty", Assert.Single(druga.Items).Description);
         Assert.Null(druga.NextCursor);
     }
 }

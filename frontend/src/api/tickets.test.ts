@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { apiDelete, apiGet, apiPatch, apiPost } from './client'
+import { emptyQuery } from '../ticketQuery'
 import {
   addTicketComment,
   deleteTicket,
@@ -20,12 +21,7 @@ describe('tickets api', () => {
   it('pierwsza strona prosi o licznik', async () => {
     vi.mocked(apiGet).mockResolvedValue({ items: [], nextCursor: null, total: 0 })
 
-    const query = {
-      status: null,
-      search: '',
-      sort: 'receivedAt:desc' as const,
-      limit: 20,
-    }
+    const query = emptyQuery
 
     await getTickets('p1', query, null)
 
@@ -39,7 +35,8 @@ describe('tickets api', () => {
     vi.mocked(apiGet).mockResolvedValue({ items: [], nextCursor: null, total: 0 })
 
     const query = {
-      status: 'Resolved' as const,
+      ...emptyQuery,
+      statuses: ['Resolved' as const],
       search: 'login bug',
       sort: 'reportedAt:asc' as const,
       limit: 50,
@@ -56,12 +53,7 @@ describe('tickets api', () => {
   it('kolejna strona idzie z kursorem i bez licznika', async () => {
     vi.mocked(apiGet).mockResolvedValue({ items: [], nextCursor: null, total: null })
 
-    const query = {
-      status: null,
-      search: '',
-      sort: 'receivedAt:desc' as const,
-      limit: 20,
-    }
+    const query = emptyQuery
 
     await getTickets('p1', query, 'kursor-1')
 
@@ -75,12 +67,7 @@ describe('tickets api', () => {
     const signal = new AbortController().signal
     vi.mocked(apiGet).mockResolvedValue({ items: [], nextCursor: null, total: 0 })
 
-    const query = {
-      status: null,
-      search: '',
-      sort: 'receivedAt:desc' as const,
-      limit: 20,
-    }
+    const query = emptyQuery
 
     await getTickets('p1', query, null, signal)
 

@@ -7,7 +7,8 @@ public class User : ICreatedAt
     public string Email { get; set; } = string.Empty;
 
     // w bazie lezy wylacznie hash bcrypt razem z sola i kosztem
-    public string PasswordHash { get; set; } = string.Empty;
+    // pusty dopoki zaproszone konto samo nie ustawi hasla
+    public string? PasswordHash { get; set; }
 
     public bool IsAdmin { get; set; }
 
@@ -17,4 +18,8 @@ public class User : ICreatedAt
     public DateTimeOffset CreatedAt { get; set; }
 
     public ICollection<UserRefreshToken> RefreshTokens { get; set; } = [];
+
+    public ICollection<ProjectMember> Memberships { get; set; } = [];
+
+    public ICollection<UserToken> Tokens { get; set; } = [];
 }

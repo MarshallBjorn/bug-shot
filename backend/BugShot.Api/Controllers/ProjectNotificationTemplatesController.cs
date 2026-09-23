@@ -3,7 +3,6 @@ using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
 using BugShot.Api.Security;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +12,7 @@ namespace BugShot.Api.Controllers;
 [ApiController]
 [Route("api/v1/projects/{projectId:guid}/templates")]
 [EnableCors(CorsPolicies.Dashboard)]
-[Authorize(Roles = AccessTokenIssuer.AdminRole)]
+[ProjectAccess(ProjectRole.Maintainer)]
 [Produces(MediaTypeNames.Application.Json)]
 public class ProjectNotificationTemplatesController(BugShotDbContext db) : ControllerBase
 {

@@ -1,617 +1,151 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* motyw ustawia skrypt w index.html wiec CSS pyta tylko o jawny atrybut */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+  Paleta wychodzi z widgetu (widget/styles.css), zeby panel i widget czytalo sie jak jeden produkt.
+  W ciemnym motywie atrament jasnego motywu staje sie powierzchnia: #172033 to tam kolor tekstu,
+  a tutaj kolor karty. Dzieki temu oba motywy sa jedna rodzina barw a nie dwoma osobnymi zestawami.
+*/
 :root {
-  font-family: system-ui, sans-serif;
-  line-height: 1.5;
+  --background: #f6f8fa;
+  --foreground: #172033;
+  --card: #ffffff;
+  --card-foreground: #172033;
+  --popover: #ffffff;
+  --popover-foreground: #172033;
+
+  --primary: #2454d6;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f6;
+  --secondary-foreground: #172033;
+  --muted: #eef1f6;
+  --muted-foreground: #667085;
+  --accent: #eef1f6;
+  --accent-foreground: #172033;
+
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+  --success: #067647;
+  --success-foreground: #ffffff;
+  --warning: #b54708;
+  --warning-foreground: #ffffff;
+
+  --border: #d7dde8;
+  /* obramowanie pola niesie stan kontrolki wiec musi trzymac kontrast 3:1, dzielniki nie musza */
+  --input: #8793a5;
+  --ring: #2454d6;
+
+  /*
+    Kolory wykresow sa osobne od akcentow UI, bo znacznik na wykresie ma inne wymagania
+    niz przycisk. Obie pary przeszly walidator palety ze skilla dataviz: pasmo jasnosci,
+    prog nasycenia, rozroznialnosc przy daltonizmie i kontrast wzgledem tla karty.
+    Tritan wypada nisko, dlatego linie maja jeszcze etykiety przy koncach a nie sam kolor.
+  */
+  --chart-1: #2454d6;
+  --chart-2: #067647;
+  --chart-grid: #e8ecf2;
+
+  --radius: 0.5rem;
 }
 
-body {
-  margin: 0;
-  padding: 1rem;
+[data-theme="dark"] {
+  --background: #0b1119;
+  --foreground: #e6ebf2;
+  --card: #141c29;
+  --card-foreground: #e6ebf2;
+  --popover: #141c29;
+  --popover-foreground: #e6ebf2;
+
+  --primary: #7c9dfb;
+  --primary-foreground: #101722;
+  --secondary: #1d2736;
+  --secondary-foreground: #e6ebf2;
+  --muted: #1d2736;
+  --muted-foreground: #94a3b8;
+  --accent: #1d2736;
+  --accent-foreground: #e6ebf2;
+
+  --destructive: #f97066;
+  --destructive-foreground: #101722;
+  --success: #47cd89;
+  --success-foreground: #101722;
+  --warning: #f79009;
+  --warning-foreground: #101722;
+
+  --border: #2a3547;
+  --input: #64748b;
+  --ring: #7c9dfb;
+
+  /* akcenty UI sa tu za jasne na znacznik wykresu, walidator odrzucil je na pasmie jasnosci */
+  --chart-1: #5a86f5;
+  --chart-2: #2fae72;
+  --chart-grid: #222c3c;
 }
 
-.app-header {
-  align-items: baseline;
-  border-bottom: 1px solid #ddd;
-  display: flex;
-  gap: 1rem;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-grid: var(--chart-grid);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* ten sam stos co widget, wiec oba renderuja sie identycznie */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
-.app-user {
-  align-items: baseline;
-  color: #555;
-  display: flex;
-  font-size: 0.85rem;
-  gap: 0.5rem;
-}
-
-.app-user button {
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  background: #fff;
-  cursor: pointer;
-  font: inherit;
-  padding: 0.2rem 0.5rem;
-}
-
-.login {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin: 4rem auto;
-  max-width: 20rem;
-}
-
-.login h1 {
-  margin: 0;
-}
-
-.login label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.login span {
-  font-size: 0.85rem;
-}
-
-.login input {
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  font: inherit;
-  padding: 0.35rem;
-}
-
-.login button {
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  background: #fff;
-  cursor: pointer;
-  font: inherit;
-  padding: 0.4rem 0.75rem;
-}
-
-.login [role='alert'] {
-  color: #b00020;
-  font-size: 0.85rem;
-  margin: 0;
-}
-
-.app-header a {
-  color: inherit;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.ticket-filters {
-  align-items: end;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.ticket-filters label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.ticket-filters span {
-  font-size: 0.85rem;
-}
-
-.ticket-filters input,
-.ticket-filters select {
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  font: inherit;
-  padding: 0.35rem;
-}
-
-.load-more {
-  align-items: center;
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.load-more button {
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  background: #fff;
-  cursor: pointer;
-  font: inherit;
-  padding: 0.35rem 0.75rem;
-}
-
-.load-more button:disabled {
-  color: #999;
-  cursor: default;
-}
-
-.live-status {
-  align-items: center;
-  color: #555;
-  display: flex;
-  font-size: 0.85rem;
-  gap: 0.4rem;
-}
-
-.live-dot {
-  background: #999;
-  border-radius: 50%;
-  height: 0.5rem;
-  width: 0.5rem;
-}
-
-.live-status-live .live-dot {
-  background: #2f8132;
-}
-
-.live-status-offline .live-dot {
-  background: #b3261e;
-}
-
-.ticket-meta {
-  display: grid;
-  gap: 0.25rem 1rem;
-  grid-template-columns: max-content 1fr;
-  margin: 1rem 0;
-}
-
-.ticket-meta dt {
-  color: #555;
-  font-size: 0.85rem;
-}
-
-.ticket-meta dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.attachments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.attachments li {
-  max-width: 14rem;
-}
-
-.attachments img {
-  border: 1px solid #ddd;
-  display: block;
-  max-height: 10rem;
-  object-fit: contain;
-  width: 100%;
-}
-
-.attachment-file {
-  align-items: center;
-  border: 1px solid #ddd;
-  display: flex;
-  height: 10rem;
-  justify-content: center;
-  color: #555;
-  font-size: 0.85rem;
-}
-
-.attachment-download {
-  background: #fff;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  cursor: pointer;
-  font: inherit;
-  padding: 0.2rem 0.5rem;
-  text-align: left;
-}
-
-.attachment-download:disabled {
-  color: #999;
-  cursor: default;
-}
-
-.attachment-meta {
-  font-size: 0.85rem;
-  margin: 0.35rem 0 0;
-  overflow-wrap: anywhere;
-}
-
-.empty-state {
-  border: 1px dashed #ccc;
-  border-radius: 3px;
-  color: #555;
-  padding: 2rem 1rem;
-  text-align: center;
-}
-
-.empty-state p {
-  margin: 0 0 0.5rem;
-}
-
-.empty-state button {
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  background: #fff;
-  cursor: pointer;
-  font: inherit;
-  margin-top: 0.5rem;
-  padding: 0.35rem 0.75rem;
-}
-
-/* odświeżanie w tle nie chowa tabeli tylko ją przygasza */
-.is-stale {
-  opacity: 0.6;
-}
-
-.ticket-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-.ticket-table th,
-.ticket-table td {
-  border-bottom: 1px solid #ddd;
-  padding: 0.5rem;
-  text-align: left;
-  vertical-align: top;
-}
-
-.ticket-details-layout {
-  display: grid;
-  gap: 2rem;
-  grid-template-columns: minmax(0, 1fr) 18rem;
-}
-
-.ticket-comments {
-  list-style: none;
-  margin: 0 0 1rem;
-  padding: 0;
-}
-
-.ticket-comments li {
-  border-bottom: 1px solid #ddd;
-  padding: 0.75rem 0;
-}
-
-.ticket-comment-header {
-  align-items: baseline;
-  display: flex;
-  gap: 0.75rem;
-}
-
-.ticket-comment-header time {
-  color: #666;
-  font-size: 0.85rem;
-}
-
-.ticket-comments p {
-  margin: 0.35rem 0 0;
-  white-space: pre-wrap;
-}
-
-.comment-form {
-  display: grid;
-  gap: 0.75rem;
-  max-width: 40rem;
-}
-
-.comment-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.comment-form input,
-.comment-form textarea {
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  font: inherit;
-  padding: 0.35rem;
-}
-
-.comment-form textarea {
-  min-height: 6rem;
-  resize: vertical;
-}
-
-.comment-form button,
-.ticket-details-layout main > button {
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  background: #fff;
-  cursor: pointer;
-  font: inherit;
-  padding: 0.35rem 0.75rem;
-}
-
-.comment-form button:disabled,
-.ticket-details-layout main > button:disabled {
-  color: #999;
-  cursor: default;
-}
-
-.ticket-history {
-  border-left: 1px solid #ddd;
-  padding-left: 1rem;
-}
-
-.ticket-history ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.ticket-history li {
-  border-bottom: 1px solid #ddd;
-  display: grid;
-  gap: 0.2rem;
-  padding: 0.75rem 0;
-}
-
-.ticket-history span,
-.ticket-history time {
-  color: #666;
-  font-size: 0.85rem;
-}
-
-@media (max-width: 700px) {
-  .ticket-details-layout {
-    grid-template-columns: 1fr;
+@layer base {
+  * {
+    @apply border-border;
   }
 
-  .ticket-history {
-    border-left: 0;
-    border-top: 1px solid #ddd;
-    padding-left: 0;
-    padding-top: 1rem;
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
   }
-}
 
-.ticket-toast {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  max-width: 24rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #fff;
-  padding: 0.75rem 1rem;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
-}
+  /* focus widoczny wszedzie, bo panel ma chodzic z klawiatury */
+  :focus-visible {
+    @apply outline-ring outline-2 outline-offset-2;
+  }
 
-.app-nav {
-  display: flex;
-  gap: 1rem;
-}
-
-.admin-form {
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-  max-width: 32rem;
-  padding: 1rem;
-}
-
-.admin-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.admin-form input,
-.admin-form select,
-.admin-form textarea {
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  font: inherit;
-  padding: 0.35rem;
-}
-
-.admin-form textarea {
-  min-height: 4rem;
-}
-
-.admin-form-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.admin-form [role='alert'] {
-  color: #b00020;
-  font-size: 0.85rem;
-}
-
-.admin-test-result {
-  background: #f5f5f5;
-  border-radius: 3px;
-  padding: 0.5rem;
-}
-
-.admin-filter {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.admin-project-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.admin-project-list > li {
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 0.75rem;
-}
-
-.admin-project-header {
-  align-items: baseline;
-  display: flex;
-  gap: 0.75rem;
-}
-
-.admin-origins {
-  margin-top: 0.5rem;
-}
-
-.admin-origin-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  list-style: none;
-  margin: 0.25rem 0;
-  padding: 0;
-}
-
-.admin-origin-list li {
-  align-items: center;
-  background: #f5f5f5;
-  border-radius: 3px;
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.15rem 0.5rem;
-}
-
-.admin-rule-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-.admin-rule-table th,
-.admin-rule-table td {
-  border-bottom: 1px solid #ddd;
-  padding: 0.5rem;
-  text-align: left;
-  vertical-align: top;
-}
-
-.list-heading {
-  align-items: baseline;
-  display: flex;
-  gap: 1rem;
-  justify-content: space-between;
-}
-
-.list-heading-actions {
-  align-items: baseline;
-  display: flex;
-  gap: 1rem;
-}
-
-.list-heading button {
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  background: #fff;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.85rem;
-  padding: 0.2rem 0.5rem;
-}
-
-.list-heading button:disabled {
-  color: #999;
-  cursor: default;
-}
-
-.analytics-controls {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.5rem;
-  margin-bottom: 1rem;
-}
-
-.analytics-controls label {
-  align-items: center;
-  display: flex;
-  gap: 0.35rem;
-}
-
-.analytics-ranges {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.analytics-ranges button {
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  background: #fff;
-  cursor: pointer;
-  font: inherit;
-  padding: 0.35rem 0.75rem;
-}
-
-.analytics-ranges button[aria-pressed='true'] {
-  background: #222;
-  border-color: #222;
-  color: #fff;
-}
-
-.stat-tiles {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  margin: 0 0 1.5rem;
-}
-
-.stat-tiles > div {
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 0.75rem;
-}
-
-.stat-tiles dt {
-  color: #555;
-  font-size: 0.85rem;
-}
-
-.stat-tiles dd {
-  margin: 0;
-}
-
-.stat-value {
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-
-.stat-note {
-  color: #666;
-  font-size: 0.8rem;
-}
-
-.analytics-sections {
-  display: grid;
-  gap: 1.5rem 2rem;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-}
-
-.analytics-section h3 {
-  font-size: 1rem;
-  margin: 0 0 0.5rem;
-}
-
-/* długie adresy i wzorce łamią się tylko w pierwszej kolumnie żeby nie ściskać liczb obok */
-.analytics-section td:first-child {
-  overflow-wrap: anywhere;
-}
-
-.analytics-section td:not(:first-child),
-.analytics-section th:not(:first-child) {
-  white-space: nowrap;
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }

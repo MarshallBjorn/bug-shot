@@ -20,6 +20,17 @@ vi.mock('../api/projects', () => ({
   renameProject: vi.fn(),
 }))
 
+const access = vi.hoisted(() => ({ isAdmin: true }))
+
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    status: 'authenticated',
+    user: { id: 'u1', email: 'admin@bug-shot.local', isAdmin: access.isAdmin, isActive: true },
+    logIn: vi.fn(),
+    logOut: vi.fn(),
+  }),
+}))
+
 vi.mock('react-router', () => ({
   Link: ({
     to,
@@ -45,10 +56,12 @@ const project = {
   origins: [
     { id: 'o1', origin: 'https://acme.example' },
   ],
+  role: 'Maintainer' as const,
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  access.isAdmin = true
   mockedGetProjects.mockResolvedValue([project])
   mockedCreateProject.mockResolvedValue({
     ...project,
@@ -169,44 +182,54 @@ describe('AdminProjectsPage', () => {
   })
 
   it('zmienia nazwe projektu', async () => {
-    vi.spyOn(window, 'prompt').mockReturnValueOnce('Acme Renamed')
-
     render(<AdminProjectsPage />)
     await screen.findByText('Acme')
 
+    fireEvent.click(screen.getByRole('button', { name: 'Zmień nazwę projektu Acme' }))
+
+    // pole wchodzi z obecna nazwa, wiec zmiana jest poprawka a nie pisaniem od zera
+    const field = screen.getByLabelText('Nazwa', { selector: '#prompt-value' })
+    expect(field).toHaveProperty('value', 'Acme')
+
+    fireEvent.change(field, { target: { value: 'Acme Renamed' } })
     fireEvent.click(screen.getByRole('button', { name: 'Zmień nazwę' }))
 
     await vi.waitFor(() => {
-      expect(mockedRenameProject).toHaveBeenCalledWith(
-        'p1',
-        'Acme Renamed',
-      )
+      expect(mockedRenameProject).toHaveBeenCalledWith('p1', 'Acme Renamed')
     })
   })
 
-  it('dodaje i usuwa origin', async () => {
-    vi.spyOn(window, 'prompt')
-      .mockReturnValueOnce('https://new.example')
-
+  it('ta sama nazwa nie idzie do API', async () => {
     render(<AdminProjectsPage />)
     await screen.findByText('Acme')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Dodaj origin' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zmień nazwę projektu Acme' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zmień nazwę' }))
 
     await vi.waitFor(() => {
-      expect(mockedAddProjectOrigin).toHaveBeenCalledWith(
-        'p1',
-        'https://new.example',
-      )
+      expect(screen.queryByLabelText('Nazwa', { selector: '#prompt-value' })).toBeNull()
     })
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    expect(mockedRenameProject).not.toHaveBeenCalled()
+  })
+
+  it('dodaje i usuwa origin', async () => {
+    render(<AdminProjectsPage />)
+    await screen.findByText('Acme')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj origin do projektu Acme' }))
+
+    fireEvent.change(screen.getByLabelText('Origin'), {
+      target: { value: 'https://new.example' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj' }))
+
+    await vi.waitFor(() => {
+      expect(mockedAddProjectOrigin).toHaveBeenCalledWith('p1', 'https://new.example')
+    })
 
     fireEvent.click(
-      screen
-        .getByText('https://acme.example')
-        .closest('li')!
-        .querySelector('button')!,
+      screen.getByRole('button', { name: 'Usuń origin https://acme.example' }),
     )
 
     await vi.waitFor(() => {
@@ -215,21 +238,31 @@ describe('AdminProjectsPage', () => {
   })
 
   it('usuwa projekt po potwierdzeniu', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
-
     render(<AdminProjectsPage />)
     await screen.findByText('Acme')
 
-    fireEvent.click(
-      screen
-        .getByText('Acme')
-        .closest('.admin-project-header')!
-        .querySelectorAll('button')[1],
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń projekt Acme' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń projekt' }))
 
     await vi.waitFor(() => {
       expect(mockedDeleteProject).toHaveBeenCalledWith('p1')
     })
+  })
+
+  it('maintainer widzi tylko swoje projekty bez zakladania i kasowania', async () => {
+    access.isAdmin = false
+    mockedGetProjects.mockResolvedValue([
+      project,
+      { ...project, id: 'p2', name: 'Cudzy', key: 'OTHER', role: 'Member' as const },
+    ])
+
+    render(<AdminProjectsPage />)
+
+    expect(await screen.findByText('Acme')).toBeDefined()
+    expect(screen.queryByText('Cudzy')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Nowy projekt' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Usuń projekt Acme' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Zmień nazwę projektu Acme' })).toBeDefined()
   })
 })
 

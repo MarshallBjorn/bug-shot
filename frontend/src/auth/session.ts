@@ -1,6 +1,6 @@
 import { ApiError } from '../api/error'
 import { apiBaseUrl } from '../config'
-import type { AuthenticatedUser } from '../types'
+import type { AccountTokenPurpose, AuthenticatedUser } from '../types'
 
 export interface Session {
   accessToken: string
@@ -39,6 +39,66 @@ export async function signIn(email: string, password: string) {
   }
 
   return publish((await response.json()) as Session)
+}
+
+export interface AccountLinkInfo {
+  email: string
+  purpose: AccountTokenPurpose
+}
+
+export async function setupRequired() {
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/v1/auth/setup`)
+
+    return response.ok && ((await response.json()) as { required: boolean }).required
+  } catch {
+    // bez odpowiedzi API zostaje zwykly ekran logowania z jego wlasnym bledem
+    return false
+  }
+}
+
+// kreator i link z maila koncza sie od razu sesja tak jak logowanie
+export async function completeSetup(token: string, email: string, password: string) {
+  return publish(await sessionFrom(await post('/setup', { token, email, password })))
+}
+
+// null znaczy ze link jest nieznany zuzyty albo wygasl, API nie mowi ktore
+export async function inspectAccountLink(token: string) {
+  const response = await post('/account-token', { token })
+
+  if (response.status === 404) {
+    return null
+  }
+
+  if (!response.ok) {
+    throw new ApiError(response.status, await problemTitle(response))
+  }
+
+  return (await response.json()) as AccountLinkInfo
+}
+
+export async function acceptAccountLink(token: string, password: string) {
+  return publish(await sessionFrom(await post('/set-password', { token, password })))
+}
+
+async function sessionFrom(response: Response) {
+  if (!response.ok) {
+    throw new ApiError(response.status, await problemTitle(response))
+  }
+
+  return (await response.json()) as Session
+}
+
+// walidacja hasla przychodzi w errors a reszta odmow w samym title
+async function problemTitle(response: Response) {
+  try {
+    const problem = (await response.json()) as { title?: string; errors?: Record<string, string[]> }
+    const fields = Object.values(problem.errors ?? {}).flat()
+
+    return fields.length > 0 ? fields.join(' ') : (problem.title ?? `Kod odpowiedzi ${response.status}`)
+  } catch {
+    return `Kod odpowiedzi ${response.status}`
+  }
 }
 
 export async function signOut() {

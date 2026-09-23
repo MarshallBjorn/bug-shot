@@ -2,6 +2,7 @@ using System.Net.Mime;
 using BugShot.Api.Contracts;
 using BugShot.Api.Data;
 using BugShot.Api.Models;
+using BugShot.Api.Security;
 using BugShot.Api.Tickets;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,7 @@ namespace BugShot.Api.Controllers;
 [ApiController]
 [Route("api/v1/projects/{projectId:guid}/tickets")]
 [EnableCors(CorsPolicies.Dashboard)]
+[ProjectAccess(ProjectRole.Viewer)]
 [Produces(MediaTypeNames.Application.Json)]
 public class ProjectTicketsController(BugShotDbContext db) : ControllerBase
 {
@@ -22,6 +24,7 @@ public class ProjectTicketsController(BugShotDbContext db) : ControllerBase
     /// Strona wychodzi z kursorem do nastepnej. Ostatnia ma nextCursor pusty.
     /// Z withTotal pierwsza strona dolicza liczbe wszystkich pasujacych. Kolejne zostawiaja total pusty.
     /// Kursor jest nieprzezroczysty i nalezy do tego sortowania z ktorym powstal.
+    /// Filtry sa poza kursorem bo tylko zawezaja zbior wiec doladowanie dziala dalej poprawnie.
     /// Bez podanego statusu lista pomija tickety skasowane. Jawne status=Deleted je zwroci.
     /// Szukanie idzie po opisie i adresie strony bez rozroznienia wielkosci liter.
     /// Sortowanie przyjmuje receivedAt:desc receivedAt:asc reportedAt:desc i reportedAt:asc.
@@ -29,8 +32,16 @@ public class ProjectTicketsController(BugShotDbContext db) : ControllerBase
     /// </remarks>
     /// <param name="projectId">Projekt ktorego dotyczy lista.</param>
     /// <param name="cancellationToken">Token anulowania zadania.</param>
-    /// <param name="status">Filtr statusu. Pusty pomija tombstone.</param>
+    /// <param name="status">Filtr statusu. Lista po przecinku na przyklad New,InProgress. Pusty pomija tombstone.</param>
     /// <param name="search">Fraza szukana w opisie i adresie strony.</param>
+    /// <param name="page">Znormalizowany adres strony. Pelny link z zapytaniem i kotwica tez przejdzie.</param>
+    /// <param name="browser">Rozpoznana przegladarka na przyklad Chrome.</param>
+    /// <param name="os">Rozpoznany system na przyklad Windows.</param>
+    /// <param name="device">Rozpoznany typ urzadzenia na przyklad desktop.</param>
+    /// <param name="hasScreenshot">Zaweza do zgloszen ze zrzutem albo bez niego.</param>
+    /// <param name="hasComments">Zaweza do zgloszen z komentarzem albo bez niego.</param>
+    /// <param name="dateFrom">Poczatek zakresu po czasie przyjecia. Granica wchodzi do wyniku.</param>
+    /// <param name="dateTo">Koniec zakresu po czasie przyjecia. Granica nie wchodzi do wyniku.</param>
     /// <param name="sort">Kolejnosc listy.</param>
     /// <param name="cursor">Kursor z poprzedniej strony. Pusty zaczyna od poczatku listy.</param>
     /// <param name="limit">Rozmiar strony przycinany do 100.</param>
@@ -42,14 +53,37 @@ public class ProjectTicketsController(BugShotDbContext db) : ControllerBase
     public async Task<ActionResult<CursorPage<TicketListItem>>> GetList(
         Guid projectId,
         CancellationToken cancellationToken,
-        [FromQuery] TicketStatus? status = null,
+        [FromQuery] string? status = null,
         [FromQuery] string? search = null,
+        [FromQuery] string? page = null,
+        [FromQuery] string? browser = null,
+        [FromQuery] string? os = null,
+        [FromQuery] string? device = null,
+        [FromQuery] bool? hasScreenshot = null,
+        [FromQuery] bool? hasComments = null,
+        [FromQuery] DateTimeOffset? dateFrom = null,
+        [FromQuery] DateTimeOffset? dateTo = null,
         [FromQuery] string sort = TicketSort.DefaultName,
         [FromQuery] string? cursor = null,
         [FromQuery] int limit = 20,
         [FromQuery] bool withTotal = false)
     {
         limit = Math.Clamp(limit, 1, MaxLimit);
+
+        if (!TicketListFilter.TryParseStatuses(status, out var statuses))
+        {
+            ModelState.AddModelError(nameof(status), "Status must be a comma separated list of known statuses.");
+        }
+
+        if (dateFrom is { } start && dateTo is { } end && start >= end)
+        {
+            ModelState.AddModelError(nameof(dateFrom), "dateFrom must be earlier than dateTo.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
 
         var order = TicketSort.Parse(sort);
         TicketListCursor? position = null;
@@ -70,23 +104,19 @@ public class ProjectTicketsController(BugShotDbContext db) : ControllerBase
             }
         }
 
-        var query = db.Tickets.AsNoTracking().Where(t => t.ProjectId == projectId);
+        var filter = TicketListFilter.Create(
+            statuses,
+            search,
+            page,
+            browser,
+            os,
+            device,
+            hasScreenshot,
+            hasComments,
+            dateFrom,
+            dateTo);
 
-        if (status is not null)
-        {
-            query = query.Where(t => t.Status == status);
-        }
-        else
-        {
-            // tombstone nie ma czego pokazac na liscie
-            query = query.Where(t => t.Status != TicketStatus.Deleted);
-        }
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var pattern = $"%{search}%";
-            query = query.Where(t => EF.Functions.ILike(t.Description, pattern) || EF.Functions.ILike(t.PageUrl, pattern));
-        }
+        var query = filter.Apply(db.Tickets.AsNoTracking().Where(t => t.ProjectId == projectId));
 
         // licznik idzie tylko przy wejsciu w liste bo przy doladowaniu nie mowi nic nowego
         // a COUNT to dokladnie ten koszt ktory kursor mial zdjac
@@ -97,7 +127,21 @@ public class ProjectTicketsController(BugShotDbContext db) : ControllerBase
         // o jeden wiecej niz strona zeby wiedziec czy jest co doladowac
         var items = await Seek(query, order, position)
             .Take(limit + 1)
-            .Select(t => new TicketListItem(t.Id, t.Description, t.PageUrl, t.Status, t.ReportedAt, t.ReceivedAt, t.UpdatedAt))
+            .Select(t => new TicketListItem(
+                t.Id,
+                t.Description,
+                t.PageUrl,
+                t.Page,
+                t.BrowserName,
+                t.OsName,
+                t.DeviceType,
+                t.Status,
+                t.ReportedAt,
+                t.ReceivedAt,
+                t.UpdatedAt,
+                t.Comments.Count,
+                t.Attachments.Any(a => a.Kind == AttachmentKind.Screenshot),
+                t.Attachments.Any(a => a.Kind == AttachmentKind.ConsoleLog)))
             .ToListAsync(cancellationToken);
 
         if (items.Count <= limit)

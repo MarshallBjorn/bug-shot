@@ -76,7 +76,12 @@ public class TicketAttachmentsControllerTests : IDisposable
         return (CreatedTicketResponse)((CreatedAtActionResult)result.Result!).Value!;
     }
 
-    private TicketAttachmentsController NewController(BugShotDbContext db, string? token, Stream body, string contentType)
+    private TicketAttachmentsController NewController(
+        BugShotDbContext db,
+        string? token,
+        Stream body,
+        string contentType,
+        RecordingTicketNotifier? notifier = null)
     {
         var context = new DefaultHttpContext();
         context.Request.Body = body;
@@ -91,7 +96,8 @@ public class TicketAttachmentsControllerTests : IDisposable
         return new TicketAttachmentsController(
             db,
             new AttachmentStorageOptions(root),
-            new SanitizationService(db))
+            new SanitizationService(db),
+            notifier ?? new RecordingTicketNotifier())
         {
             ControllerContext = new ControllerContext { HttpContext = context }
         };
@@ -117,11 +123,16 @@ public class TicketAttachmentsControllerTests : IDisposable
     }
 
     private async Task<IActionResult> Upload(BugShotDbContext db, Guid ticketId, string? token,
+        params (string Field, string FileName, byte[] Content)[] parts) =>
+        await Upload(db, ticketId, token, null, parts);
+
+    private async Task<IActionResult> Upload(BugShotDbContext db, Guid ticketId, string? token,
+        RecordingTicketNotifier? notifier,
         params (string Field, string FileName, byte[] Content)[] parts)
     {
         Directory.CreateDirectory(root);
         var (body, contentType) = Multipart(parts);
-        var controller = NewController(db, token, body, contentType);
+        var controller = NewController(db, token, body, contentType, notifier);
         return await controller.Upload(ticketId, CancellationToken.None);
     }
 
@@ -396,5 +407,51 @@ public class TicketAttachmentsControllerTests : IDisposable
         var attachment = await db.TicketAttachments.SingleAsync();
         Assert.Equal(AttachmentLimits.MaxFileNameLength, attachment.FileName.Length);
         Assert.EndsWith(".png", attachment.FileName);
+    }
+
+    [Fact]
+    public async Task WgraniezrzutuIdzieDoKanaluLiveZeWskaznikiem()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+        var notifier = new RecordingTicketNotifier();
+
+        await Upload(db, ticket.Id, ticket.UploadToken, notifier, ("screenshot", "zrzut.png", Png));
+
+        var sent = Assert.Single(notifier.Events);
+
+        Assert.Equal("changed", sent.Event);
+        Assert.Equal(ticket.Id, sent.TicketId);
+        Assert.True(sent.Ticket!.HasScreenshot);
+        Assert.False(sent.Ticket!.HasConsoleLog);
+    }
+
+    [Fact]
+    public async Task WgranieLoguKonsoliIdzieDoKanaluLiveZeWskaznikiem()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+        var notifier = new RecordingTicketNotifier();
+
+        await Upload(db, ticket.Id, ticket.UploadToken, notifier, ("consoleLog", "console.log", "[2026-09-17T10:00:00.000Z] INFO console.log: test"u8.ToArray()));
+
+        var sent = Assert.Single(notifier.Events);
+
+        Assert.Equal("changed", sent.Event);
+        Assert.True(sent.Ticket!.HasConsoleLog);
+        Assert.False(sent.Ticket!.HasScreenshot);
+    }
+
+    [Fact]
+    public async Task SamZalacznikUzytkownikaNieRuszaKanaluLive()
+    {
+        using var db = NewContext();
+        var ticket = await CreateTicket(db);
+        var notifier = new RecordingTicketNotifier();
+
+        // wiersz listy nie pokazuje zwyklych zalacznikow wiec nie ma o czym powiadamiac
+        await Upload(db, ticket.Id, ticket.UploadToken, notifier, ("files", "notatka.png", Png));
+
+        Assert.Empty(notifier.Events);
     }
 }
