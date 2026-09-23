@@ -41,6 +41,14 @@ BUMP="none"
 # wobec commit message zawierajacych cudzyslowy, spacje, unicode, backticki
 # (nic nie jest eval-owane, tylko porownywane regexem bash).
 while IFS= read -r -d $'\x02' entry; do
+  # `git log --pretty=format:` wstawia \n MIEDZY commitami, a nasz rekord konczy
+  # sie na %x02 — wiec kazdy chunk poza pierwszym zaczyna sie tym separatorem \n.
+  # Bez tego subject drugiego i kolejnych commitow mial wiodacy \n, przez co
+  # type_token = $'\nfeat' != 'feat' i release-worthy commity byly CICHO gubione
+  # (liczyl sie tylko NAJNOWSZY non-merge commit). To wlasnie zaniżało bumpy
+  # (np. feat gubiony -> patch zamiast minor) i dawało "none" gdy najnowszy
+  # commit byl np. docs:. Ucinamy wiodacy separator.
+  entry="${entry#$'\n'}"
   subject="${entry%%$'\x01'*}"
   body="${entry#*$'\x01'}"
 
